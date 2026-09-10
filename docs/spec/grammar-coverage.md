@@ -108,3 +108,26 @@ were already implemented in `ast_canon.py` before this session, just never
 exercised by the self-hosted parser or any differential test). Verified
 by new unit tests in `tests/parser/test_ast_canon.py` alongside the
 existing ones.
+
+## Stage 7 update: semantic coverage
+
+`self_host/resolver.kuro` (top-level collection) and `self_host/
+typecheck.kuro` (usage resolution + type checking, combined per
+ADR-0014) bring name resolution and type checking to parity with
+`compiler/resolver.py` + `compiler/typecheck.py` for every statement kind
+and every diagnostic code those two files can *statically* produce:
+`E3001`, `E3002`, `E3003`, `E3004`, `E3006`-`E3011`, and `E4001`-`E4005`.
+(`E3005`, "value is not indexable," is a *runtime*-only check —
+`compiler/interpreter.py`, not `compiler/typecheck.py` — so it has no
+static self-hosted counterpart; no self-hosted interpreter exists yet,
+Stage 8.) The full audit behind this —
+resolver/typechecker behavior, scope semantics, type rules, and every
+known bootstrap/current limitation — lives in `docs/architecture/
+self-hosted-semantics.md`, not duplicated here; this file's job is
+grammar/statement coverage, that one's is semantic behavior.
+
+Not yet self-hosted: `E2005` (duplicate Action parameter — deliberately
+not ported to the resolver, since Python's own copy is dead code in
+practice; the *reachable* check belongs in the parser and is still a
+named, open gap there — see ADR-0011), IR lowering, and any backend.
+

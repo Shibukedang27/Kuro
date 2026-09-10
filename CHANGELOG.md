@@ -3,6 +3,61 @@
 All notable changes to Kuro are recorded here. Format loosely follows
 Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 
+## [0.8.0-dev] — Stage 7: self-hosted resolver + typechecker
+
+### Added
+- `self_host/resolver.kuro` and `self_host/typecheck.kuro`: name
+  resolution and type checking, written in Kuro. `docs/architecture/
+  self-hosted-semantics.md` audits the Python oracle's actual behavior
+  first (not assumed) - including three real findings that contradicted
+  the obvious reading of the source (a nested `Decl` is semantically
+  inert; a nested `Action` is parsed and checked but never callable; the
+  resolver's own `E2005` check is dead code in practice, since the
+  parser's copy always fires first). `ADR-0012` formalizes the scope
+  model precisely (one flat scope, plus `Index`/Action-parameter as the
+  only two narrow, temporary exceptions). `ADR-0013` is the Golden Rule's
+  required process for a genuine semantic expansion: six new type checks
+  (`E3006`-`E3011` - comparison operand compatibility, call argument
+  types against typed parameters, `Repeat`'s count, `Length`'s target,
+  `Get`/`Set`'s index, and closing a real gap where `Text + Text` string
+  concatenation was invisible to type inference), each individually
+  justified, implemented in `compiler/typecheck.py` (the Python oracle)
+  first. `ADR-0014` records the key architectural finding: Stage 6's
+  canonical AST text (`AstOut`) is *not* walkable back into structure for
+  expressions (proven concretely - two different programs produce
+  identical leading postfix token sequences, differing only in a trailing
+  tag a linear walker cannot know to expect), so the self-hosted resolver
+  and typechecker independently re-scan the token stream instead, and
+  combine what Python keeps as two separate passes (resolver pass 2, then
+  typecheck) into one, for code-size reasons specific to Kuro having no
+  closures/function values to share a grammar walk.
+- `compiler/semantic_canon.py`: the Stage 7 analog of `compiler/
+  ast_canon.py` - a deterministic, order-independent summary of
+  `resolve()` + `typecheck()`'s result, for differential comparison.
+- 108 new self-hosted tests: 15 for the resolver's pass 1 alone, 44 for
+  the combined pass 2 (26 valid programs across every statement kind and
+  every documented scoping edge case, 18 invalid programs covering every
+  E4xxx and all 9 E3xxx codes), 11 adversarial/fuzz cases (deep nesting,
+  recursion, mutual recursion, large collections - no hangs, no crashes),
+  13 resolver/interpreter consistency cases (a validated program must
+  both compile clean AND run to the exact expected output, not just "not
+  crash").
+
+### Fixed
+- A genuine, previously-undiscovered **crash** in `compiler/lower.py`: a
+  nested `ActionDecl` (valid, resolvable Kuro source, already established
+  as parsed-but-uncallable rather than rejected) had no case in
+  `Lowering._lower_stmt` and hit its `AssertionError` fallback, crashing
+  compilation entirely instead of compiling the program. Found via
+  Stage 7 differential testing, not by inspection.
+
+### Known limitation (documented, not fixed)
+- The self-hosted resolver/typechecker's own recursive walk runs through
+  `compiler/interpreter.py`'s call-depth guard (`E6005`, 200), so it has
+  materially lower practical capacity for deeply nested expressions or
+  large value-lists than the Python oracle, which recurses natively. See
+  ADR-0014.
+
 ## [0.7.0-dev] — Stage 6 completion: full grammar parity + self-hosted diagnostics
 
 ### Added

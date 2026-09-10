@@ -30,9 +30,14 @@ finished than it is (see `CONTRIBUTING`/spec section 55, "no fake features").
   resolution, type checking, an IR, and an IR interpreter.
 - `self_host/` — Kuro source written *in Kuro itself*, run by `compiler/`
   and cross-tested against it (the self-hosting effort, spec section 5):
-  `lexer.kuro` (Stage 5) and `parser.kuro` (Stage 6, full grammar parity
-  plus structured diagnostics — see `docs/spec/grammar-coverage.md` and
-  `docs/engineering/ADR-0010-stage6-parser.md`/`ADR-0011-stage6-completion.md`).
+  `lexer.kuro` (Stage 5), `parser.kuro` (Stage 6, full grammar parity plus
+  structured diagnostics), and `resolver.kuro`/`typecheck.kuro` (Stage 7,
+  name resolution and type checking — see `docs/architecture/
+  self-hosted-semantics.md` and `docs/engineering/ADR-0012` through
+  `ADR-0014`). The Python compiler in `compiler/` remains the bootstrap/
+  reference oracle throughout; nothing here is self-*compiling* yet (no
+  IR lowering or backend exists in Kuro) — see each ADR's "known
+  limitations" for exactly what is and isn't true today.
 - `cli/kuro.py` — `kuro run <file>` / `kuro check <file>` / `kuro emit-ir <file>`.
 - `tests/` — lexer, parser, semantic, IR, runtime, and regression suites.
 
