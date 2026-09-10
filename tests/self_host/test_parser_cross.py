@@ -123,6 +123,48 @@ SNIPPETS = [
     ),
 ]
 
+# --- dedicated fixtures for the 7 statements deferred in the previous
+# Stage 6 increment (Take/Get/Length/Set/Append/Compare/legacy Entered) --
+
+DEFERRED_CONSTRUCT_SNIPPETS = [
+    "Take user Name;",
+    "Take user Name and Age;",
+    "Take Name and Age and City;",
+    'Name = "Kuro";\nGet Name;',
+    'Name = "Kuro";\nGet Name 0;',
+    'Names = "A", "B", "C";\nGet Names 1;',
+    'Name = "Kuro";\nLength Name;',
+    'Names = "A", "B", "C";\nLength Names;',
+    'Name = "Kuro";\nSet Name 0 to "k";',
+    'Names = "A", "B", "C";\nSet Names 1 to "Mani";',
+    "A = 5;\nCompare Bigger A greater than 3;",
+    "A = 5;\nCompare R A is equal to 5;",
+    'Tokens = "a";\nAppend "b" to Tokens;',
+    'Age is Integers;\nAge = 25;\nEntered Age is greater than 20 then Print "Old" otherwise Print "Young";',
+    'X = 5;\nEntered X is equal to 5 then Print "yes" otherwise Print "no";',
+]
+
+# --- realistic combinations (not just isolated grammar rules) -----------
+
+COMBINATION_SNIPPETS = [
+    # If + Get
+    'Names = "A", "B", "C";\nIf Names is greater than 0;\nGet Names 0;\nDone.',
+    # Repeat + Set
+    'Names = "A", "B", "C";\nRepeat 3;\nSet Names Index to "X";\nDone.',
+    # While + Get
+    'Names = "A", "B", "C";\nN is Integers;\nN = 0;\nWhile N is less than 3;\nGet Names N;\nAdd 1 to N;\nDone.',
+    # Action + Compare
+    "Action Check A;\nCompare R A greater than 0;\nReturn R;\nDone.\nCall Check 5;",
+    # Nested blocks + Append
+    'Tokens = "a";\nIf 1 is equal to 1;\nRepeat 2;\nAppend "x" to Tokens;\nDone.\nDone.',
+    # Expressions + Length
+    'Name = "Kuro";\nLength Name;\nPrint @_ + 1.',
+    # Take + Print combined with a typed Decl
+    "Age is Integers;\nTake user Age;\nPrint Age.",
+    # Compare feeding an If
+    "A = 5;\nCompare Big A greater than 3;\nIf Big is equal to 1;\nPrint A.\nDone.",
+]
+
 
 @pytest.mark.parametrize("source", SNIPPETS, ids=[f"snippet{i}" for i in range(len(SNIPPETS))])
 def test_self_hosted_parser_matches_python_parser_ast(source):
@@ -132,22 +174,104 @@ def test_self_hosted_parser_matches_python_parser_ast(source):
     assert actual == expected
 
 
+@pytest.mark.parametrize(
+    "source", DEFERRED_CONSTRUCT_SNIPPETS,
+    ids=[f"deferred{i}" for i in range(len(DEFERRED_CONSTRUCT_SNIPPETS))],
+)
+def test_deferred_constructs_now_match(source):
+    expected = python_ast(source)
+    actual, parse_failed = kuro_ast(source)
+    assert parse_failed == 0, f"self-hosted parser reported ParseFailed for: {source!r}"
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "source", COMBINATION_SNIPPETS,
+    ids=[f"combo{i}" for i in range(len(COMBINATION_SNIPPETS))],
+)
+def test_realistic_combinations_match(source):
+    expected = python_ast(source)
+    actual, parse_failed = kuro_ast(source)
+    assert parse_failed == 0, f"self-hosted parser reported ParseFailed for: {source!r}"
+    assert actual == expected
+
+
 # --- malformed input: must not hang or crash (ADR-0010's "Error behavior") --
 
 MALFORMED_SNIPPETS = [
-    "Name = ",                      # incomplete expression, EOF
-    "If Age is greater than 20\nPrint",  # missing ';' after condition
-    "Repeat 3;\nPrint Index.",      # missing Done.
-    "Action Add A, B;\nReturn A;",  # missing Done.
-    "N = 1 +",                      # dangling operator, EOF
-    "((((((",                       # unbalanced grouping
+    # -- missing semicolon --
+    ('Name = "Kuro"\nPrint Name.', "missing semicolon after Assign"),
+    # -- missing period --
+    ('Print "hi"', "missing period after Print"),
+    # -- missing Done --
+    ("Repeat 3;\nPrint Index.", "missing Done (Repeat)"),
+    ("If Age is greater than 20;\nPrint Age.", "missing Done (If)"),
+    ("Action Add A, B;\nReturn A;", "missing Done (Action)"),
+    (
+        "If 1 is equal to 1;\nRepeat 3;\nPrint Index.\nDone.",
+        "missing Done (outer If, inner Repeat closed fine) - malformed nested block",
+    ),
+    # -- unexpected Done --
+    ("Done.", "unexpected Done with nothing open"),
+    ("Print 1.\nDone.\nPrint 2.", "stray Done between two valid statements"),
+    # -- unexpected Else --
+    ("Else;\nPrint 1.\nDone.", "unexpected Else with no preceding If"),
+    # -- unexpected EOF --
+    ("Print", "unexpected EOF right after a keyword"),
+    ("If Age is greater than 20;", "unexpected EOF right after If's condition"),
+    # -- incomplete Take --
+    ("Take user", "incomplete Take: EOF after 'user'"),
+    ("Take Name and", "incomplete Take: EOF after 'and'"),
+    # -- incomplete Get --
+    ("Get", "incomplete Get: EOF, no target"),
+    # -- incomplete Set --
+    ("Set Name 0 to", "incomplete Set: EOF after 'to', no value"),
+    ("Set Name", "incomplete Set: EOF, no index/value"),
+    # -- incomplete Append --
+    ("Append", "incomplete Append: EOF, no value"),
+    ("Append 1 to", "incomplete Append: EOF after 'to', no target"),
+    # -- incomplete Compare --
+    ("Compare Bigger A greater", "incomplete Compare: EOF mid comparison-op"),
+    ("Compare Bigger", "incomplete Compare: EOF, no condition"),
+    # -- malformed Entered --
+    (
+        'Entered Age is greater than 20 then',
+        "malformed Entered: EOF after 'then', no Print",
+    ),
+    (
+        'Entered Age is greater than 20 then Print "Old" otherwise',
+        "malformed Entered: EOF after 'otherwise', no Print",
+    ),
+    # -- malformed expression --
+    ("N = 1 +", "dangling operator, EOF"),
+    ("N = * 5;", "leading operator with no left operand"),
+    ("((((((", "unbalanced grouping"),
+    # -- malformed Action --
+    ("Action", "malformed Action: EOF, no name"),
+    ("Action Add A, ,;\nReturn A;\nDone.", "malformed Action: double comma in params"),
+    # -- malformed Call --
+    ("Call", "malformed Call: EOF, no name"),
+    ("Call Add 1, ;", "malformed Call: dangling comma in args"),
+    ("Call 5;", "malformed Call: a literal instead of a name"),
+    # -- regression coverage: a non-identifier token blindly accepted as a
+    # name (found via malformed26 above; the general fix is ExpectIdent in
+    # self_host/parser.kuro, used everywhere a name is expected) --
+    ("Get ;", "Get with no target (semicolon where a name is expected)"),
+    ("Update 5 to 1;", "Update target is a literal, not an identifier"),
+    ("Action ; Return 1; Done.", "Action with no name at all"),
 ]
 
 
-@pytest.mark.parametrize("source", MALFORMED_SNIPPETS, ids=[f"malformed{i}" for i in range(len(MALFORMED_SNIPPETS))])
-def test_malformed_input_does_not_hang_or_crash(source):
+@pytest.mark.parametrize(
+    "source,description", MALFORMED_SNIPPETS,
+    ids=[f"malformed{i}" for i in range(len(MALFORMED_SNIPPETS))],
+)
+def test_malformed_input_does_not_hang_or_crash(source, description):
     # Deliberately not comparing against the Python parser's diagnostics -
     # ADR-0010 documents this parser doesn't yet produce equivalent
-    # structured errors. The property under test is termination.
+    # structured errors (Stage 6's diagnostic parity work, tracked
+    # separately - see tests/self_host/test_parser_diagnostics.py, adds
+    # error codes/locations without requiring identical messages). The
+    # property under test here is termination without a crash.
     ast_out, parse_failed = kuro_ast(source)
-    assert parse_failed == 1
+    assert parse_failed == 1, f"expected ParseFailed for ({description}): {source!r}"

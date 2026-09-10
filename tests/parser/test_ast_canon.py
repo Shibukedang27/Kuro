@@ -133,6 +133,67 @@ def test_encoding_is_deterministic():
     assert canon(src) == canon(src)
 
 
+def test_take_encoding():
+    assert canon("Name is Text;\nAge is Integers;\nTake user Name and Age;") == [
+        "PROGRAM",
+        "DECL", "Name", "Text",
+        "DECL", "Age", "Integers",
+        "INPUT", "Name", "Age", "END_NAMES",
+        "END_BLOCK",
+    ]
+
+
+def test_get_direct_vs_indexed():
+    assert canon('Name = "Kuro";\nGet Name;') == [
+        "PROGRAM",
+        "ASSIGN", "Name", "NONE", "LIT_STR", "Kuro", "END_VALUES",
+        "GET", "Name", "0",
+        "END_BLOCK",
+    ]
+    assert canon('Name = "Kuro";\nGet Name 0;') == [
+        "PROGRAM",
+        "ASSIGN", "Name", "NONE", "LIT_STR", "Kuro", "END_VALUES",
+        "GET", "Name", "1", "LIT_INT", "0",
+        "END_BLOCK",
+    ]
+
+
+def test_length_encoding():
+    assert canon('Name = "Kuro";\nLength Name;')[-3:-1] == ["LENGTH", "Name"]
+
+
+def test_set_encoding_explicit():
+    # target is read before either expression is parsed (Set N idx to v;),
+    # so target-then-index-then-value matches real parse order and stays
+    # a prefix encoding, unlike Add/Append.
+    assert canon('Name = "Kuro";\nSet Name 0 to "k";') == [
+        "PROGRAM",
+        "ASSIGN", "Name", "NONE", "LIT_STR", "Kuro", "END_VALUES",
+        "SET", "Name", "LIT_INT", "0", "LIT_STR", "k",
+        "END_BLOCK",
+    ]
+
+
+def test_compare_statement_encoding():
+    c = canon("A = 5;\nCompare Bigger A greater than 3;")
+    assert c[:5] == ["PROGRAM", "ASSIGN", "A", "NONE", "LIT_INT"]
+    compare_idx = c.index("COMPARE")
+    assert c[compare_idx : compare_idx + 2] == ["COMPARE", "Bigger"]
+    assert "CMP" in c[compare_idx:] and "gt" in c[compare_idx:]
+
+
+def test_entered_legacy_desugars_to_if_encoding():
+    legacy = canon(
+        'Age is Integers;\nAge = 25;\n'
+        'Entered Age is greater than 20 then Print "Old" otherwise Print "Young";'
+    )
+    equivalent = canon(
+        'Age is Integers;\nAge = 25;\n'
+        'If Age is greater than 20;\nPrint "Old".\nElse;\nPrint "Young".\nDone.'
+    )
+    assert legacy == equivalent
+
+
 def test_block_end_markers_nest_correctly():
     # A Repeat inside an If's then-body: four blocks total (Repeat's own
     # body, the If's then-body containing it, the If's empty else-body,

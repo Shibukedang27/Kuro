@@ -13,18 +13,19 @@
 # after self_host/lexer.kuro instead (see ADR-0010's "Decision 1" for why
 # this is a build-time convenience, not a real Kuro import system).
 #
-# Grammar coverage this session (see ADR-0010 for the full scope decision):
-#   covered:  literals, variable refs, arithmetic (+ - * / with
-#             precedence, parens, unary minus), comparisons (including
-#             "or equal to"/"at least"/"at most"), and/or, is
-#             digit/alpha/space/alnum/quote, Decl, Assign (typed/untyped,
-#             multi-value), Add, Update, Print, Return, Call (paren-less
-#             and legacy-parenthesized), Action (paren-less/legacy,
-#             typed/untyped params), If/Else, Repeat, While.
-#   deferred: Take, Get, Length, Set, Append (the statement), Compare (the
-#             statement - not to be confused with the condition grammar,
-#             which If/While already need and this file covers), and the
-#             legacy `Entered ... then ... otherwise ...;` one-liner.
+# Grammar coverage: complete for the currently-supported Kuro grammar
+# (see docs/spec/grammar-coverage.md and ADR-0011 for the Stage 6
+# completion audit that verified this against compiler/parser.py
+# statement-by-statement). Covers: literals, variable refs, arithmetic
+# (+ - * / with precedence, parens, unary minus), comparisons (including
+# "or equal to"/"at least"/"at most"), and/or, is digit/alpha/space/
+# alnum/quote, Decl, Assign (typed/untyped, multi-value), Take, Add,
+# Update, Get (direct and indexed), Length, Set, Append (the statement),
+# Compare (the statement), Print, Return, Call (paren-less and
+# legacy-parenthesized), Action (paren-less/legacy, typed/untyped
+# params), If/Else, Repeat, While, and the legacy
+# `Entered ... then ... otherwise ...;` one-liner (desugars to the same
+# canonical IF encoding a real If/Else would produce).
 #
 # NAMING DISCIPLINE, AND WHY EVERY REPEATED-CONSTRUCT LOOP IS RECURSIVE,
 # NOT while+flag (both load-bearing, not style — found while differential-
@@ -162,6 +163,29 @@ Action ExpectWord ExpectedWord;
     Done.
 Done.
 
+# Consumes and returns an identifier's text, or fails cleanly (ParseFailed
+# = 1, no token consumed, "" returned) if the current token isn't one.
+# Every place that expects a name (a variable/target/action/type name)
+# uses this instead of blindly reading CurValue, after a real bug was
+# found by malformed-input testing: reading CurValue unconditionally
+# accepts *any* token's text as a name, so `Action Add A, ,;` silently
+# treated the second comma as a valid (empty-ish) parameter instead of
+# failing, unlike compiler/parser.py's `ident()`, which checks the token
+# kind first. See tests/self_host/test_parser_cross.py's malformed26 case.
+Action ExpectIdent;
+    Call CurKind;
+    ExpectIdent_K = @_;
+    If ExpectIdent_K is equal to "IDENT";
+        Call CurValue;
+        ExpectIdent_V = @_;
+        Add 1 to TokPos;
+        Return ExpectIdent_V;
+    Else;
+        ParseFailed = 1;
+        Return "";
+    Done.
+Done.
+
 # --- expression parsing (precedence: term > factor > atom, matching
 # compiler/parser.py's expr/_term/_factor/_atom exactly) -----------------
 
@@ -205,9 +229,8 @@ Action ParseAtom;
 
     If ParseAtom_K is equal to "AT";
         Add 1 to TokPos;
-        Call CurValue;
+        Call ExpectIdent;
         ParseAtom_V = @_;
-        Add 1 to TokPos;
         Append "VAR" to AstOut;
         Append "1" to AstOut;
         Append ParseAtom_V to AstOut;
@@ -477,17 +500,15 @@ Done.
 # compiler/parser.py::_param_list / _arg_list (ADR-0002). --------------
 
 Action ParseOneParam;
-    Call CurValue;
+    Call ExpectIdent;
     ParseOneParam_Name = @_;
-    Add 1 to TokPos;
     ParseOneParam_Typ = "NONE";
     Call CurKind;
     ParseOneParam_K = @_;
     If ParseOneParam_K is equal to "COLON";
         Add 1 to TokPos;
-        Call CurValue;
+        Call ExpectIdent;
         ParseOneParam_Typ = @_;
-        Add 1 to TokPos;
     Done.
     Append ParseOneParam_Name to AstOut;
     Append ParseOneParam_Typ to AstOut;
@@ -607,6 +628,20 @@ Action IsDeclAhead;
     Done.
 Done.
 
+Action ParseTakeNamesTail;
+    Call IsWord "and";
+    ParseTakeNamesTail_IsAnd = @_;
+    If ParseTakeNamesTail_IsAnd is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseTakeNamesTail_Name = @_;
+        Append ParseTakeNamesTail_Name to AstOut;
+        If ParseFailed is equal to 0;
+            Call ParseTakeNamesTail;
+        Done.
+    Done.
+Done.
+
 Action ParseValueListTail;
     Call CurKind;
     ParseValueListTail_K = @_;
@@ -637,9 +672,8 @@ Action ParseStatement;
         If ParseStatement_IsDecl is equal to 1;
             Add 1 to TokPos;
             Add 1 to TokPos;
-            Call CurValue;
+            Call ExpectIdent;
             ParseStatement_Typ = @_;
-            Add 1 to TokPos;
             Call ExpectKind "SEMI";
             Append "DECL" to AstOut;
             Append ParseStatement_V to AstOut;
@@ -653,9 +687,8 @@ Action ParseStatement;
         If ParseStatement_NextK is equal to "COLON";
             Add 1 to TokPos;
             Add 1 to TokPos;
-            Call CurValue;
+            Call ExpectIdent;
             ParseStatement_Typ2 = @_;
-            Add 1 to TokPos;
             Call ExpectKind "EQUAL";
             Append "ASSIGN" to AstOut;
             Append ParseStatement_V to AstOut;
@@ -694,9 +727,8 @@ Action ParseStatement;
         Append "ADD" to AstOut;
         Call ParseExpr;
         Call ExpectWord "to";
-        Call CurValue;
+        Call ExpectIdent;
         ParseStatement_Tgt = @_;
-        Add 1 to TokPos;
         Append ParseStatement_Tgt to AstOut;
         Call ExpectKind "SEMI";
         Return 1;
@@ -706,13 +738,135 @@ Action ParseStatement;
     ParseStatement_IsUpdate = @_;
     If ParseStatement_IsUpdate is equal to 1;
         Add 1 to TokPos;
-        Call CurValue;
+        Call ExpectIdent;
         ParseStatement_UName = @_;
-        Add 1 to TokPos;
         Call ExpectWord "to";
         Append "UPDATE" to AstOut;
         Append ParseStatement_UName to AstOut;
         Call ParseExpr;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Take";
+    ParseStatement_IsTake = @_;
+    If ParseStatement_IsTake is equal to 1;
+        Add 1 to TokPos;
+        Call IsWord "user";
+        ParseStatement_HasUser = @_;
+        If ParseStatement_HasUser is equal to 1;
+            Add 1 to TokPos;
+        Done.
+        Call ExpectIdent;
+        ParseStatement_TakeName1 = @_;
+        Append "INPUT" to AstOut;
+        Append ParseStatement_TakeName1 to AstOut;
+        Call ParseTakeNamesTail;
+        Append "END_NAMES" to AstOut;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Get";
+    ParseStatement_IsGet = @_;
+    If ParseStatement_IsGet is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_GetTarget = @_;
+        Append "GET" to AstOut;
+        Append ParseStatement_GetTarget to AstOut;
+        Call CurKind;
+        ParseStatement_GetK = @_;
+        If ParseStatement_GetK is equal to "SEMI";
+            Append "0" to AstOut;
+        Else;
+            Append "1" to AstOut;
+            Call ParseExpr;
+        Done.
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Length";
+    ParseStatement_IsLength = @_;
+    If ParseStatement_IsLength is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_LengthTarget = @_;
+        Append "LENGTH" to AstOut;
+        Append ParseStatement_LengthTarget to AstOut;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Set";
+    ParseStatement_IsSet = @_;
+    If ParseStatement_IsSet is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_SetTarget = @_;
+        Append "SET" to AstOut;
+        Append ParseStatement_SetTarget to AstOut;
+        Call ParseExpr;
+        Call ExpectWord "to";
+        Call ParseExpr;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Append";
+    ParseStatement_IsAppend = @_;
+    If ParseStatement_IsAppend is equal to 1;
+        Add 1 to TokPos;
+        Append "APPEND" to AstOut;
+        Call ParseExpr;
+        Call ExpectWord "to";
+        Call ExpectIdent;
+        ParseStatement_AppendTarget = @_;
+        Append ParseStatement_AppendTarget to AstOut;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Compare";
+    ParseStatement_IsCompare = @_;
+    If ParseStatement_IsCompare is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_CompareName = @_;
+        Append "COMPARE" to AstOut;
+        Append ParseStatement_CompareName to AstOut;
+        Call ParseCondition;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Entered";
+    ParseStatement_IsEntered = @_;
+    If ParseStatement_IsEntered is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_EnteredName = @_;
+        Call ExpectWord "is";
+        Call ParseComparisonOp;
+        ParseStatement_EnteredOp = @_;
+        Append "IF" to AstOut;
+        Append "VAR" to AstOut;
+        Append "0" to AstOut;
+        Append ParseStatement_EnteredName to AstOut;
+        Call ParseExpr;
+        Append "CMP" to AstOut;
+        Append ParseStatement_EnteredOp to AstOut;
+        Call ExpectWord "then";
+        Call ExpectWord "Print";
+        Append "PRINT" to AstOut;
+        Call ParseExpr;
+        Append "END_BLOCK" to AstOut;
+        Call ExpectWord "otherwise";
+        Call ExpectWord "Print";
+        Append "PRINT" to AstOut;
+        Call ParseExpr;
+        Append "END_BLOCK" to AstOut;
         Call ExpectKind "SEMI";
         Return 1;
     Done.
@@ -731,9 +885,8 @@ Action ParseStatement;
     ParseStatement_IsCall = @_;
     If ParseStatement_IsCall is equal to 1;
         Add 1 to TokPos;
-        Call CurValue;
+        Call ExpectIdent;
         ParseStatement_CName = @_;
-        Add 1 to TokPos;
         Append "CALL" to AstOut;
         Append ParseStatement_CName to AstOut;
         Call ParseArgs;
@@ -745,9 +898,8 @@ Action ParseStatement;
     ParseStatement_IsAction = @_;
     If ParseStatement_IsAction is equal to 1;
         Add 1 to TokPos;
-        Call CurValue;
+        Call ExpectIdent;
         ParseStatement_AName = @_;
-        Add 1 to TokPos;
         Append "ACTION" to AstOut;
         Append ParseStatement_AName to AstOut;
         Call ParseParams;
