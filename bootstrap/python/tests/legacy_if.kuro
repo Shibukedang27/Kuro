@@ -1,0 +1,2 @@
+Age = 25;
+Entered Age is greater than 20 then Print "Old" otherwise Print "Young";

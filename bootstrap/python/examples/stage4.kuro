@@ -1,0 +1,24 @@
+Name = "Kuro";
+Names = "Rithilesh", "Rahul", "Arjun";
+
+Print Name.
+Get Name 0;
+Length Name;
+
+Get Names 1;
+Length Names;
+
+Set Name 0 to "k";
+Print Name.
+
+Set Names 1 to "Mani";
+Print Names.
+
+Repeat 3;
+    Print Index.
+    If Index is equal to 1;
+        Print "middle".
+    Else;
+        Print "edge".
+    Done.
+Done.

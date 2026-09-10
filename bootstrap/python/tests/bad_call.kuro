@@ -1,0 +1,4 @@
+Action A(x);
+ Return @x;
+Done.
+Call A();

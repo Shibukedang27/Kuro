@@ -1,0 +1,5 @@
+Kuro v0.4 Stage 4
+=================
+Regression tests: 16/16 PASS
+Demo runtime: PASS
+Stage 4 COMPLETE.

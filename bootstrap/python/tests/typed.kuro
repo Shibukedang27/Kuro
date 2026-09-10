@@ -1,0 +1,4 @@
+Age is Integers;
+Age = 20;
+Update Age to 21;
+Print @Age.

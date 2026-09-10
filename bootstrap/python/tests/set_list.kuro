@@ -1,0 +1,3 @@
+Names = "A", "B", "C";
+Set Names 1 to "X";
+Print Names.

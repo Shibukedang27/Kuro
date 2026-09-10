@@ -1,0 +1,6 @@
+Action Echo(value);
+    Return @value;
+Done.
+Name = "Kuro";
+Call Echo(@Name);
+Print @_.

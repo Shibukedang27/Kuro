@@ -1,0 +1,7 @@
+Repeat 2;
+    If Index is equal to 0;
+        Print "zero".
+    Else;
+        Print "one".
+    Done.
+Done.
