@@ -47,6 +47,38 @@ def test_nested_repeat_uses_distinct_counters():
     assert len(names) == 2  # outer and inner loop got separate counters
 
 
+def test_while_lowers_to_labels_jump_and_loop_guard():
+    ir = build_ir("N is Integers;\nN = 0;\nWhile N is less than 3;\nAdd 1 to N;\nDone.")
+    ops = [i.op for i in ir.main]
+    assert ops.count("LABEL") == 2  # while_start, while_end
+    assert "JUMPF" in ops
+    assert "JUMP" in ops
+    assert "LOOP_GUARD" in ops
+    assert validate(ir) == []
+
+
+def test_while_has_no_savevar_restorevar_unlike_repeat():
+    ir = build_ir("N is Integers;\nN = 0;\nWhile N is less than 3;\nAdd 1 to N;\nDone.")
+    ops = [i.op for i in ir.main]
+    assert "SAVEVAR" not in ops and "RESTOREVAR" not in ops
+
+
+def test_nested_while_uses_distinct_loop_guards():
+    ir = build_ir(
+        "A is Integers;\nA = 0;\nB is Integers;\n"
+        "While A is less than 2;\nB = 0;\nWhile B is less than 2;\nAdd 1 to B;\nDone.\nAdd 1 to A;\nDone."
+    )
+    # Both While loops lower inline into ir.main's flat instruction list.
+    guard_ids = [i.args[0] for i in ir.main if i.op == "LOOP_GUARD"]
+    assert len(guard_ids) == 2
+    assert len(set(guard_ids)) == 2
+
+
+def test_repeat_still_checks_nonneg_count():
+    ir = build_ir("Repeat 3;\nPrint Index.\nDone.")
+    assert any(i.op == "CHECK_NONNEG" for i in ir.main)
+
+
 def test_ir_printer_does_not_crash():
     ir = build_ir("Action Echo A;\nReturn A;\nDone.\nCall Echo 1;")
     text = str(ir)

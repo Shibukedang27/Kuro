@@ -166,4 +166,5 @@ REGISTRY: dict[str, str] = {
     "E6003": "division by zero",
     "E6004": "Repeat count is negative",
     "E6005": "maximum recursion depth exceeded",
+    "E6006": "While loop exceeded maximum iteration count (ADR-0009)",
 }

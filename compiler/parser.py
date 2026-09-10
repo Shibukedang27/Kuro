@@ -12,7 +12,7 @@ from .ast_nodes import (
     ActionDecl, AddStmt, Assign, BinaryExpr, BoolAnd, BoolOr, CallStmt,
     Comparison, CompareStmt, Condition, Decl, Expr, GetStmt, IfStmt, Input,
     IsClass, Literal, LengthStmt, AppendStmt, Param, PrintStmt, Program,
-    RepeatStmt, ReturnStmt, SetStmt, Stmt, UpdateStmt, VarRef,
+    RepeatStmt, ReturnStmt, SetStmt, Stmt, UpdateStmt, VarRef, WhileStmt,
 )
 
 CLASSIFY_WORDS = {"digit", "alpha", "space", "alnum", "quote"}
@@ -21,9 +21,20 @@ from .tokens import Token, TokKind
 
 _STMT_START_WORDS = {
     "Take", "Print", "Add", "Update", "Get", "Length", "Set", "Append",
-    "Compare", "If", "Else", "Repeat", "Action", "Return", "Call", "Done",
-    "Entered",
+    "Compare", "If", "Else", "Repeat", "While", "Action", "Return", "Call",
+    "Done", "Entered",
 }
+
+# "Done"/"Else" are block *terminators*, not statement starts — they're
+# only valid as a synchronization stopping point when they belong to the
+# block currently being recovered (i.e. when they're in that block's own
+# `stops` set, checked separately in _synchronize). Treating them as a
+# universal stop point regardless of `stops` is a real bug: an orphaned
+# "Done" one nesting level shallower than any block that's looking for it
+# would make _synchronize return without consuming it, and the enclosing
+# block() loop would then call stmt() on that same unconsumed token forever
+# — an infinite loop, found while adding While's error-recovery tests.
+_BLOCK_TERMINATORS = {"Done", "Else"}
 
 
 class _Synchronize(Exception):
@@ -97,10 +108,16 @@ class Parser:
 
     def _synchronize(self, stops: set[str]):
         while self.c().kind is not TokKind.EOF:
-            if self.c().kind is TokKind.IDENT and (
-                self.c().value in stops or self.c().value in _STMT_START_WORDS
-            ):
-                return
+            if self.c().kind is TokKind.IDENT:
+                word = self.c().value
+                if word in stops:
+                    return  # this block's own terminator — let block() break on it
+                if word in _STMT_START_WORDS and word not in _BLOCK_TERMINATORS:
+                    return  # a real statement can start fresh here
+                # else: a "Done"/"Else" that doesn't belong to any block we're
+                # currently recovering — it's orphaned, so consume it and
+                # keep scanning instead of getting stuck (see
+                # _BLOCK_TERMINATORS' comment above).
             if self.c().kind in (TokKind.SEMI, TokKind.DOT):
                 self.adv()
                 return
@@ -373,6 +390,15 @@ class Parser:
             self.expect_word("Done")
             self.expect_kind(TokKind.DOT, "'.'")
             return RepeatStmt(count, body, self.span(t))
+
+        if self.isw("While"):
+            self.adv()
+            cond = self.condition()
+            self.expect_kind(TokKind.SEMI, "';'")
+            body = self.block({"Done"})
+            self.expect_word("Done")
+            self.expect_kind(TokKind.DOT, "'.'")
+            return WhileStmt(cond, body, self.span(t))
 
         if self.isw("Action"):
             self.adv()

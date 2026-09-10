@@ -23,7 +23,7 @@ from .ast_nodes import (
     ActionDecl, AddStmt, Assign, BinaryExpr, BoolAnd, BoolOr, CallStmt,
     Comparison, CompareStmt, Condition, Decl, Expr, GetStmt, IfStmt, Input,
     IsClass, Literal, LengthStmt, AppendStmt, PrintStmt, Program, RepeatStmt,
-    ReturnStmt, SetStmt, Stmt, UpdateStmt, VarRef,
+    ReturnStmt, SetStmt, Stmt, UpdateStmt, VarRef, WhileStmt,
 )
 from .diagnostics import DiagnosticEngine
 
@@ -205,6 +205,12 @@ class Resolver:
             self._resolve_block(st.body, scope, in_action)
             if not had_index:
                 scope.names.discard("Index")
+            return
+        if isinstance(st, WhileStmt):
+            # No loop variable to special-case (ADR-0009) — the body just
+            # shares the enclosing scope, exactly like If's branches.
+            self._resolve_condition(st.condition, scope)
+            self._resolve_block(st.body, scope, in_action)
             return
         if isinstance(st, ActionDecl):
             inner = scope.child()

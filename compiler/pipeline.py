@@ -64,7 +64,7 @@ class RunResult:
         return self.compile.ok and self.runtime_error is None
 
 
-def run_source(source: str, filename: str = "<source>", input_fn=input) -> RunResult:
+def run_source(source: str, filename: str = "<source>", input_fn=input, **interp_kwargs) -> RunResult:
     import io
 
     result = compile_source(source, filename)
@@ -72,7 +72,7 @@ def run_source(source: str, filename: str = "<source>", input_fn=input) -> RunRe
         return RunResult(result)
 
     buf = io.StringIO()
-    interp = Interpreter(result.ir, input_fn=input_fn, output=buf)
+    interp = Interpreter(result.ir, input_fn=input_fn, output=buf, **interp_kwargs)
     try:
         interp.run()
     except KuroRuntimeException as e:

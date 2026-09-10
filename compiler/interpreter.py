@@ -14,6 +14,13 @@ Unlike the bootstrap engine, uncontrolled Python exceptions are not allowed
 to reach the caller: deep recursion, division by zero, and out-of-range
 indexing all become structured `KuroRuntimeException`s with an E6xxx code
 (spec section 11 — "runtime errors must never produce meaningless crashes").
+
+`While` (ADR-0009) is the first construct that can fail to terminate by
+construction, so its lowered IR includes one `LOOP_GUARD` instruction per
+loop (compiler/lower.py); this interpreter counts how many times each one
+fires and raises `E6006` past `max_while_iterations` instead of hanging —
+the same "no indefinite hangs" principle that already motivated `E6005`
+for recursion depth.
 """
 from __future__ import annotations
 
@@ -23,6 +30,7 @@ from .diagnostics import Span
 from .ir import IRFunction, IRProgram
 
 _MAX_CALL_DEPTH = 200
+_DEFAULT_MAX_WHILE_ITERATIONS = 10_000_000
 
 
 class _Unset:
@@ -48,12 +56,19 @@ class _Return(Exception):
 
 
 class Interpreter:
-    def __init__(self, ir: IRProgram, input_fn=input, output=None):
+    def __init__(
+        self,
+        ir: IRProgram,
+        input_fn=input,
+        output=None,
+        max_while_iterations: int = _DEFAULT_MAX_WHILE_ITERATIONS,
+    ):
         self.ir = ir
         self.env: dict[str, object] = {}
         self.frames: list[dict[str, object]] = []
         self._input_fn = input_fn
         self._out = output if output is not None else sys.stdout
+        self._max_while_iterations = max_while_iterations
 
     # --- variable access --------------------------------------------
     def _read(self, name: str, span: Span | None):
@@ -92,6 +107,7 @@ class Interpreter:
     def _execute(self, instrs):
         labels = {instr.dest: i for i, instr in enumerate(instrs) if instr.op == "LABEL"}
         temps: dict[str, object] = {}
+        loop_counts: dict[str, int] = {}
         pc = 0
         n = len(instrs)
         while pc < n:
@@ -112,6 +128,20 @@ class Interpreter:
                 self._write(name, vals[0] if len(vals) == 1 else vals)
             elif op == "DECLTYPE":
                 pass
+            elif op == "CHECK_NONNEG":
+                val = temps[instr.args[0]]
+                if isinstance(val, (int, float)) and val < 0:
+                    raise KuroRuntimeException("E6004", "Repeat count cannot be negative", span)
+            elif op == "LOOP_GUARD":
+                guard_id = instr.args[0]
+                count = loop_counts.get(guard_id, 0) + 1
+                loop_counts[guard_id] = count
+                if count > self._max_while_iterations:
+                    raise KuroRuntimeException(
+                        "E6006",
+                        f"While loop exceeded maximum iteration count ({self._max_while_iterations})",
+                        span,
+                    )
             elif op == "INPUT":
                 name, typ = instr.args
                 raw = self._input_fn(f"{name} ({typ}): ")

@@ -200,6 +200,17 @@ class RepeatStmt(Stmt):
 
 
 @dataclass
+class WhileStmt(Stmt):
+    """ADR-0009: a condition-bounded loop, added so a scan doesn't need to
+    be padded to a precomputed upper bound (as self_host/lexer.kuro's
+    Repeat-plus-flag workaround had to be) to avoid an unbounded loop."""
+
+    condition: Condition
+    body: list[Stmt]
+    span: Span
+
+
+@dataclass
 class Param:
     name: str
     typ: str | None

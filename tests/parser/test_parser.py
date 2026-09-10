@@ -2,7 +2,7 @@ from compiler.ast_nodes import (
     ActionDecl, AddStmt, Assign, BinaryExpr, BoolAnd, BoolOr, CallStmt,
     Comparison, CompareStmt, Decl, GetStmt, IfStmt, Input, IsClass,
     LengthStmt, Literal, PrintStmt, RepeatStmt, ReturnStmt, SetStmt,
-    UpdateStmt, VarRef, AppendStmt,
+    UpdateStmt, VarRef, AppendStmt, WhileStmt,
 )
 from compiler.diagnostics import DiagnosticEngine
 from compiler.lexer import tokenize
@@ -145,6 +145,49 @@ def test_repeat():
     assert isinstance(r, RepeatStmt)
 
 
+def test_while_basic():
+    [w] = parse_ok("While N is greater than 0;\nAdd -1 to N;\nDone.")
+    assert isinstance(w, WhileStmt)
+    assert isinstance(w.condition, Comparison) and w.condition.op == "gt"
+    assert len(w.body) == 1
+
+
+def test_while_and_or_condition():
+    [w] = parse_ok("While N is greater than 0 and N is less than 10;\nAdd 1 to N;\nDone.")
+    assert isinstance(w.condition, BoolAnd)
+
+
+def test_while_nested_inside_repeat():
+    [r] = parse_ok(
+        "Repeat 3;\nWhile Flag is equal to 1;\nUpdate Flag to 0;\nDone.\nDone."
+    )
+    assert isinstance(r, RepeatStmt)
+    assert isinstance(r.body[0], WhileStmt)
+
+
+def test_while_nested_inside_while():
+    [w] = parse_ok(
+        "While A is equal to 1;\nWhile B is equal to 1;\nUpdate B to 0;\nDone.\nDone."
+    )
+    assert isinstance(w, WhileStmt)
+    assert isinstance(w.body[0], WhileStmt)
+
+
+def test_error_while_missing_done():
+    diags = parse_errors("While N is greater than 0;\nAdd -1 to N;\n")
+    assert diags.has_errors()
+
+
+def test_error_while_missing_semicolon_after_condition():
+    diags = parse_errors("While N is greater than 0\nAdd -1 to N;\nDone.")
+    assert diags.has_errors()
+
+
+def test_error_while_malformed_condition():
+    diags = parse_errors("While N;\nAdd -1 to N;\nDone.")
+    assert diags.has_errors()
+
+
 def test_action_paren_less_canonical():
     [a] = parse_ok("Action Add A, B;\nReturn A;\nDone.")
     assert isinstance(a, ActionDecl)
@@ -227,3 +270,25 @@ def test_multiple_syntax_errors_reported_in_one_pass():
     diags = parse_errors("Bogus1 X;\nBogus2 Y;\n")
     codes = [d.code for d in diags.diagnostics]
     assert codes.count("E2001") == 2
+
+
+def test_orphaned_done_after_recovery_does_not_hang():
+    # Regression: a missing ';' inside a While's condition used to make
+    # error recovery loop forever once it reached the block's trailing
+    # "Done." at the wrong nesting level — _synchronize treated "Done" as
+    # a universal stop point instead of only stopping on it when it
+    # belonged to the block currently being recovered, so block() kept
+    # calling stmt() on the same unconsumed "Done" token. Found while
+    # adding Stage 6's While error-recovery tests (ADR-0009). This must
+    # terminate, not hang.
+    diags = parse_errors("While N is greater than 0\nAdd -1 to N;\nDone.")
+    assert diags.has_errors()
+
+
+def test_orphaned_done_at_top_level_recovers_and_parses_the_rest():
+    toks, diags = tokenize('If Age is greater than 20\nPrint "x".\nDone.\nPrint "after".')
+    program = parse(toks, diags)
+    assert diags.has_errors()
+    # recovery should still find the trailing, syntactically valid statement
+    kinds = [type(s).__name__ for s in program.statements]
+    assert "PrintStmt" in kinds

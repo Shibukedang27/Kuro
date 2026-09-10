@@ -112,6 +112,23 @@ def test_set_text_requires_single_character():
 
 # --- multiple diagnostics in one pass --------------------------------
 
+def test_while_condition_checks_undefined_variable():
+    assert "E4001" in codes("While Missing is equal to 1;\nPrint Missing.\nDone.")
+
+
+def test_while_body_variable_visible_after_it():
+    r = compile_source("N is Integers;\nN = 0;\nWhile N is less than 3;\nX = N;\nAdd 1 to N;\nDone.\nPrint X.")
+    assert r.ok, r.diags.render_all()
+
+
+def test_while_condition_is_type_consistent_with_if():
+    # Conditions aren't statically type-checked for either If or While
+    # today (see compiler/typecheck.py) — this just documents that While
+    # doesn't regress relative to If's existing (lack of) behavior here.
+    r = compile_source('N is Text;\nN = "x";\nWhile N is greater than 0;\nPrint N.\nDone.')
+    assert r.ok
+
+
 def test_several_semantic_errors_reported_together():
     src = "Print Missing1.\nPrint Missing2."
     cs = codes(src)

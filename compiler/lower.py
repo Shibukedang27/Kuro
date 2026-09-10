@@ -11,6 +11,11 @@ not leaking `Index` into surrounding code (see resolver.py's scoping note
 and docs/architecture/current-state.md section 6) — but implemented as real
 IR instructions instead of ad hoc Python dict save/restore, so a native
 backend can implement the same save/restore contract.
+
+`While` (ADR-0009) has no loop variable, so it needs no save/restore — just
+a loop-start/loop-end label pair around a JUMPF, like `If`, plus one
+LOOP_GUARD instruction so an unbounded condition can't hang the runtime
+forever (see compiler/interpreter.py).
 """
 from __future__ import annotations
 
@@ -18,7 +23,7 @@ from .ast_nodes import (
     ActionDecl, AddStmt, Assign, BinaryExpr, BoolAnd, BoolOr, CallStmt,
     Comparison, CompareStmt, Condition, Decl, Expr, GetStmt, IfStmt, Input,
     IsClass, Literal, LengthStmt, AppendStmt, PrintStmt, Program, RepeatStmt,
-    ReturnStmt, SetStmt, Stmt, UpdateStmt, VarRef,
+    ReturnStmt, SetStmt, Stmt, UpdateStmt, VarRef, WhileStmt,
 )
 from .ir import IRBuilder, IRFunction, IRProgram
 from .resolver import SymbolTable
@@ -143,6 +148,9 @@ class Lowering:
         if isinstance(st, RepeatStmt):
             self._lower_repeat(st, b)
             return
+        if isinstance(st, WhileStmt):
+            self._lower_while(st, b)
+            return
         if isinstance(st, ReturnStmt):
             v = self._lower_expr(st.value, b)
             b.emit("RETURN", v, span=st.span)
@@ -159,6 +167,7 @@ class Lowering:
         counter = f"__repeat_i{self._repeat_depth}"
         try:
             count = self._lower_expr(st.count, b)
+            b.emit("CHECK_NONNEG", count, span=st.span)
             saved_index = b.emit_value("SAVEVAR", "Index", span=st.span)
             zero = b.emit_value("CONST", 0, span=st.span)
             b.emit("STORE_LIST", counter, (zero,), span=st.span)
@@ -179,6 +188,22 @@ class Lowering:
             b.emit("RESTOREVAR", "Index", saved_index, span=st.span)
         finally:
             self._repeat_depth -= 1
+
+    def _lower_while(self, st: WhileStmt, b: IRBuilder):
+        # ADR-0009: unlike Repeat, While has no loop variable to save/
+        # restore — only the LOOP_GUARD safety counter (see
+        # compiler/interpreter.py) is loop-specific, keyed by a unique
+        # label so nested/sibling While loops never share a counter.
+        start = b.fresh_label("while_start")
+        end = b.fresh_label("while_end")
+        guard_id = b.fresh_label("while_guard")
+        b.label(start)
+        b.emit("LOOP_GUARD", guard_id, span=st.span)
+        cond = self._lower_condition(st.condition, b)
+        b.emit("JUMPF", end, cond, span=st.span)
+        self._lower_block(st.body, b)
+        b.emit("JUMP", start, span=st.span)
+        b.label(end)
 
 
 def lower(program: Program, symbols: SymbolTable) -> IRProgram:
