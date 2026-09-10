@@ -1,0 +1,276 @@
+# Stage 5 self-hosting milestone (spec sections 5 and 61): a Kuro
+# tokenizer written in Kuro itself, executed by compiler/ (there is no
+# native Kuro compiler yet, so "self-hosted" here means "runs on the
+# Stage 1-4 Python-hosted interpreter, not that the Python lexer is gone").
+#
+# Cross-tested token-for-token against compiler/lexer.py by
+# self_host/cross_test.py, which substitutes real Kuro source (including
+# this project's own .kuro test fixtures) into the `Source` variable below
+# and compares this program's printed token stream against the Python
+# lexer's tokens for the same text.
+#
+# Known, deliberate limitations (see docs/engineering/ADR-0008-stage5-lexer.md):
+#   - No source-location tracking (line:col) — would need integer-to-text
+#     conversion, which the language doesn't have yet.
+#   - No error recovery/diagnostics for malformed input — silently skips
+#     characters it cannot classify, unlike compiler/lexer.py's E1xxx
+#     diagnostics.
+#   - O(n) rescanning per token (no `break`/early-exit primitive exists —
+#     see the same ADR), so this is an O(n^2)-ish algorithm. Correct, not
+#     fast; performance work is out of scope for a self-hosting milestone.
+#   - Unicode identifier combining-mark continuation (ADR-0003) is not
+#     replicated here; only `is alpha` / `is alnum` are used.
+
+Quote = "\"";
+Backslash = "\\";
+Hash = "#";
+Slash = "/";
+NL = "\n";
+Tab = "\t";
+CR = "\r";
+Underscore = "_";
+EqCh = "=";
+CommaCh = ",";
+SemiCh = ";";
+DotCh = ".";
+LParenCh = "(";
+RParenCh = ")";
+AtCh = "@";
+PlusCh = "+";
+MinusCh = "-";
+StarCh = "*";
+ColonCh = ":";
+NChar = "n";
+TChar = "t";
+RChar = "r";
+
+Source = "Action Add A, B;\n    Return A + B;\nDone.\nCall Add 3, 4;\nPrint @_.";
+Length Source;
+SourceLen = @_;
+Pos = 0;
+
+Repeat SourceLen;
+    If Pos is less than SourceLen;
+        Get Source Pos;
+        Ch = @_;
+
+        If Ch is space;
+            Add 1 to Pos;
+        Else;
+            NextPos = Pos + 1;
+            NextCh = NL;
+            If NextPos is less than SourceLen;
+                Get Source NextPos;
+                NextCh = @_;
+            Done.
+
+            If Ch is equal to Hash or Ch is equal to Slash and NextCh is equal to Slash;
+                CommentScanning = 1;
+                Repeat SourceLen;
+                    If CommentScanning is equal to 1;
+                        If Pos is less than SourceLen;
+                            Get Source Pos;
+                            Ch2 = @_;
+                            If Ch2 is equal to NL;
+                                CommentScanning = 0;
+                            Else;
+                                Add 1 to Pos;
+                            Done.
+                        Else;
+                            CommentScanning = 0;
+                        Done.
+                    Done.
+                Done.
+            Else;
+                If Ch is equal to Quote;
+                    Add 1 to Pos;
+                    StrBuf = "";
+                    StrScanning = 1;
+                    Repeat SourceLen;
+                        If StrScanning is equal to 1;
+                            If Pos is less than SourceLen;
+                                Get Source Pos;
+                                Ch2 = @_;
+                                If Ch2 is equal to Quote;
+                                    Add 1 to Pos;
+                                    StrScanning = 0;
+                                Else;
+                                    If Ch2 is equal to Backslash;
+                                        EscNextPos = Pos + 1;
+                                        EscNextCh = Backslash;
+                                        If EscNextPos is less than SourceLen;
+                                            Get Source EscNextPos;
+                                            EscNextCh = @_;
+                                        Done.
+                                        If EscNextCh is equal to NChar;
+                                            StrBuf = StrBuf + NL;
+                                        Else;
+                                            If EscNextCh is equal to TChar;
+                                                StrBuf = StrBuf + Tab;
+                                            Else;
+                                                If EscNextCh is equal to RChar;
+                                                    StrBuf = StrBuf + CR;
+                                                Else;
+                                                    StrBuf = StrBuf + EscNextCh;
+                                                Done.
+                                            Done.
+                                        Done.
+                                        Add 2 to Pos;
+                                    Else;
+                                        StrBuf = StrBuf + Ch2;
+                                        Add 1 to Pos;
+                                    Done.
+                                Done.
+                            Else;
+                                StrScanning = 0;
+                            Done.
+                        Done.
+                    Done.
+                    Print "STRING".
+                    Print StrBuf.
+                Else;
+                    If Ch is digit;
+                        NumBuf = "";
+                        IsDecimal = 0;
+                        NumScanning = 1;
+                        Repeat SourceLen;
+                            If NumScanning is equal to 1;
+                                If Pos is less than SourceLen;
+                                    Get Source Pos;
+                                    Ch2 = @_;
+                                    If Ch2 is digit;
+                                        NumBuf = NumBuf + Ch2;
+                                        Add 1 to Pos;
+                                    Else;
+                                        If Ch2 is equal to DotCh and IsDecimal is equal to 0;
+                                            DotNextPos = Pos + 1;
+                                            DotNextCh = EqCh;
+                                            If DotNextPos is less than SourceLen;
+                                                Get Source DotNextPos;
+                                                DotNextCh = @_;
+                                            Done.
+                                            If DotNextCh is digit;
+                                                NumBuf = NumBuf + Ch2;
+                                                IsDecimal = 1;
+                                                Add 1 to Pos;
+                                            Else;
+                                                NumScanning = 0;
+                                            Done.
+                                        Else;
+                                            NumScanning = 0;
+                                        Done.
+                                    Done.
+                                Else;
+                                    NumScanning = 0;
+                                Done.
+                            Done.
+                        Done.
+                        If IsDecimal is equal to 1;
+                            Print "DECIMAL".
+                        Else;
+                            Print "INTEGER".
+                        Done.
+                        Print NumBuf.
+                    Else;
+                        If Ch is alpha or Ch is equal to Underscore;
+                            IdBuf = "";
+                            IdScanning = 1;
+                            Repeat SourceLen;
+                                If IdScanning is equal to 1;
+                                    If Pos is less than SourceLen;
+                                        Get Source Pos;
+                                        Ch2 = @_;
+                                        If Ch2 is alnum or Ch2 is equal to Underscore;
+                                            IdBuf = IdBuf + Ch2;
+                                            Add 1 to Pos;
+                                        Else;
+                                            IdScanning = 0;
+                                        Done.
+                                    Else;
+                                        IdScanning = 0;
+                                    Done.
+                                Done.
+                            Done.
+                            Print "IDENT".
+                            Print IdBuf.
+                        Else;
+                            If Ch is equal to EqCh;
+                                Print "EQUAL".
+                                Print Ch.
+                                Add 1 to Pos;
+                            Else;
+                                If Ch is equal to CommaCh;
+                                    Print "COMMA".
+                                    Print Ch.
+                                    Add 1 to Pos;
+                                Else;
+                                    If Ch is equal to SemiCh;
+                                        Print "SEMI".
+                                        Print Ch.
+                                        Add 1 to Pos;
+                                    Else;
+                                        If Ch is equal to DotCh;
+                                            Print "DOT".
+                                            Print Ch.
+                                            Add 1 to Pos;
+                                        Else;
+                                            If Ch is equal to LParenCh;
+                                                Print "LPAREN".
+                                                Print Ch.
+                                                Add 1 to Pos;
+                                            Else;
+                                                If Ch is equal to RParenCh;
+                                                    Print "RPAREN".
+                                                    Print Ch.
+                                                    Add 1 to Pos;
+                                                Else;
+                                                    If Ch is equal to AtCh;
+                                                        Print "AT".
+                                                        Print Ch.
+                                                        Add 1 to Pos;
+                                                    Else;
+                                                        If Ch is equal to PlusCh;
+                                                            Print "PLUS".
+                                                            Print Ch.
+                                                            Add 1 to Pos;
+                                                        Else;
+                                                            If Ch is equal to MinusCh;
+                                                                Print "MINUS".
+                                                                Print Ch.
+                                                                Add 1 to Pos;
+                                                            Else;
+                                                                If Ch is equal to StarCh;
+                                                                    Print "STAR".
+                                                                    Print Ch.
+                                                                    Add 1 to Pos;
+                                                                Else;
+                                                                    If Ch is equal to Slash;
+                                                                        Print "SLASH".
+                                                                        Print Ch.
+                                                                        Add 1 to Pos;
+                                                                    Else;
+                                                                        If Ch is equal to ColonCh;
+                                                                            Print "COLON".
+                                                                            Print Ch.
+                                                                            Add 1 to Pos;
+                                                                        Else;
+                                                                            Add 1 to Pos;
+                                                                        Done.
+                                                                    Done.
+                                                                Done.
+                                                            Done.
+                                                        Done.
+                                                    Done.
+                                                Done.
+                                            Done.
+                                        Done.
+                                    Done.
+                                Done.
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+Done.

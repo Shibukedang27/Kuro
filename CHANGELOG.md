@@ -21,12 +21,14 @@ Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
   (`Age : Integers = 25;`).
 - Paren-less `Action`/`Call` syntax is now canonical; the original
   parenthesized form is still accepted (ADR-0002).
-- 124 tests across `tests/lexer`, `tests/parser`, `tests/semantic`,
-  `tests/ir`, `tests/runtime`, and `tests/regression` (the last replaying
-  all 16 original bootstrap fixtures against captured golden output).
+- 150 tests total: 22 lexer, 36 parser, 21 semantic, 7 IR, 19 runtime,
+  22 regression (replaying all 16 original bootstrap fixtures against
+  captured golden output), 23 self-hosting cross-tests. All passing.
 - `self_host/lexer.kuro`: the first self-hosting milestone (Stage 5) — a
   Kuro tokenizer written in Kuro, run by `compiler/`, cross-tested token
-  for token against `compiler/lexer.py` on real Kuro source files.
+  for token against `compiler/lexer.py` on 21 real `.kuro` fixtures plus a
+  hand-written all-punctuation snippet (`tests/self_host/`). Scope and
+  known limitations recorded in ADR-0008.
 
 ### Changed / Breaking
 - `Get`/`Length` no longer print their result as a side effect (ADR-0007).

@@ -1,0 +1,15 @@
+Name = "Kuro";
+Print Name.
+
+Action Add A, B;
+    Return A + B;
+Done.
+
+Call Add 3, 4;
+Print @_.
+
+Repeat 3;
+    If Index is greater than 0;
+        Print Index.
+    Done.
+Done.
