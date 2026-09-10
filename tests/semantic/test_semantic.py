@@ -51,6 +51,30 @@ def test_index_only_defined_inside_repeat():
     assert compile_source("Repeat 3;\nPrint Index.\nDone.").ok
 
 
+def test_variable_first_assigned_inside_repeat_is_visible_after_it():
+    # The interpreter's storage is flat (compiler/interpreter.py): a name
+    # assigned inside a Repeat body really does exist afterward, matching
+    # the bootstrap engine. The resolver must not falsely reject this.
+    r = compile_source("Repeat 3;\nX = Index;\nDone.\nPrint X.")
+    assert r.ok, r.diags.render_all()
+
+
+def test_index_does_not_leak_past_its_own_repeat():
+    assert "E4001" in codes("Repeat 3;\nPrint Index.\nDone.\nPrint Index.")
+
+
+def test_nested_repeat_inner_index_does_not_shadow_outer_after_it_ends():
+    src = (
+        "Repeat 2;\n"
+        "Repeat 3;\n"
+        "Y = Index;\n"
+        "Done.\n"
+        "Print Index.\n"  # still the outer Repeat's Index — must resolve
+        "Done."
+    )
+    assert compile_source(src).ok
+
+
 def test_input_variable_must_be_declared():
     assert "E4001" in codes("Take user Age;")
     r = compile_source("Age is Integers;\nTake user Age;")

@@ -187,9 +187,24 @@ class Resolver:
             return
         if isinstance(st, RepeatStmt):
             self._resolve_expr(st.count, scope)
-            inner = scope.child()
-            inner.define("Index")
-            self._resolve_block(st.body, inner, in_action)
+            # Only `Index` is scoped to this Repeat (mirroring the
+            # interpreter's SAVEVAR/RESTOREVAR around Index — see
+            # lower.py::_lower_repeat). Every other name assigned inside
+            # the body must land in the SAME (enclosing) scope, not a
+            # child, because the interpreter's storage is flat: `X = 1;`
+            # inside a Repeat really does define X for code after the loop
+            # too (matches the bootstrap engine — see
+            # docs/architecture/current-state.md section 7). An earlier
+            # version of this pass used a child scope for the whole body,
+            # which made that a false "undefined variable" at resolve time
+            # even though it would run fine — caught while writing the
+            # Stage 5 self-hosted lexer, which relies on exactly this
+            # pattern (scan buffers assigned inside nested Repeats).
+            had_index = "Index" in scope.names
+            scope.define("Index")
+            self._resolve_block(st.body, scope, in_action)
+            if not had_index:
+                scope.names.discard("Index")
             return
         if isinstance(st, ActionDecl):
             inner = scope.child()
