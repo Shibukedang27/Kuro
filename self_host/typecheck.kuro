@@ -1,0 +1,1342 @@
+# Stage 7, self-hosted typechecker — PASS 2: usage resolution (E4xxx) and
+# type checking (E3xxx), COMBINED into one walk (ADR-0014's deliberate
+# simplification of Python's two separate passes — compiler/resolver.py's
+# second pass, then compiler/typecheck.py). Reuses self_host/resolver.kuro's
+# pass-1 symbol table (SymNames/SymTypes/ActionNames/ActionArity/
+# ActionParamPos, and its KindAt/ValueAt/StartAt/RecordSemDiag/SymHasType/
+# SymGetType/ActionExists/IsDeclAheadSem/CountParamsAt helpers) — this file
+# assumes resolver.kuro's pass 1 has already run (normally by being
+# concatenated right after it) and its own top-level `Call
+# ResolverPass1;` has already executed before this file's `Call
+# TypecheckPass2;` runs.
+#
+# WHY THIS RE-SCANS TOKENS INSTEAD OF WALKING AstOut, and WHY PASS 2 IS
+# COMBINED WITH TYPE CHECKING: see ADR-0014 in full — both are load-bearing
+# architectural decisions made *before* writing this file, not discovered
+# by trial and error the way Stage 6's reentrancy bugs were.
+#
+# TRUST BOUNDARY: unlike self_host/parser.kuro (which must validate
+# untrusted syntax), this file only ever runs on a token stream that
+# ALREADY parsed successfully once (the pipeline never reaches resolution
+# on a program with parse errors — matching compiler/pipeline.py's own
+# short-circuit-on-error structure). So token *consumption* here never
+# needs failure/recovery handling — only the genuinely new checks this
+# pass performs (undefined names, type mismatches) need RecordSemDiag.
+# This is what makes pass 2 meaningfully shorter than a second parser
+# would otherwise be.
+#
+# REENTRANCY: every repeated construct here is tail recursion (never
+# while+flag around a call that could recurse back through it), and every
+# "accumulate while walking" value (an expression's type, in particular)
+# is threaded through as an Action PARAMETER rather than a global —
+# lessons already paid for once in self_host/parser.kuro (see its header
+# comment's "NAMING DISCIPLINE" section); applied here from the start
+# rather than rediscovered.
+
+# --- BEGIN_STANDALONE (stripped by the differential test harness) ---
+Source = "Age is Integers;\nAge = 25;\nPrint Age.";
+TokenKinds = "IDENT", "IDENT", "SEMI", "IDENT", "EQUAL", "INTEGER", "SEMI", "IDENT", "IDENT", "DOT";
+TokenValues = "Age", "is", ";", "Age", "=", "25", ";", "Print", "Age", ".";
+TokenStarts = 0, 4, 14, 16, 20, 22, 24, 26, 32, 35;
+TokCount = 10;
+DiagCodes is Text;
+DiagLines is Text;
+DiagCols is Text;
+DiagMessages is Text;
+SymNames = "";
+SymTypes = "";
+ActionNames = "";
+ActionArity = -1;
+ActionParamPos = -1;
+# --- END_STANDALONE ---
+
+SemPos = 0;
+IndexDepth = 0;
+InActionDepth = 0;
+
+CurParamNames is Text;
+CurParamTypes is Text;
+CurParamBase = 0;
+CurParamCount = 0;
+Append "" to CurParamNames;
+Append "" to CurParamTypes;
+
+# --- small shared predicates ---------------------------------------------
+
+Action TCIsNumericType Typ;
+    If Typ is equal to "Integers";
+        Return 1;
+    Done.
+    If Typ is equal to "Decimals";
+        Return 1;
+    Done.
+    Return 0;
+Done.
+
+Action TCCompatible Declared, Actual;
+    If Declared is equal to Actual;
+        Return 1;
+    Done.
+    If Declared is equal to "Decimals" and Actual is equal to "Integers";
+        Return 1;
+    Done.
+    Return 0;
+Done.
+
+Action TCIsWord Word;
+    Call KindAt SemPos;
+    TCIsWord_K = @_;
+    If TCIsWord_K is equal to "IDENT";
+        Call ValueAt SemPos;
+        TCIsWord_V = @_;
+        If TCIsWord_V is equal to Word;
+            Return 1;
+        Else;
+            Return 0;
+        Done.
+    Else;
+        Return 0;
+    Done.
+Done.
+
+# --- symbol lookup, including the two temporary scoping exceptions
+# (ADR-0012/ADR-0014: Index via IndexDepth, Action params via the
+# CurParamNames "window" [CurParamBase, CurParamBase+CurParamCount)) ------
+
+Action TCIsParam Name;
+    TCIsParam_I = CurParamBase;
+    TCIsParam_End = CurParamBase + CurParamCount;
+    TCIsParam_Found = 0;
+    While TCIsParam_I is less than TCIsParam_End;
+        Get CurParamNames TCIsParam_I;
+        TCIsParam_Nm = @_;
+        If TCIsParam_Nm is equal to Name;
+            TCIsParam_Found = 1;
+        Done.
+        Add 1 to TCIsParam_I;
+    Done.
+    Return TCIsParam_Found;
+Done.
+
+Action TCParamTypeOf Name;
+    TCParamTypeOf_I = CurParamBase;
+    TCParamTypeOf_End = CurParamBase + CurParamCount;
+    TCParamTypeOf_Result = "";
+    While TCParamTypeOf_I is less than TCParamTypeOf_End;
+        Get CurParamNames TCParamTypeOf_I;
+        TCParamTypeOf_Nm = @_;
+        If TCParamTypeOf_Nm is equal to Name;
+            Get CurParamTypes TCParamTypeOf_I;
+            TCParamTypeOf_Result = @_;
+        Done.
+        Add 1 to TCParamTypeOf_I;
+    Done.
+    Return TCParamTypeOf_Result;
+Done.
+
+Action TCIsDefined Name;
+    If Name is equal to "_";
+        Return 1;
+    Done.
+    If Name is equal to "Index";
+        Compare TCIsDefined_HasIndex IndexDepth greater than 0;
+        If TCIsDefined_HasIndex is equal to 1;
+            Return 1;
+        Done.
+    Done.
+    Call TCIsParam Name;
+    TCIsDefined_P = @_;
+    If TCIsDefined_P is equal to 1;
+        Return 1;
+    Done.
+    Call SymHasType Name;
+    Return @_;
+Done.
+
+Action TCTypeOf Name;
+    If Name is equal to "Index";
+        Return "Integers";
+    Done.
+    If Name is equal to "_";
+        Return "";
+    Done.
+    Call TCIsParam Name;
+    TCTypeOf_P = @_;
+    If TCTypeOf_P is equal to 1;
+        Call TCParamTypeOf Name;
+        Return @_;
+    Done.
+    Call SymGetType Name;
+    Return @_;
+Done.
+
+# --- expressions: full precedence climbing, mirroring self_host/
+# parser.kuro's ParseExpr/ParseTerm/ParseFactor/ParseAtom exactly, but
+# each returns a TYPE (a Text value: "Integers"/"Decimals"/"Text"/
+# "Symbols"/"" for unknown) instead of appending to AstOut, and reports
+# E4001 for an undefined name or E3011 for incompatible arithmetic
+# operands (ADR-0013) along the way. ------------------------------------
+
+Action TCBinOpType Op, Lt, Rt, ErrPos;
+    If Lt is equal to "";
+        Return "";
+    Done.
+    If Rt is equal to "";
+        Return "";
+    Done.
+    If Op is equal to "+";
+        If Lt is equal to "Text" and Rt is equal to "Text";
+            Return "Text";
+        Done.
+    Done.
+    Call TCIsNumericType Lt;
+    TCBinOpType_LNum = @_;
+    Call TCIsNumericType Rt;
+    TCBinOpType_RNum = @_;
+    If TCBinOpType_LNum is equal to 1 and TCBinOpType_RNum is equal to 1;
+        If Lt is equal to "Decimals" or Rt is equal to "Decimals";
+            Return "Decimals";
+        Else;
+            Return "Integers";
+        Done.
+    Done.
+    Call RecordSemDiag "E3011", ErrPos, "invalid operand types for " + Op + ": " + Lt + " and " + Rt;
+    Return "";
+Done.
+
+Action TCResolveAtom;
+    Call KindAt SemPos;
+    TCResolveAtom_K = @_;
+
+    If TCResolveAtom_K is equal to "LPAREN";
+        Add 1 to SemPos;
+        Call TCResolveExpr;
+        TCResolveAtom_T = @_;
+        Add 1 to SemPos;
+        Return TCResolveAtom_T;
+    Done.
+
+    If TCResolveAtom_K is equal to "STRING";
+        Add 1 to SemPos;
+        Return "Text";
+    Done.
+
+    If TCResolveAtom_K is equal to "INTEGER";
+        Add 1 to SemPos;
+        Return "Integers";
+    Done.
+
+    If TCResolveAtom_K is equal to "DECIMAL";
+        Add 1 to SemPos;
+        Return "Decimals";
+    Done.
+
+    If TCResolveAtom_K is equal to "AT";
+        Add 1 to SemPos;
+        TCResolveAtom_NamePos = SemPos;
+        Call ValueAt SemPos;
+        TCResolveAtom_Name = @_;
+        Add 1 to SemPos;
+        If TCResolveAtom_Name is equal to "_";
+            Return "";
+        Done.
+        Call TCIsDefined TCResolveAtom_Name;
+        TCResolveAtom_Def = @_;
+        If TCResolveAtom_Def is equal to 0;
+            Call RecordSemDiag "E4001", TCResolveAtom_NamePos, "undefined value " + TCResolveAtom_Name;
+            Return "";
+        Done.
+        Call TCTypeOf TCResolveAtom_Name;
+        Return @_;
+    Done.
+
+    If TCResolveAtom_K is equal to "MINUS";
+        TCResolveAtom_MinusPos = SemPos;
+        Add 1 to SemPos;
+        Call TCResolveAtom;
+        TCResolveAtom_Inner = @_;
+        Call TCBinOpType "-", "Integers", TCResolveAtom_Inner, TCResolveAtom_MinusPos;
+        Return @_;
+    Done.
+
+    # bare IDENT (a variable reference)
+    TCResolveAtom_NamePos2 = SemPos;
+    Call ValueAt SemPos;
+    TCResolveAtom_Name2 = @_;
+    Add 1 to SemPos;
+    Call TCIsDefined TCResolveAtom_Name2;
+    TCResolveAtom_Def2 = @_;
+    If TCResolveAtom_Def2 is equal to 0;
+        Call RecordSemDiag "E4001", TCResolveAtom_NamePos2, "undefined value " + TCResolveAtom_Name2;
+        Return "";
+    Done.
+    Call TCTypeOf TCResolveAtom_Name2;
+    Return @_;
+Done.
+
+Action TCResolveFactorTail LeftType;
+    Call KindAt SemPos;
+    TCResolveFactorTail_K = @_;
+    If TCResolveFactorTail_K is equal to "STAR" or TCResolveFactorTail_K is equal to "SLASH";
+        TCResolveFactorTail_Op = "*";
+        If TCResolveFactorTail_K is equal to "SLASH";
+            TCResolveFactorTail_Op = "/";
+        Done.
+        TCResolveFactorTail_OpPos = SemPos;
+        Add 1 to SemPos;
+        Call TCResolveAtom;
+        TCResolveFactorTail_Rt = @_;
+        Call TCBinOpType TCResolveFactorTail_Op, LeftType, TCResolveFactorTail_Rt, TCResolveFactorTail_OpPos;
+        TCResolveFactorTail_Combined = @_;
+        Call TCResolveFactorTail TCResolveFactorTail_Combined;
+        Return @_;
+    Else;
+        Return LeftType;
+    Done.
+Done.
+
+Action TCResolveFactor;
+    Call TCResolveAtom;
+    TCResolveFactor_T = @_;
+    Call TCResolveFactorTail TCResolveFactor_T;
+    Return @_;
+Done.
+
+Action TCResolveTermTail LeftType;
+    Call KindAt SemPos;
+    TCResolveTermTail_K = @_;
+    If TCResolveTermTail_K is equal to "PLUS" or TCResolveTermTail_K is equal to "MINUS";
+        TCResolveTermTail_Op = "+";
+        If TCResolveTermTail_K is equal to "MINUS";
+            TCResolveTermTail_Op = "-";
+        Done.
+        TCResolveTermTail_OpPos = SemPos;
+        Add 1 to SemPos;
+        Call TCResolveFactor;
+        TCResolveTermTail_Rt = @_;
+        Call TCBinOpType TCResolveTermTail_Op, LeftType, TCResolveTermTail_Rt, TCResolveTermTail_OpPos;
+        TCResolveTermTail_Combined = @_;
+        Call TCResolveTermTail TCResolveTermTail_Combined;
+        Return @_;
+    Else;
+        Return LeftType;
+    Done.
+Done.
+
+Action TCResolveTerm;
+    Call TCResolveFactor;
+    TCResolveTerm_T = @_;
+    Call TCResolveTermTail TCResolveTerm_T;
+    Return @_;
+Done.
+
+Action TCResolveExpr;
+    Call TCResolveTerm;
+    Return @_;
+Done.
+
+# --- conditions: comparisons (+ E3006, ADR-0013), and/or, is-class -------
+
+Action TCResolveComparisonOp;
+    Call TCIsWord "greater";
+    TCROp_W1 = @_;
+    If TCROp_W1 is equal to 1;
+        Add 1 to SemPos;
+        Add 1 to SemPos;
+        Call TCIsWord "or";
+        TCROp_W1b = @_;
+        If TCROp_W1b is equal to 1;
+            Add 1 to SemPos;
+            Add 1 to SemPos;
+            Call TCIsWord "to";
+            TCROp_W1c = @_;
+            If TCROp_W1c is equal to 1;
+                Add 1 to SemPos;
+            Done.
+            Return "ge";
+        Else;
+            Return "gt";
+        Done.
+    Done.
+
+    Call TCIsWord "less";
+    TCROp_W2 = @_;
+    If TCROp_W2 is equal to 1;
+        Add 1 to SemPos;
+        Add 1 to SemPos;
+        Call TCIsWord "or";
+        TCROp_W2b = @_;
+        If TCROp_W2b is equal to 1;
+            Add 1 to SemPos;
+            Add 1 to SemPos;
+            Call TCIsWord "to";
+            TCROp_W2c = @_;
+            If TCROp_W2c is equal to 1;
+                Add 1 to SemPos;
+            Done.
+            Return "le";
+        Else;
+            Return "lt";
+        Done.
+    Done.
+
+    Call TCIsWord "equal";
+    TCROp_W3 = @_;
+    If TCROp_W3 is equal to 1;
+        Add 1 to SemPos;
+        Call TCIsWord "to";
+        TCROp_W3b = @_;
+        If TCROp_W3b is equal to 1;
+            Add 1 to SemPos;
+        Done.
+        Return "eq";
+    Done.
+
+    Call TCIsWord "equals";
+    TCROp_W4 = @_;
+    If TCROp_W4 is equal to 1;
+        Add 1 to SemPos;
+        Call TCIsWord "to";
+        TCROp_W4b = @_;
+        If TCROp_W4b is equal to 1;
+            Add 1 to SemPos;
+        Done.
+        Return "eq";
+    Done.
+
+    Call TCIsWord "not";
+    TCROp_W5 = @_;
+    If TCROp_W5 is equal to 1;
+        Add 1 to SemPos;
+        Add 1 to SemPos;
+        Call TCIsWord "to";
+        TCROp_W5b = @_;
+        If TCROp_W5b is equal to 1;
+            Add 1 to SemPos;
+        Done.
+        Return "ne";
+    Done.
+
+    # "at least" / "at most"
+    Add 1 to SemPos;
+    Call TCIsWord "least";
+    TCROp_W6a = @_;
+    If TCROp_W6a is equal to 1;
+        Add 1 to SemPos;
+        Return "ge";
+    Done.
+    Add 1 to SemPos;
+    Return "le";
+Done.
+
+Action TCResolveComparison;
+    TCRC_LtPos = SemPos;
+    Call TCResolveExpr;
+    TCRC_Lt = @_;
+    Call TCIsWord "is";
+    TCRC_HasIs = @_;
+    If TCRC_HasIs is equal to 1;
+        Add 1 to SemPos;
+    Done.
+
+    Call KindAt SemPos;
+    TCRC_K = @_;
+    Call ValueAt SemPos;
+    TCRC_V = @_;
+    TCRC_IsClassWord = 0;
+    If TCRC_K is equal to "IDENT";
+        If TCRC_V is equal to "digit";
+            TCRC_IsClassWord = 1;
+        Done.
+        If TCRC_V is equal to "alpha";
+            TCRC_IsClassWord = 1;
+        Done.
+        If TCRC_V is equal to "space";
+            TCRC_IsClassWord = 1;
+        Done.
+        If TCRC_V is equal to "alnum";
+            TCRC_IsClassWord = 1;
+        Done.
+        If TCRC_V is equal to "quote";
+            TCRC_IsClassWord = 1;
+        Done.
+    Done.
+
+    If TCRC_IsClassWord is equal to 1;
+        Add 1 to SemPos;
+    Else;
+        TCRC_OpPos = SemPos;
+        Call TCResolveComparisonOp;
+        TCRC_Op = @_;
+        Call TCResolveExpr;
+        TCRC_Rt = @_;
+        TCRC_IsOrdering = 0;
+        If TCRC_Op is equal to "gt";
+            TCRC_IsOrdering = 1;
+        Done.
+        If TCRC_Op is equal to "lt";
+            TCRC_IsOrdering = 1;
+        Done.
+        If TCRC_Op is equal to "ge";
+            TCRC_IsOrdering = 1;
+        Done.
+        If TCRC_Op is equal to "le";
+            TCRC_IsOrdering = 1;
+        Done.
+        If TCRC_IsOrdering is equal to 1 and TCRC_Lt is not equal to "" and TCRC_Rt is not equal to "";
+            Call TCIsNumericType TCRC_Lt;
+            TCRC_LNum = @_;
+            Call TCIsNumericType TCRC_Rt;
+            TCRC_RNum = @_;
+            TCRC_BothNum = 0;
+            If TCRC_LNum is equal to 1 and TCRC_RNum is equal to 1;
+                TCRC_BothNum = 1;
+            Done.
+            TCRC_BothText = 0;
+            If TCRC_Lt is equal to "Text" and TCRC_Rt is equal to "Text";
+                TCRC_BothText = 1;
+            Done.
+            If TCRC_BothNum is equal to 0 and TCRC_BothText is equal to 0;
+                Call RecordSemDiag "E3006", TCRC_LtPos, "cannot compare " + TCRC_Lt + " and " + TCRC_Rt;
+            Done.
+        Done.
+    Done.
+Done.
+
+Action TCResolveAndConditionTail;
+    Call TCIsWord "and";
+    TCRACT_IsAnd = @_;
+    If TCRACT_IsAnd is equal to 1;
+        Add 1 to SemPos;
+        Call TCResolveComparison;
+        Call TCResolveAndConditionTail;
+    Done.
+Done.
+
+Action TCResolveAndCondition;
+    Call TCResolveComparison;
+    Call TCResolveAndConditionTail;
+Done.
+
+Action TCResolveConditionTail;
+    Call TCIsWord "or";
+    TCRCT_IsOr = @_;
+    If TCRCT_IsOr is equal to 1;
+        Add 1 to SemPos;
+        Call TCResolveAndCondition;
+        Call TCResolveConditionTail;
+    Done.
+Done.
+
+Action TCResolveCondition;
+    Call TCResolveAndCondition;
+    Call TCResolveConditionTail;
+Done.
+
+# --- Action parameter registration (entering/leaving an Action's body) --
+# CurParamBase/CurParamCount are set by the caller (TCCheckStatement's
+# Action case) before these run. Nested Actions are a known, documented
+# simplification (ADR-0014): CurParamCount always resets to 0 once a
+# body finishes, including a nested one, rather than being restored to
+# whatever the enclosing Action's count was - low-risk given a nested
+# Action is already established as inert/uncallable (docs/architecture/
+# self-hosted-semantics.md §3b), and avoids needing frame-safe save/
+# restore for a case this rare.
+
+Action TCRegisterOneParam;
+    Call ValueAt SemPos;
+    TCROP_Name = @_;
+    Add 1 to SemPos;
+    TCROP_Typ = "";
+    Call KindAt SemPos;
+    TCROP_K = @_;
+    If TCROP_K is equal to "COLON";
+        Add 1 to SemPos;
+        Call ValueAt SemPos;
+        TCROP_Typ = @_;
+        Add 1 to SemPos;
+    Done.
+    Append TCROP_Name to CurParamNames;
+    Append TCROP_Typ to CurParamTypes;
+    CurParamCount = CurParamCount + 1;
+Done.
+
+Action TCRegisterParamsTail;
+    Call KindAt SemPos;
+    TCRPT_K = @_;
+    If TCRPT_K is equal to "COMMA";
+        Add 1 to SemPos;
+        Call TCRegisterOneParam;
+        Call TCRegisterParamsTail;
+    Done.
+Done.
+
+Action TCRegisterParams;
+    Call KindAt SemPos;
+    TCRP_K = @_;
+    If TCRP_K is equal to "LPAREN";
+        Add 1 to SemPos;
+        Call KindAt SemPos;
+        TCRP_K2 = @_;
+        If TCRP_K2 is equal to "RPAREN";
+            Add 1 to SemPos;
+        Else;
+            Call TCRegisterOneParam;
+            Call TCRegisterParamsTail;
+            Add 1 to SemPos;
+        Done.
+    Else;
+        Call KindAt SemPos;
+        TCRP_K3 = @_;
+        If TCRP_K3 is not equal to "SEMI";
+            Call TCRegisterOneParam;
+            Call TCRegisterParamsTail;
+        Done.
+    Done.
+Done.
+
+# On-demand lookup of one specific parameter's declared type, by jumping
+# SemPos to a previously-recorded ActionParamPos and re-scanning just that
+# parameter list (ADR-0014's alternative to a ragged per-action symbol
+# structure Kuro cannot represent cleanly). Safe to save/restore SemPos
+# with a plain local here (no reentrancy risk - this helper never calls
+# back into the statement-walking machinery that could clobber it).
+Action TCParamTypeAtIndex ParamsPos, Idx;
+    TCPTAI_SavedPos = SemPos;
+    SemPos = ParamsPos;
+    Call KindAt SemPos;
+    TCPTAI_K = @_;
+    If TCPTAI_K is equal to "LPAREN";
+        Add 1 to SemPos;
+    Done.
+    TCPTAI_I = 0;
+    TCPTAI_Result = "";
+    TCPTAI_Continue = 1;
+    While TCPTAI_Continue is equal to 1;
+        Call KindAt SemPos;
+        TCPTAI_K2 = @_;
+        If TCPTAI_K2 is equal to "RPAREN" or TCPTAI_K2 is equal to "SEMI";
+            TCPTAI_Continue = 0;
+        Else;
+            Add 1 to SemPos;
+            TCPTAI_PTyp = "";
+            Call KindAt SemPos;
+            TCPTAI_K3 = @_;
+            If TCPTAI_K3 is equal to "COLON";
+                Add 1 to SemPos;
+                Call ValueAt SemPos;
+                TCPTAI_PTyp = @_;
+                Add 1 to SemPos;
+            Done.
+            If TCPTAI_I is equal to Idx;
+                TCPTAI_Result = TCPTAI_PTyp;
+            Done.
+            TCPTAI_I = TCPTAI_I + 1;
+            Call KindAt SemPos;
+            TCPTAI_K4 = @_;
+            If TCPTAI_K4 is equal to "COMMA";
+                Add 1 to SemPos;
+            Else;
+                TCPTAI_Continue = 0;
+            Done.
+        Done.
+    Done.
+    SemPos = TCPTAI_SavedPos;
+    Return TCPTAI_Result;
+Done.
+
+# --- multi-value Assign's comma-separated value list (E3001) ------------
+
+Action TCCheckValueList Declared, VarName;
+    TCCVL_Pos = SemPos;
+    Call TCResolveExpr;
+    TCCVL_T = @_;
+    If Declared is not equal to "" and TCCVL_T is not equal to "";
+        Call TCCompatible Declared, TCCVL_T;
+        TCCVL_Ok = @_;
+        If TCCVL_Ok is equal to 0;
+            Call RecordSemDiag "E3001", TCCVL_Pos, "cannot assign " + TCCVL_T + " to " + Declared + " variable " + VarName;
+        Done.
+    Done.
+    Call KindAt SemPos;
+    TCCVL_NK = @_;
+    If TCCVL_NK is equal to "COMMA";
+        Add 1 to SemPos;
+        Call TCCheckValueList Declared, VarName;
+    Else;
+        Add 1 to SemPos;
+    Done.
+Done.
+
+# --- Call's comma-separated argument list (E3007 against typed params) --
+
+Action TCCheckArgList ActionIdx, ParamsPos, ArgIdx;
+    TCCAL_Pos = SemPos;
+    Call TCResolveExpr;
+    TCCAL_T = @_;
+    Call TCParamTypeAtIndex ParamsPos, ArgIdx;
+    TCCAL_ParamTyp = @_;
+    If TCCAL_ParamTyp is not equal to "" and TCCAL_T is not equal to "";
+        Call TCCompatible TCCAL_ParamTyp, TCCAL_T;
+        TCCAL_Ok = @_;
+        If TCCAL_Ok is equal to 0;
+            Call RecordSemDiag "E3007", TCCAL_Pos, "cannot pass " + TCCAL_T + " as " + TCCAL_ParamTyp + " argument";
+        Done.
+    Done.
+    Call KindAt SemPos;
+    TCCAL_NK = @_;
+    If TCCAL_NK is equal to "COMMA";
+        Add 1 to SemPos;
+        Call TCCheckArgList ActionIdx, ParamsPos, ArgIdx + 1;
+    Done.
+Done.
+
+Action TCCheckCallArgs ActionName;
+    Call KindAt SemPos;
+    TCCCA_K = @_;
+    TCCCA_HasParens = 0;
+    If TCCCA_K is equal to "LPAREN";
+        TCCCA_HasParens = 1;
+        Add 1 to SemPos;
+    Done.
+
+    Call KindAt SemPos;
+    TCCCA_K2 = @_;
+    TCCCA_Empty = 0;
+    If TCCCA_HasParens is equal to 1;
+        If TCCCA_K2 is equal to "RPAREN";
+            TCCCA_Empty = 1;
+        Done.
+    Else;
+        If TCCCA_K2 is equal to "SEMI";
+            TCCCA_Empty = 1;
+        Done.
+    Done.
+
+    If TCCCA_Empty is equal to 0;
+        Call ActionParamsPosFor ActionName;
+        TCCCA_ParamsPos = @_;
+        Call TCCheckArgList 0, TCCCA_ParamsPos, 0;
+    Done.
+
+    If TCCCA_HasParens is equal to 1;
+        Add 1 to SemPos;
+    Done.
+Done.
+
+Action ActionParamsPosFor Name;
+    Length ActionNames;
+    APPF_N = @_;
+    APPF_Result = -1;
+    Repeat APPF_N;
+        Get ActionNames Index;
+        APPF_Nm = @_;
+        If APPF_Nm is equal to Name;
+            Get ActionParamPos Index;
+            APPF_Result = @_;
+        Done.
+    Done.
+    Return APPF_Result;
+Done.
+
+Action ActionArityFor Name;
+    Length ActionNames;
+    AAF_N = @_;
+    AAF_Result = -1;
+    Repeat AAF_N;
+        Get ActionNames Index;
+        AAF_Nm = @_;
+        If AAF_Nm is equal to Name;
+            Get ActionArity Index;
+            AAF_Result = @_;
+        Done.
+    Done.
+    Return AAF_Result;
+Done.
+
+# Counts a Call's comma-separated argument expressions WITHOUT resolving
+# them (used only to produce the E4004 count for a mismatch message /
+# check - the real per-argument work happens in TCCheckCallArgs). Mirrors
+# resolver.kuro's CountParamsAt in spirit but for expressions at the
+# CURRENT SemPos, saving/restoring it (safe - no reentrant risk, see
+# TCParamTypeAtIndex's comment).
+Action TCCountCallArgs;
+    TCCCArgs_Saved = SemPos;
+    Call KindAt SemPos;
+    TCCCArgs_K = @_;
+    TCCCArgs_HasParens = 0;
+    If TCCCArgs_K is equal to "LPAREN";
+        TCCCArgs_HasParens = 1;
+        Add 1 to SemPos;
+    Done.
+    Call KindAt SemPos;
+    TCCCArgs_K2 = @_;
+    TCCCArgs_Empty = 0;
+    If TCCCArgs_HasParens is equal to 1;
+        If TCCCArgs_K2 is equal to "RPAREN";
+            TCCCArgs_Empty = 1;
+        Done.
+    Else;
+        If TCCCArgs_K2 is equal to "SEMI";
+            TCCCArgs_Empty = 1;
+        Done.
+    Done.
+    If TCCCArgs_Empty is equal to 1;
+        SemPos = TCCCArgs_Saved;
+        Return 0;
+    Done.
+    TCCCArgs_Count = 1;
+    TCCCArgs_Depth = 0;
+    TCCCArgs_Continue = 1;
+    While TCCCArgs_Continue is equal to 1;
+        Call KindAt SemPos;
+        TCCCArgs_K3 = @_;
+        If TCCCArgs_K3 is equal to "LPAREN";
+            TCCCArgs_Depth = TCCCArgs_Depth + 1;
+        Done.
+        If TCCCArgs_K3 is equal to "RPAREN";
+            If TCCCArgs_Depth is equal to 0;
+                TCCCArgs_Continue = 0;
+            Else;
+                TCCCArgs_Depth = TCCCArgs_Depth - 1;
+            Done.
+        Done.
+        If TCCCArgs_K3 is equal to "SEMI";
+            TCCCArgs_Continue = 0;
+        Done.
+        If TCCCArgs_K3 is equal to "COMMA" and TCCCArgs_Depth is equal to 0;
+            TCCCArgs_Count = TCCCArgs_Count + 1;
+        Done.
+        If TCCCArgs_Continue is equal to 1;
+            Add 1 to SemPos;
+        Done.
+    Done.
+    SemPos = TCCCArgs_Saved;
+    Return TCCCArgs_Count;
+Done.
+
+# --- statements ------------------------------------------------------------
+
+Action TCCheckStatement;
+    Call KindAt SemPos;
+    TCCS_K = @_;
+    Call ValueAt SemPos;
+    TCCS_V = @_;
+
+    If TCCS_K is equal to "IDENT";
+        Call IsDeclAheadSem;
+        TCCS_IsDecl = @_;
+        If TCCS_IsDecl is equal to 1;
+            # Decl is semantically inert in this pass too - it already did
+            # everything it does (nothing, if nested; registration, if
+            # top-level) in resolver.kuro's pass 1. Just skip past it.
+            Add 1 to SemPos;
+            Add 1 to SemPos;
+            Add 1 to SemPos;
+            Add 1 to SemPos;
+            Return 1;
+        Done.
+
+        Call KindAt SemPos + 1;
+        TCCS_NextK = @_;
+        If TCCS_NextK is equal to "COLON" or TCCS_NextK is equal to "EQUAL";
+            TCCS_Name = TCCS_V;
+            If TCCS_NextK is equal to "COLON";
+                Add 1 to SemPos;
+                Add 1 to SemPos;
+                Add 1 to SemPos;
+            Else;
+                Add 1 to SemPos;
+                Add 1 to SemPos;
+            Done.
+            # compiler/resolver.py's pass 2 ALWAYS scope.define()s an
+            # Assign's name (definedness) but NEVER writes symbols.types
+            # itself - only pass 1 (_collect_globals, top-level only) does
+            # that, even for a typed `Name : Type = ...;` form. Verified
+            # directly: a NESTED typed Assign's own annotation is never
+            # enforced by E3001 in Python either (symbols.types.get(name)
+            # is always empty there), while a TOP-LEVEL one is, because
+            # pass 1 already recorded it before this pass runs. So this
+            # pass only ever READS SymGetType (whatever pass 1 already
+            # established) for the E3001 check, and separately ensures
+            # the name is present in SymNames (with type "" if it wasn't
+            # already known) so later code can see it's defined - the
+            # exact bug this fixes: without this, `X = 1;` inside any
+            # nested block never became visible to code after the block,
+            # even though it runs fine at runtime (flat storage).
+            Call SymHasType TCCS_Name;
+            TCCS_AlreadyKnown = @_;
+            If TCCS_AlreadyKnown is equal to 0;
+                Append TCCS_Name to SymNames;
+                Append "" to SymTypes;
+            Done.
+            Call SymGetType TCCS_Name;
+            TCCS_Declared = @_;
+            Call TCCheckValueList TCCS_Declared, TCCS_Name;
+            Return 1;
+        Done.
+    Done.
+
+    Call TCIsWord "Print";
+    TCCS_IsPrint = @_;
+    If TCCS_IsPrint is equal to 1;
+        Add 1 to SemPos;
+        Call TCResolveExpr;
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Add";
+    TCCS_IsAdd = @_;
+    If TCCS_IsAdd is equal to 1;
+        Add 1 to SemPos;
+        Call TCResolveExpr;
+        Add 1 to SemPos;
+        TCCS_TgtPos = SemPos;
+        Call ValueAt SemPos;
+        TCCS_Tgt = @_;
+        Add 1 to SemPos;
+        Call TCIsDefined TCCS_Tgt;
+        TCCS_TgtDef = @_;
+        If TCCS_TgtDef is equal to 0;
+            Call RecordSemDiag "E4001", TCCS_TgtPos, "undefined variable " + TCCS_Tgt;
+        Else;
+            Call TCTypeOf TCCS_Tgt;
+            TCCS_TgtTyp = @_;
+            If TCCS_TgtTyp is not equal to "";
+                Call TCIsNumericType TCCS_TgtTyp;
+                TCCS_TgtNum = @_;
+                If TCCS_TgtNum is equal to 0;
+                    Call RecordSemDiag "E3002", TCCS_TgtPos, "Add target must be numeric, found " + TCCS_TgtTyp;
+                Done.
+            Done.
+        Done.
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Update";
+    TCCS_IsUpdate = @_;
+    If TCCS_IsUpdate is equal to 1;
+        Add 1 to SemPos;
+        TCCS_UPos = SemPos;
+        Call ValueAt SemPos;
+        TCCS_UName = @_;
+        Add 1 to SemPos;
+        Call TCIsDefined TCCS_UName;
+        TCCS_UDef = @_;
+        If TCCS_UDef is equal to 0;
+            Call RecordSemDiag "E4001", TCCS_UPos, "undefined variable " + TCCS_UName;
+        Done.
+        Add 1 to SemPos;
+        Call TCResolveExpr;
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Take";
+    TCCS_IsTake = @_;
+    If TCCS_IsTake is equal to 1;
+        Add 1 to SemPos;
+        Call TCIsWord "user";
+        TCCS_HasUser = @_;
+        If TCCS_HasUser is equal to 1;
+            Add 1 to SemPos;
+        Done.
+        Call TCCheckTakeName;
+        Call TCCheckTakeNamesTail;
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Get";
+    TCCS_IsGet = @_;
+    If TCCS_IsGet is equal to 1;
+        Add 1 to SemPos;
+        TCCS_GPos = SemPos;
+        Call ValueAt SemPos;
+        TCCS_GTgt = @_;
+        Add 1 to SemPos;
+        Call TCIsDefined TCCS_GTgt;
+        TCCS_GDef = @_;
+        If TCCS_GDef is equal to 0;
+            Call RecordSemDiag "E4001", TCCS_GPos, "undefined target " + TCCS_GTgt;
+        Done.
+        Call KindAt SemPos;
+        TCCS_GK = @_;
+        If TCCS_GK is not equal to "SEMI";
+            TCCS_IdxPos = SemPos;
+            Call TCResolveExpr;
+            TCCS_IdxT = @_;
+            If TCCS_IdxT is not equal to "" and TCCS_IdxT is not equal to "Integers";
+                Call RecordSemDiag "E3010", TCCS_IdxPos, "index must be Integers, found " + TCCS_IdxT;
+            Done.
+        Done.
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Length";
+    TCCS_IsLength = @_;
+    If TCCS_IsLength is equal to 1;
+        Add 1 to SemPos;
+        TCCS_LPos = SemPos;
+        Call ValueAt SemPos;
+        TCCS_LTgt = @_;
+        Add 1 to SemPos;
+        Call TCIsDefined TCCS_LTgt;
+        TCCS_LDef = @_;
+        If TCCS_LDef is equal to 0;
+            Call RecordSemDiag "E4001", TCCS_LPos, "undefined target " + TCCS_LTgt;
+        Else;
+            Call TCTypeOf TCCS_LTgt;
+            TCCS_LTyp = @_;
+            If TCCS_LTyp is not equal to "" and TCCS_LTyp is not equal to "Text";
+                Call RecordSemDiag "E3009", TCCS_LPos, "Length target must be Text, found " + TCCS_LTyp;
+            Done.
+        Done.
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Set";
+    TCCS_IsSet = @_;
+    If TCCS_IsSet is equal to 1;
+        Add 1 to SemPos;
+        TCCS_SPos = SemPos;
+        Call ValueAt SemPos;
+        TCCS_STgt = @_;
+        Add 1 to SemPos;
+        Call TCIsDefined TCCS_STgt;
+        TCCS_SDef = @_;
+        TCCS_STgtTyp = "";
+        If TCCS_SDef is equal to 0;
+            Call RecordSemDiag "E4001", TCCS_SPos, "undefined target " + TCCS_STgt;
+        Else;
+            Call TCTypeOf TCCS_STgt;
+            TCCS_STgtTyp = @_;
+        Done.
+        TCCS_SIdxPos = SemPos;
+        Call TCResolveExpr;
+        TCCS_SIdxT = @_;
+        If TCCS_SIdxT is not equal to "" and TCCS_SIdxT is not equal to "Integers";
+            Call RecordSemDiag "E3010", TCCS_SIdxPos, "index must be Integers, found " + TCCS_SIdxT;
+        Done.
+        Add 1 to SemPos;
+        TCCS_SValPos = SemPos;
+        Call TCResolveExpr;
+        TCCS_SValT = @_;
+        If TCCS_STgtTyp is equal to "Text" and TCCS_SValT is not equal to "" and TCCS_SValT is not equal to "Text";
+            Call RecordSemDiag "E3004", TCCS_SValPos, "Set on Text requires a single character";
+        Done.
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Append";
+    TCCS_IsAppend = @_;
+    If TCCS_IsAppend is equal to 1;
+        Add 1 to SemPos;
+        Call TCResolveExpr;
+        Add 1 to SemPos;
+        TCCS_APos = SemPos;
+        Call ValueAt SemPos;
+        TCCS_ATgt = @_;
+        Add 1 to SemPos;
+        Call TCIsDefined TCCS_ATgt;
+        TCCS_ADef = @_;
+        If TCCS_ADef is equal to 0;
+            Call RecordSemDiag "E4001", TCCS_APos, "undefined variable " + TCCS_ATgt;
+        Done.
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Compare";
+    TCCS_IsCompare = @_;
+    If TCCS_IsCompare is equal to 1;
+        Add 1 to SemPos;
+        Call ValueAt SemPos;
+        TCCS_CName = @_;
+        Add 1 to SemPos;
+        Call TCResolveCondition;
+        Call SymHasType TCCS_CName;
+        TCCS_CHas = @_;
+        If TCCS_CHas is equal to 0;
+            Append TCCS_CName to SymNames;
+            Append "Symbols" to SymTypes;
+        Done.
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Entered";
+    TCCS_IsEntered = @_;
+    If TCCS_IsEntered is equal to 1;
+        Add 1 to SemPos;
+        TCCS_EPos = SemPos;
+        Call ValueAt SemPos;
+        TCCS_EName = @_;
+        Add 1 to SemPos;
+        Call TCIsDefined TCCS_EName;
+        TCCS_EDef = @_;
+        TCCS_ELt = "";
+        If TCCS_EDef is equal to 0;
+            Call RecordSemDiag "E4001", TCCS_EPos, "undefined value " + TCCS_EName;
+        Else;
+            Call TCTypeOf TCCS_EName;
+            TCCS_ELt = @_;
+        Done.
+        Add 1 to SemPos;
+        TCCS_EOpPos = SemPos;
+        Call TCResolveComparisonOp;
+        TCCS_EOp = @_;
+        Call TCResolveExpr;
+        TCCS_ERt = @_;
+        TCCS_EOrdering = 0;
+        If TCCS_EOp is equal to "gt";
+            TCCS_EOrdering = 1;
+        Done.
+        If TCCS_EOp is equal to "lt";
+            TCCS_EOrdering = 1;
+        Done.
+        If TCCS_EOp is equal to "ge";
+            TCCS_EOrdering = 1;
+        Done.
+        If TCCS_EOp is equal to "le";
+            TCCS_EOrdering = 1;
+        Done.
+        If TCCS_EOrdering is equal to 1 and TCCS_ELt is not equal to "" and TCCS_ERt is not equal to "";
+            Call TCIsNumericType TCCS_ELt;
+            TCCS_ELNum = @_;
+            Call TCIsNumericType TCCS_ERt;
+            TCCS_ERNum = @_;
+            TCCS_EBothNum = 0;
+            If TCCS_ELNum is equal to 1 and TCCS_ERNum is equal to 1;
+                TCCS_EBothNum = 1;
+            Done.
+            TCCS_EBothText = 0;
+            If TCCS_ELt is equal to "Text" and TCCS_ERt is equal to "Text";
+                TCCS_EBothText = 1;
+            Done.
+            If TCCS_EBothNum is equal to 0 and TCCS_EBothText is equal to 0;
+                Call RecordSemDiag "E3006", TCCS_EPos, "cannot compare " + TCCS_ELt + " and " + TCCS_ERt;
+            Done.
+        Done.
+        Add 1 to SemPos;
+        Add 1 to SemPos;
+        Call TCResolveExpr;
+        Add 1 to SemPos;
+        Add 1 to SemPos;
+        Call TCResolveExpr;
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Return";
+    TCCS_IsReturn = @_;
+    If TCCS_IsReturn is equal to 1;
+        Add 1 to SemPos;
+        TCCS_RPos = SemPos;
+        If InActionDepth is equal to 0;
+            Call RecordSemDiag "E4005", TCCS_RPos, "Return is only valid inside an Action";
+        Done.
+        Call TCResolveExpr;
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Call";
+    TCCS_IsCall = @_;
+    If TCCS_IsCall is equal to 1;
+        Add 1 to SemPos;
+        TCCS_CallPos = SemPos;
+        Call ValueAt SemPos;
+        TCCS_CallName = @_;
+        Add 1 to SemPos;
+        Call ActionExists TCCS_CallName;
+        TCCS_CallExists = @_;
+        If TCCS_CallExists is equal to 0;
+            Call RecordSemDiag "E4003", TCCS_CallPos, "unknown action " + TCCS_CallName;
+            Call TCSkipCallArgsOnly;
+        Else;
+            Call TCCountCallArgs;
+            TCCS_ArgCount = @_;
+            Call ActionArityFor TCCS_CallName;
+            TCCS_Arity = @_;
+            If TCCS_ArgCount is not equal to TCCS_Arity;
+                Call RecordSemDiag "E4004", TCCS_CallPos, "action " + TCCS_CallName + " expects a different number of arguments";
+            Done.
+            Call TCCheckCallArgs TCCS_CallName;
+        Done.
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Action";
+    TCCS_IsAction = @_;
+    If TCCS_IsAction is equal to 1;
+        Add 1 to SemPos;
+        Add 1 to SemPos;
+        Length CurParamNames;
+        CurParamBase = @_;
+        CurParamCount = 0;
+        Call TCRegisterParams;
+        Add 1 to SemPos;
+        InActionDepth = InActionDepth + 1;
+        Call TCCheckBlock;
+        InActionDepth = InActionDepth - 1;
+        CurParamCount = 0;
+        Add 1 to SemPos;
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "If";
+    TCCS_IsIf = @_;
+    If TCCS_IsIf is equal to 1;
+        Add 1 to SemPos;
+        Call TCResolveCondition;
+        Add 1 to SemPos;
+        Call TCCheckBlock;
+        Call TCIsWord "Else";
+        TCCS_HasElse = @_;
+        If TCCS_HasElse is equal to 1;
+            Add 1 to SemPos;
+            Add 1 to SemPos;
+            Call TCCheckBlock;
+        Done.
+        Add 1 to SemPos;
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "Repeat";
+    TCCS_IsRepeat = @_;
+    If TCCS_IsRepeat is equal to 1;
+        Add 1 to SemPos;
+        TCCS_CountPos = SemPos;
+        Call TCResolveExpr;
+        TCCS_CountT = @_;
+        If TCCS_CountT is not equal to "" and TCCS_CountT is not equal to "Integers";
+            Call RecordSemDiag "E3008", TCCS_CountPos, "Repeat count must be Integers, found " + TCCS_CountT;
+        Done.
+        Add 1 to SemPos;
+        IndexDepth = IndexDepth + 1;
+        Call TCCheckBlock;
+        IndexDepth = IndexDepth - 1;
+        Add 1 to SemPos;
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Call TCIsWord "While";
+    TCCS_IsWhile = @_;
+    If TCCS_IsWhile is equal to 1;
+        Add 1 to SemPos;
+        Call TCResolveCondition;
+        Add 1 to SemPos;
+        Call TCCheckBlock;
+        Add 1 to SemPos;
+        Add 1 to SemPos;
+        Return 1;
+    Done.
+
+    Return 0;
+Done.
+
+Action TCCheckTakeName;
+    TCCTN_Pos = SemPos;
+    Call ValueAt SemPos;
+    TCCTN_Name = @_;
+    Add 1 to SemPos;
+    Call TCIsDefined TCCTN_Name;
+    TCCTN_Def = @_;
+    If TCCTN_Def is equal to 0;
+        Call RecordSemDiag "E4001", TCCTN_Pos, "input variable " + TCCTN_Name + " must be declared first";
+    Done.
+Done.
+
+Action TCCheckTakeNamesTail;
+    Call TCIsWord "and";
+    TCCTNT_IsAnd = @_;
+    If TCCTNT_IsAnd is equal to 1;
+        Add 1 to SemPos;
+        Call TCCheckTakeName;
+        Call TCCheckTakeNamesTail;
+    Done.
+Done.
+
+# Consumes a Call's argument list without checking anything - used only
+# when the action name itself was already unknown (E4003), so there is no
+# parameter list to check arguments against, but the tokens still need to
+# be consumed to keep SemPos advancing correctly.
+Action TCSkipCallArgsOnly;
+    Call KindAt SemPos;
+    TCSCAO_K = @_;
+    TCSCAO_HasParens = 0;
+    If TCSCAO_K is equal to "LPAREN";
+        TCSCAO_HasParens = 1;
+        Add 1 to SemPos;
+    Done.
+    Call KindAt SemPos;
+    TCSCAO_K2 = @_;
+    TCSCAO_Empty = 0;
+    If TCSCAO_HasParens is equal to 1;
+        If TCSCAO_K2 is equal to "RPAREN";
+            TCSCAO_Empty = 1;
+        Done.
+    Else;
+        If TCSCAO_K2 is equal to "SEMI";
+            TCSCAO_Empty = 1;
+        Done.
+    Done.
+    If TCSCAO_Empty is equal to 0;
+        Call TCResolveExpr;
+        Call TCSkipCallArgsTail;
+    Done.
+    If TCSCAO_HasParens is equal to 1;
+        Add 1 to SemPos;
+    Done.
+Done.
+
+Action TCSkipCallArgsTail;
+    Call KindAt SemPos;
+    TCSCAT_K = @_;
+    If TCSCAT_K is equal to "COMMA";
+        Add 1 to SemPos;
+        Call TCResolveExpr;
+        Call TCSkipCallArgsTail;
+    Done.
+Done.
+
+Action TCCheckBlock;
+    Call KindAt SemPos;
+    TCCB_K = @_;
+    If TCCB_K is not equal to "EOF";
+        Call TCIsWord "Done";
+        TCCB_IsDone = @_;
+        Call TCIsWord "Else";
+        TCCB_IsElse = @_;
+        If TCCB_IsDone is equal to 0 and TCCB_IsElse is equal to 0;
+            Call TCCheckStatement;
+            Call TCCheckBlock;
+        Done.
+    Done.
+Done.
+
+Action TypecheckPass2;
+    SemPos = 0;
+    TypecheckPass2_Looping = 1;
+    While TypecheckPass2_Looping is equal to 1;
+        Call KindAt SemPos;
+        TypecheckPass2_K = @_;
+        If TypecheckPass2_K is equal to "EOF";
+            TypecheckPass2_Looping = 0;
+        Else;
+            Call TCCheckStatement;
+        Done.
+    Done.
+Done.
+
+Call TypecheckPass2;
