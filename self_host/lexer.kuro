@@ -10,8 +10,13 @@
 # lexer's tokens for the same text.
 #
 # Known, deliberate limitations (see docs/engineering/ADR-0008-stage5-lexer.md):
-#   - No source-location tracking (line:col) — would need integer-to-text
-#     conversion, which the language doesn't have yet.
+#   - No line:col tracking of its own — superseded by ADR-0011: each
+#     token's starting character offset into Source is now recorded
+#     (TokenStarts, added for Stage 6 completion), and
+#     self_host/parser.kuro converts an offset to line:col on demand by
+#     scanning Source, entirely avoiding the integer-to-text conversion
+#     ADR-0008 originally assumed was required (the offsets are stored as
+#     plain Integers, never printed by this file).
 #   - No error recovery/diagnostics for malformed input — silently skips
 #     characters it cannot classify, unlike compiler/lexer.py's E1xxx
 #     diagnostics.
@@ -57,10 +62,23 @@ Pos = 0;
 TokenKinds is Text;
 TokenValues is Text;
 
+# Stage 6 completion (ADR-0011): each token's starting character offset
+# into Source, so self_host/parser.kuro can compute a line:col for its own
+# diagnostics without needing integer-to-text conversion (the offsets are
+# stored as plain Integers, never printed by this file — ADR-0008's "no
+# source locations yet" limitation was specifically about not having a
+# way to render them as text, not about tracking the raw positions).
+# TokStartPos is captured once, right after Ch is read: Pos does not move
+# again until whichever branch below decides to consume characters, so
+# this single capture point is correct for every one of the 16 token
+# kinds this lexer can emit — no per-branch capture needed.
+TokenStarts is Text;
+
 Repeat SourceLen;
     If Pos is less than SourceLen;
         Get Source Pos;
         Ch = @_;
+        TokStartPos = Pos;
 
         If Ch is space;
             Add 1 to Pos;
@@ -136,6 +154,7 @@ Repeat SourceLen;
                     Done.
                     Print "STRING".
                     Append "STRING" to TokenKinds;
+                    Append TokStartPos to TokenStarts;
                     Print StrBuf.
                     Append StrBuf to TokenValues;
                 Else;
@@ -178,9 +197,11 @@ Repeat SourceLen;
                         If IsDecimal is equal to 1;
                             Print "DECIMAL".
                             Append "DECIMAL" to TokenKinds;
+                            Append TokStartPos to TokenStarts;
                         Else;
                             Print "INTEGER".
                             Append "INTEGER" to TokenKinds;
+                            Append TokStartPos to TokenStarts;
                         Done.
                         Print NumBuf.
                         Append NumBuf to TokenValues;
@@ -206,12 +227,14 @@ Repeat SourceLen;
                             Done.
                             Print "IDENT".
                             Append "IDENT" to TokenKinds;
+                            Append TokStartPos to TokenStarts;
                             Print IdBuf.
                             Append IdBuf to TokenValues;
                         Else;
                             If Ch is equal to EqCh;
                                 Print "EQUAL".
                                 Append "EQUAL" to TokenKinds;
+                                Append TokStartPos to TokenStarts;
                                 Print Ch.
                                 Append Ch to TokenValues;
                                 Add 1 to Pos;
@@ -219,6 +242,7 @@ Repeat SourceLen;
                                 If Ch is equal to CommaCh;
                                     Print "COMMA".
                                     Append "COMMA" to TokenKinds;
+                                    Append TokStartPos to TokenStarts;
                                     Print Ch.
                                     Append Ch to TokenValues;
                                     Add 1 to Pos;
@@ -226,6 +250,7 @@ Repeat SourceLen;
                                     If Ch is equal to SemiCh;
                                         Print "SEMI".
                                         Append "SEMI" to TokenKinds;
+                                        Append TokStartPos to TokenStarts;
                                         Print Ch.
                                         Append Ch to TokenValues;
                                         Add 1 to Pos;
@@ -233,6 +258,7 @@ Repeat SourceLen;
                                         If Ch is equal to DotCh;
                                             Print "DOT".
                                             Append "DOT" to TokenKinds;
+                                            Append TokStartPos to TokenStarts;
                                             Print Ch.
                                             Append Ch to TokenValues;
                                             Add 1 to Pos;
@@ -240,6 +266,7 @@ Repeat SourceLen;
                                             If Ch is equal to LParenCh;
                                                 Print "LPAREN".
                                                 Append "LPAREN" to TokenKinds;
+                                                Append TokStartPos to TokenStarts;
                                                 Print Ch.
                                                 Append Ch to TokenValues;
                                                 Add 1 to Pos;
@@ -247,6 +274,7 @@ Repeat SourceLen;
                                                 If Ch is equal to RParenCh;
                                                     Print "RPAREN".
                                                     Append "RPAREN" to TokenKinds;
+                                                    Append TokStartPos to TokenStarts;
                                                     Print Ch.
                                                     Append Ch to TokenValues;
                                                     Add 1 to Pos;
@@ -254,6 +282,7 @@ Repeat SourceLen;
                                                     If Ch is equal to AtCh;
                                                         Print "AT".
                                                         Append "AT" to TokenKinds;
+                                                        Append TokStartPos to TokenStarts;
                                                         Print Ch.
                                                         Append Ch to TokenValues;
                                                         Add 1 to Pos;
@@ -261,6 +290,7 @@ Repeat SourceLen;
                                                         If Ch is equal to PlusCh;
                                                             Print "PLUS".
                                                             Append "PLUS" to TokenKinds;
+                                                            Append TokStartPos to TokenStarts;
                                                             Print Ch.
                                                             Append Ch to TokenValues;
                                                             Add 1 to Pos;
@@ -268,6 +298,7 @@ Repeat SourceLen;
                                                             If Ch is equal to MinusCh;
                                                                 Print "MINUS".
                                                                 Append "MINUS" to TokenKinds;
+                                                                Append TokStartPos to TokenStarts;
                                                                 Print Ch.
                                                                 Append Ch to TokenValues;
                                                                 Add 1 to Pos;
@@ -275,6 +306,7 @@ Repeat SourceLen;
                                                                 If Ch is equal to StarCh;
                                                                     Print "STAR".
                                                                     Append "STAR" to TokenKinds;
+                                                                    Append TokStartPos to TokenStarts;
                                                                     Print Ch.
                                                                     Append Ch to TokenValues;
                                                                     Add 1 to Pos;
@@ -282,6 +314,7 @@ Repeat SourceLen;
                                                                     If Ch is equal to Slash;
                                                                         Print "SLASH".
                                                                         Append "SLASH" to TokenKinds;
+                                                                        Append TokStartPos to TokenStarts;
                                                                         Print Ch.
                                                                         Append Ch to TokenValues;
                                                                         Add 1 to Pos;
@@ -289,6 +322,7 @@ Repeat SourceLen;
                                                                         If Ch is equal to ColonCh;
                                                                             Print "COLON".
                                                                             Append "COLON" to TokenKinds;
+                                                                            Append TokStartPos to TokenStarts;
                                                                             Print Ch.
                                                                             Append Ch to TokenValues;
                                                                             Add 1 to Pos;

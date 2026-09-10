@@ -46,6 +46,26 @@ def test_action_locals_do_not_leak():
     )
 
 
+def test_ordinary_variable_assigned_inside_action_is_visible_after_it():
+    # The interpreter's storage is flat (compiler/interpreter.py): a
+    # non-parameter name assigned inside an Action body really is visible
+    # afterward, matching the bootstrap engine and matching what already
+    # holds for Repeat (see resolver.py's ActionDecl handling and its
+    # comment). Unlike a parameter, an ordinary Assign is not scoped to
+    # the call at all.
+    r = compile_source("Action A;\nX = 1;\nReturn X;\nDone.\nCall A;\nPrint X.")
+    assert r.ok, r.diags.render_all()
+
+
+def test_variable_assigned_in_one_action_visible_in_another():
+    r = compile_source(
+        "Action First;\nShared = 5;\nReturn Shared;\nDone.\n"
+        "Action Second;\nReturn Shared;\nDone.\n"
+        "Call First;\nCall Second;\nPrint @_."
+    )
+    assert r.ok, r.diags.render_all()
+
+
 def test_index_only_defined_inside_repeat():
     assert "E4001" in codes("Print Index.")
     assert compile_source("Repeat 3;\nPrint Index.\nDone.").ok

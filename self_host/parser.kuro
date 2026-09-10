@@ -72,15 +72,24 @@
 # is sufficient (not automatic) safety: Action names are unique, so a
 # prefixed name can never collide with another Action's own locals.
 #
-# Error behavior: does not crash or hang on malformed input, but does not
-# yet produce compiler/diagnostics.py-equivalent structured errors — see
-# ADR-0010's "Error behavior" section. ParseFailed is a global circuit
-# breaker: once anything fails to match, block parsing stops cleanly
-# instead of looping or corrupting AstOut further.
+# Error behavior (updated by ADR-0011's Stage 6 completion work): does not
+# crash or hang on malformed input, and now produces real structured
+# diagnostics (DiagCodes/DiagLines/DiagCols/DiagMessages, reusing
+# compiler/diagnostics.py's existing E2xxx codes — see the "diagnostics"
+# section below and ADR-0011's "Diagnostic compatibility" policy for what
+# is and isn't required to match compiler/parser.py). ParseFailed remains
+# the circuit breaker: once anything fails to match, RecordDiag sets it
+# and block parsing stops cleanly instead of looping or corrupting AstOut
+# further. Recovery is still minimal by design (no token-level
+# synchronization/resume, unlike compiler/parser.py's _synchronize) — a
+# single malformed construct can produce a short cascade of a few
+# diagnostics, not exactly one.
 
 # --- BEGIN_STANDALONE_TOKENS (stripped by the Stage 6 differential test harness) ---
+Source = "Print \"hi\".";
 TokenKinds = "IDENT", "STRING", "DOT";
 TokenValues = "Print", "hi", ".";
+TokenStarts = 0, 6, 10;
 # --- END_STANDALONE_TOKENS ---
 
 TokPos = 0;
@@ -88,6 +97,75 @@ Length TokenKinds;
 TokCount = @_;
 AstOut is Text;
 ParseFailed = 0;
+
+# Stage 6 completion diagnostics (ADR-0011). Four parallel lists, mirroring
+# TokenKinds/TokenValues' shape: DiagCodes[i]/DiagLines[i]/DiagCols[i]/
+# DiagMessages[i] together describe one diagnostic. Declared with no
+# initial value (Decl only), same reason as AstOut - the first Append
+# starts a fresh list cleanly. Line/column are plain Integers (never
+# rendered to text by this file), computed on demand from a token's
+# recorded character offset (self_host/lexer.kuro's TokenStarts) by
+# scanning Source for newlines - see ComputeLineCol below.
+DiagCodes is Text;
+DiagLines is Text;
+DiagCols is Text;
+DiagMessages is Text;
+
+# --- diagnostics ---------------------------------------------------------
+# Diagnostic codes are the *same* E2xxx codes compiler/diagnostics.py's
+# registry already assigns to the analogous Python-parser situation
+# (E2001 unexpected token/expected identifier, E2002 expected a specific
+# token or keyword, E2003 expected a value expression, E2004 expected a
+# comparison operator) - this file does not invent a second taxonomy.
+# Messages are NOT required to match the Python parser's wording
+# byte-for-byte - see docs/engineering/ADR-0011-stage6-completion.md's
+# "Diagnostic compatibility" section for why, and what IS compared
+# (category/code and source location) in
+# tests/self_host/test_parser_diagnostics.py.
+
+Action ComputeLineCol TargetPos;
+    ComputeLineCol_I = 0;
+    ComputeLineCol_Line = 1;
+    ComputeLineCol_Col = 1;
+    While ComputeLineCol_I is less than TargetPos;
+        Get Source ComputeLineCol_I;
+        ComputeLineCol_Ch = @_;
+        If ComputeLineCol_Ch is equal to "\n";
+            ComputeLineCol_Line = ComputeLineCol_Line + 1;
+            ComputeLineCol_Col = 1;
+        Else;
+            ComputeLineCol_Col = ComputeLineCol_Col + 1;
+        Done.
+        Add 1 to ComputeLineCol_I;
+    Done.
+    DiagCurLine = ComputeLineCol_Line;
+    DiagCurCol = ComputeLineCol_Col;
+Done.
+
+# The character offset to report a diagnostic at: the current token's
+# recorded start position, or the end of the source (a reasonable,
+# conventional place to point at) once TokPos has run past the end.
+Action CurDiagPos;
+    Compare CurDiagPos_InBounds TokPos less than TokCount;
+    If CurDiagPos_InBounds is equal to 1;
+        Get TokenStarts TokPos;
+        Return @_;
+    Else;
+        Length Source;
+        Return @_;
+    Done.
+Done.
+
+Action RecordDiag Code, Message;
+    Call CurDiagPos;
+    RecordDiag_Pos = @_;
+    Call ComputeLineCol RecordDiag_Pos;
+    Append Code to DiagCodes;
+    Append DiagCurLine to DiagLines;
+    Append DiagCurCol to DiagCols;
+    Append Message to DiagMessages;
+    ParseFailed = 1;
+Done.
 
 # --- token access helpers ---------------------------------------------
 
@@ -146,7 +224,8 @@ Action ExpectKind ExpectedKind;
         Add 1 to TokPos;
         Return 1;
     Else;
-        ParseFailed = 1;
+        ExpectKind_Msg = "expected " + ExpectedKind;
+        Call RecordDiag "E2002", ExpectKind_Msg;
         Return 0;
     Done.
 Done.
@@ -158,7 +237,8 @@ Action ExpectWord ExpectedWord;
         Add 1 to TokPos;
         Return 1;
     Else;
-        ParseFailed = 1;
+        ExpectWord_Msg = "expected '" + ExpectedWord;
+        Call RecordDiag "E2002", ExpectWord_Msg;
         Return 0;
     Done.
 Done.
@@ -181,7 +261,7 @@ Action ExpectIdent;
         Add 1 to TokPos;
         Return ExpectIdent_V;
     Else;
-        ParseFailed = 1;
+        Call RecordDiag "E2001", "expected an identifier";
         Return "";
     Done.
 Done.
@@ -257,7 +337,7 @@ Action ParseAtom;
         Return 1;
     Done.
 
-    ParseFailed = 1;
+    Call RecordDiag "E2003", "expected a value";
     Return 0;
 Done.
 
@@ -411,7 +491,7 @@ Action ParseComparisonOp;
         Done.
     Done.
 
-    ParseFailed = 1;
+    Call RecordDiag "E2004", "expected a comparison operator";
     Return "";
 Done.
 
@@ -958,7 +1038,10 @@ Action ParseStatement;
         Return 1;
     Done.
 
-    ParseFailed = 1;
+    Call CurValue;
+    ParseStatement_BadV = @_;
+    ParseStatement_Msg = "unknown statement starting with " + ParseStatement_BadV;
+    Call RecordDiag "E2001", ParseStatement_Msg;
     Add 1 to TokPos;
     Return 0;
 Done.

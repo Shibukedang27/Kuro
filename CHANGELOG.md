@@ -3,6 +3,42 @@
 All notable changes to Kuro are recorded here. Format loosely follows
 Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 
+## [0.7.0-dev] — Stage 6 completion: full grammar parity + self-hosted diagnostics
+
+### Added
+- `self_host/parser.kuro` now covers the complete currently-supported
+  Kuro grammar: `Take`, `Get` (direct and indexed), `Length`, `Set`,
+  `Append`, `Compare`, and the legacy `Entered ... then ... otherwise
+  ...;` one-liner, following `compiler/parser.py`'s exact grammar (see
+  ADR-0011). `docs/spec/grammar-coverage.md` records the audit that
+  confirmed no other phase (resolver/typecheck/lower/interpreter/
+  ast_canon) had any remaining gap.
+- Structured diagnostics for the self-hosted parser: `DiagCodes`/
+  `DiagLines`/`DiagCols`/`DiagMessages`, reusing `compiler/diagnostics.py`'s
+  existing E2xxx codes rather than a second taxonomy. `self_host/lexer.kuro`
+  gained `TokenStarts` (each token's character offset, additive — all 23
+  Stage 5 cross-tests re-verified unmodified) so the parser can compute a
+  real line:col for any diagnostic by scanning `Source` on demand —
+  entirely without the integer-to-text conversion ADR-0008 assumed would
+  be required, since positions are stored as plain Integers, never printed.
+- `ExpectIdent`, a validated identifier-consuming helper, added after
+  malformed-input testing found several places blindly accepted *any*
+  token as a name (`Action Add A, ,;` silently took a comma as a
+  parameter). Applied at every name-reading site in the file.
+- 78 new tests: 20 `ast_canon` unit tests, 15 dedicated fixtures + 8
+  realistic combinations + 29 malformed-input cases for the new
+  constructs (`tests/self_host/test_parser_cross.py`), 15 diagnostic tests
+  covering every required category and source-location correctness across
+  multiple lines/columns (`tests/self_host/test_parser_diagnostics.py`).
+
+### Fixed
+- `compiler/resolver.py`'s `ActionDecl` handling had the same scoping bug
+  already fixed for `RepeatStmt`: a full child scope for the whole body
+  meant an ordinary (non-parameter) variable assigned inside one Action
+  was invisible to resolution afterward and to *other* Actions, even
+  though the interpreter's storage is flat and it runs fine. Fixed with
+  the same pattern — only parameters are scoped to the call.
+
 ## [0.6.0-dev] — Stage 6: control-flow gate + self-hosted parser
 
 ### Added

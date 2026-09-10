@@ -1,5 +1,13 @@
 # ADR-0010: Stage 6 self-hosted parser — module system, AST representation, and grammar scope
 
+> **Continued by [ADR-0011](ADR-0011-stage6-completion.md)**, which
+> implements the 7 statement forms this ADR's "Grammar scope" section
+> deferred, plus self-hosted structured diagnostics, and fixes an
+> `ActionDecl` resolver bug found while doing so. This document's
+> "Grammar scope for this session" and "Error behavior" sections describe
+> the state *before* that work; treat ADR-0011 as authoritative for
+> current coverage and diagnostic behavior.
+
 ## Problem
 
 Stage 6 (spec section 61) asks for a Kuro-in-Kuro parser, cross-tested

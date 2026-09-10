@@ -213,10 +213,31 @@ class Resolver:
             self._resolve_block(st.body, scope, in_action)
             return
         if isinstance(st, ActionDecl):
-            inner = scope.child()
+            # Same fix, and same reason, as RepeatStmt's Index handling
+            # above: only the parameters are genuinely scoped to this
+            # Action (each call gets a fresh frame — compiler/
+            # interpreter.py's self.frames — and a param must not leak
+            # into surrounding code once the ActionDecl is resolved, which
+            # is exactly what tests/semantic/test_semantic.py's
+            # test_action_locals_do_not_leak checks). But an *ordinary*
+            # Assign inside the body is not scoped to the call at all —
+            # every STORE-shaped instruction always targets the flat
+            # global env (docs/architecture/current-state.md section 7),
+            # so a ordinary variable one Action assigns really is visible
+            # to code after the ActionDecl, and to *other* Actions, at
+            # runtime. An earlier version of this method used a child
+            # scope for the whole body, which made that pattern a false
+            # "undefined variable" here even though it ran fine — found
+            # while adding self-hosted diagnostics (self_host/parser.kuro
+            # ADR-0011), which has one Action (ComputeLineCol) assign
+            # globals that a different Action (RecordDiag) then reads.
+            had_before = {p.name: p.name in scope.names for p in st.params}
             for p in st.params:
-                inner.define(p.name)
-            self._resolve_block(st.body, inner, True)
+                scope.define(p.name)
+            self._resolve_block(st.body, scope, True)
+            for p in st.params:
+                if not had_before[p.name]:
+                    scope.names.discard(p.name)
             return
         if isinstance(st, ReturnStmt):
             if not in_action:
