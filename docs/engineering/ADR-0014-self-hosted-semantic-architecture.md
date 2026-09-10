@@ -191,6 +191,33 @@ return` — a deliberate static allowance, not the bootstrap's silent
 bare-word fallback this stage was explicitly told not to reintroduce —
 see the semantics audit §7-8), and `Index` uses `IndexDepth` (above).
 
+## Known limitation, found during adversarial testing: nesting/collection capacity
+
+`self_host/typecheck.kuro`'s expression and value-list walkers are, like
+the rest of it, real Kuro `Action` calls executed by `compiler/
+interpreter.py` — which enforces its own `_MAX_CALL_DEPTH` (200,
+ADR-0009's recursion guard) to turn pathological recursion into a
+structured `E6005` instead of a Python stack overflow. Each *logical*
+level of nesting in the *source being analyzed* costs several levels of
+the self-hosted walker's *own* call depth (a single parenthesized
+sub-expression passes through `TCResolveExpr` → `TCResolveTerm` →
+`TCResolveFactor` → `TCResolveAtom` before recursing again), and each item
+in a comma-separated value list costs one more tail-recursive call
+(`TCCheckValueList`). So the self-hosted implementation has materially
+*lower* practical capacity for deeply nested expressions or large
+value-lists than the Python oracle, which recurses natively rather than
+through an interpreted, depth-guarded call stack — found directly, not
+assumed: an initial adversarial test using 60 levels of nested parens and
+a 200-item collection (both realistic-looking numbers) hit `E6005` on the
+self-hosted side while the equivalent would run fine in Python. Test
+depths were adjusted down to what the self-hosted path can actually
+handle (`tests/self_host/test_semantic_fuzz.py`), and a dedicated test
+confirms the failure mode past that capacity is `E6005`, not a crash or a
+hang. This is a real, load-bearing capacity difference between the two
+implementations, not a bug to fix here — it will matter again once a
+native/self-hosted backend removes the Python-interpreter safety net
+underneath the self-hosted tools themselves (Stage 8+).
+
 ## Compatibility impact
 
 None on the language. This ADR is entirely about how the self-hosted
