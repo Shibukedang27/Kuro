@@ -57,10 +57,31 @@ same source. Stage 6's differential test
 (`tests/self_host/test_parser_cross.py`) is then a plain list-equality
 check between the two, the same technique
 `tests/self_host/test_lexer_cross.py` already validated for token streams
-in Stage 5, now applied to trees instead of a flat token sequence. Full
-encoding rules are documented in `compiler/ast_canon.py`'s module
-docstring, which is the single source of truth both implementations must
-match.
+in Stage 5, now applied to trees instead of a flat token sequence.
+
+Getting this encoding right took two corrections, both forced by the same
+constraint — a Kuro program can only *append* to `AstOut` as it parses
+left to right, it cannot go back and insert something before tokens
+already written:
+
+- Most nodes are prefix-encoded (tag, then children) — safe for anything
+  whose grammar rule starts with a keyword, which is every statement.
+  `BinaryExpr`/`Comparison`/`BoolAnd`/`BoolOr`/`IsClass`, though, are only
+  recognized *after* their left operand is already fully parsed (a
+  left-associative precedence-climbing loop discovers "there's a `+` here"
+  only once the preceding operand is behind it), so those five node kinds
+  are postfix instead (children first, tag last).
+- Every variable-length list (a block's statements, a multi-value
+  assignment's values, an action's parameters, a call's arguments) is
+  closed by an explicit `END_*` marker *after* its items, not a leading
+  count — a block parser has no way to know how many statements it holds
+  until it has already parsed all of them and hit the terminator token, so
+  a leading count isn't information a single left-to-right pass has yet.
+
+Full, current encoding rules are documented in `compiler/ast_canon.py`'s
+module docstring, which is the single source of truth both implementations
+must match — treat that docstring as authoritative over the summary above
+if the two ever drift.
 
 ## Decision 3: the lexer gains a structured output, additively
 
@@ -79,6 +100,66 @@ still pass, proving the addition is genuinely additive, not a rewrite.
 `self_host/parser.kuro` reads `TokenKinds`/`TokenValues` (two parallel
 lists) plus a global cursor variable `TokPos`, using `Get`/`Length` —
 exactly the same access pattern the lexer already used to read `Source`.
+
+## Decision 4: every repeated construct is tail recursion, not while+flag
+
+This was not designed up front — it was forced by two rounds of
+differential-test failures, and is significant enough to record as its
+own decision rather than bury in `self_host/parser.kuro`'s comments alone.
+
+The first working draft of the parser used the same "bounded loop plus an
+integer flag" idiom `self_host/lexer.kuro` (ADR-0008) already established,
+now attached to real `While` loops (ADR-0009) instead of padded `Repeat`
+loops. It failed immediately: `Name = "Kuro";\nPrint Name.` parsed only the
+first statement. Cause: every "local" in a Kuro Action is actually a write
+to the single global environment (no true local variables exist —
+`docs/architecture/current-state.md` section 7), so a loop-control flag
+like `ParseBlock`'s `Looping` is shared by *every* call to `ParseBlock`,
+not private to one. `ParseBlock` calls `ParseStatement`, which (for an
+`Assign`) calls `ParseExpr` → `ParseTerm`, which used a *different* global
+also named `Looping` for its own `+`/`-` repetition — and when that inner
+loop finished by setting `Looping = 0`, it silently zeroed out
+`ParseBlock`'s still-in-use flag too, ending the whole block one statement
+early. Fix attempt one: prefix every local by its owning Action's name
+(`ParseBlock_Looping`, `ParseTerm_Looping`, ...), eliminating collisions
+*between different* Actions.
+
+That fixed the simple cases but not `Action Add A, B;\nReturn A + B;\nDone.\n
+Call Add 3, 4;\nPrint @_.` — prefixing doesn't help when an Action is
+reentrant *with itself*: the top-level program's `ParseBlock` call parses
+an `Action ... Done.` statement whose *body* is parsed by a second,
+nested `ParseBlock` call — sharing the exact same global
+`ParseBlock_Looping`, because no amount of per-Action prefixing gives two
+different *calls* to the same Action their own copy of anything. Only
+Action *parameters* get an actual call frame
+(`compiler/interpreter.py`'s `self.frames`).
+
+The real fix: every repeated construct in this file (an operator chain
+like `a * b * c`, an `and`/`or` chain, a parameter/argument list, a
+block's statement list) is written as **tail recursion** instead of a
+while-loop with a flag — e.g. `ParseFactorTail` calls itself once per
+additional `*`/`/` instead of looping. This isn't a style preference: tail
+recursion needs no loop-control variable to survive a nested call at
+all — each repetition is its own frame-isolated `Call`, so there is
+nothing left for a reentrant call to clobber. Both bugs were caught by
+`tests/self_host/test_parser_cross.py` before either reached
+`docs/architecture/current-state.md`-worthy "this works" status, and two
+of its snippets (`Print 2 * (3 * 4).` and a nested-`Action`-inside-a-block
+case) exist specifically as regression coverage for this exact class of
+bug, not just for the constructs themselves.
+
+This has a real implication beyond this one file: **Kuro's flat global
+scoping (a deliberate Stage 1-4 compatibility choice, not an oversight —
+see `docs/architecture/current-state.md` section 7 and
+`compiler/interpreter.py`'s module docstring) has a genuine cost for any
+program with multiple mutually-recursive functions that each need
+per-call state**, and that cost is easy to hit by accident, not just in
+contrived examples — it broke the very first non-trivial self-hosted
+program written against it. A future ADR should weigh whether Kuro needs
+real per-call local variables (not just parameters) once a second such
+program surfaces the same pattern; this ADR does not propose that change
+itself, since one data point (this parser) is a reason to watch for it,
+not yet a reason to redesign the runtime's scoping model.
 
 ## Grammar scope for this session (honest, not full)
 
@@ -163,3 +244,10 @@ statements to an existing self-hosted program.
 - Malformed-input cases (missing `Done`, missing `;`, an incomplete
   expression, unexpected EOF) asserted not to hang or crash the
   interpreter, per "Error behavior" above.
+- Reentrancy regression cases (Decision 4): `Print 2 * (3 * 4).` (a
+  parenthesized sub-expression re-enters `ParseFactor`'s own repetition)
+  and an `Action` containing a nested `If` followed by more top-level
+  statements (the exact shape that broke `ParseBlock` in the second bug
+  round) — both exist specifically so a future change that reintroduces a
+  while+flag loop in this file gets caught immediately, not rediscovered
+  the hard way again.

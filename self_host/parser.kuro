@@ -1,0 +1,852 @@
+# Stage 6 self-hosting milestone (spec sections 5/61, ADR-0010): a
+# recursive-descent Kuro parser written in Kuro, executed by compiler/'s
+# Stage 1-4 interpreter, producing a flat canonical AST encoding
+# (compiler/ast_canon.py is the single source of truth for that encoding)
+# that tests/self_host/test_parser_cross.py compares against
+# compiler/parser.py's real AST for the same source.
+#
+# This file assumes TokenKinds/TokenValues (two parallel lists) already
+# exist when it runs — normally populated by self_host/lexer.kuro. The
+# small block below marked BEGIN/END_STANDALONE_TOKENS supplies a tiny
+# default so `kuro run self_host/parser.kuro` also works on its own; the
+# differential-test harness strips that block and concatenates this file
+# after self_host/lexer.kuro instead (see ADR-0010's "Decision 1" for why
+# this is a build-time convenience, not a real Kuro import system).
+#
+# Grammar coverage this session (see ADR-0010 for the full scope decision):
+#   covered:  literals, variable refs, arithmetic (+ - * / with
+#             precedence, parens, unary minus), comparisons (including
+#             "or equal to"/"at least"/"at most"), and/or, is
+#             digit/alpha/space/alnum/quote, Decl, Assign (typed/untyped,
+#             multi-value), Add, Update, Print, Return, Call (paren-less
+#             and legacy-parenthesized), Action (paren-less/legacy,
+#             typed/untyped params), If/Else, Repeat, While.
+#   deferred: Take, Get, Length, Set, Append (the statement), Compare (the
+#             statement - not to be confused with the condition grammar,
+#             which If/While already need and this file covers), and the
+#             legacy `Entered ... then ... otherwise ...;` one-liner.
+#
+# NAMING DISCIPLINE, AND WHY EVERY REPEATED-CONSTRUCT LOOP IS RECURSIVE,
+# NOT while+flag (both load-bearing, not style — found while differential-
+# testing this file, not designed in up front):
+#
+# Kuro Actions have no true local variables — only *parameters* get
+# frame-based read priority (compiler/interpreter.py); every other name an
+# Action assigns is a write to the single global environment
+# (docs/architecture/current-state.md section 7). A first version of this
+# file reused generic names like `Looping`/`K`/`V` across many Actions and
+# broke immediately under differential testing: e.g. ParseBlock sets its
+# own `Looping = 1`, calls (transitively, through ParseStatement ->
+# ParseValueList -> ParseExpr) ParseTerm, which *also* uses a global
+# named `Looping` for its own +/- loop — and when ParseTerm's loop ends by
+# setting `Looping = 0`, it silently clobbers ParseBlock's still-in-use
+# flag, ending the whole block one statement early.
+#
+# Prefixing every local by its Action's name (done throughout this file)
+# fixes collisions *between different* Actions, but not a second, deeper
+# case: an Action that is reentrant with itself — directly or, like
+# ParseBlock, indirectly (the top-level program's ParseBlock call parses a
+# statement that is itself an `Action ... Done.`, whose body is parsed by
+# *another* ParseBlock call, sharing the exact same global
+# `ParseBlock_Looping`). The inner call's loop ending (`Looping = 0`) still
+# clobbers the outer call's copy of the *same* global, because no amount of
+# per-Action prefixing gives two different *calls* to the same Action their
+# own copy of anything — only Action *parameters* get that (a real call
+# frame). So every construct that repeats zero-or-more times (`a * b * c`,
+# `a and b and c`, a parameter/argument list, a block's statement list) is
+# written as tail recursion here instead of a while-loop-plus-flag: each
+# repetition is one more (frame-isolated) `Call`, and there is no
+# loop-control variable left to survive — and therefore be clobbered by —
+# a nested call at all. Every one of this file's repeated constructs is
+# reentrant in principle (expressions nest via parentheses, blocks nest
+# via If/Action/Repeat/While bodies), so this file does not keep any
+# while+flag loops around a call that could recurse back through it —
+# `While` (ADR-0009) remains available in the language and is exercised
+# by the *grammar* this parser recognizes (it can parse a Kuro `While`
+# statement fine), it is just not how this parser implements its own
+# repetition.
+#
+# Every non-parameter
+# variable in this file is therefore named `<ActionName>_<purpose>`, which
+# is sufficient (not automatic) safety: Action names are unique, so a
+# prefixed name can never collide with another Action's own locals.
+#
+# Error behavior: does not crash or hang on malformed input, but does not
+# yet produce compiler/diagnostics.py-equivalent structured errors — see
+# ADR-0010's "Error behavior" section. ParseFailed is a global circuit
+# breaker: once anything fails to match, block parsing stops cleanly
+# instead of looping or corrupting AstOut further.
+
+# --- BEGIN_STANDALONE_TOKENS (stripped by the Stage 6 differential test harness) ---
+TokenKinds = "IDENT", "STRING", "DOT";
+TokenValues = "Print", "hi", ".";
+# --- END_STANDALONE_TOKENS ---
+
+TokPos = 0;
+Length TokenKinds;
+TokCount = @_;
+AstOut is Text;
+ParseFailed = 0;
+
+# --- token access helpers ---------------------------------------------
+
+Action PeekKind Offset;
+    PeekKind_P = TokPos + Offset;
+    Compare PeekKind_InBounds PeekKind_P less than TokCount;
+    If PeekKind_InBounds is equal to 1;
+        Get TokenKinds PeekKind_P;
+        Return @_;
+    Else;
+        Return "EOF";
+    Done.
+Done.
+
+Action PeekValue Offset;
+    PeekValue_P = TokPos + Offset;
+    Compare PeekValue_InBounds PeekValue_P less than TokCount;
+    If PeekValue_InBounds is equal to 1;
+        Get TokenValues PeekValue_P;
+        Return @_;
+    Else;
+        Return "";
+    Done.
+Done.
+
+Action CurKind;
+    Call PeekKind 0;
+    Return @_;
+Done.
+
+Action CurValue;
+    Call PeekValue 0;
+    Return @_;
+Done.
+
+Action IsWord ExpectedWord;
+    Call CurKind;
+    IsWord_K = @_;
+    If IsWord_K is equal to "IDENT";
+        Call CurValue;
+        IsWord_V = @_;
+        If IsWord_V is equal to ExpectedWord;
+            Return 1;
+        Else;
+            Return 0;
+        Done.
+    Else;
+        Return 0;
+    Done.
+Done.
+
+Action ExpectKind ExpectedKind;
+    Call CurKind;
+    ExpectKind_K = @_;
+    If ExpectKind_K is equal to ExpectedKind;
+        Add 1 to TokPos;
+        Return 1;
+    Else;
+        ParseFailed = 1;
+        Return 0;
+    Done.
+Done.
+
+Action ExpectWord ExpectedWord;
+    Call IsWord ExpectedWord;
+    ExpectWord_Ok = @_;
+    If ExpectWord_Ok is equal to 1;
+        Add 1 to TokPos;
+        Return 1;
+    Else;
+        ParseFailed = 1;
+        Return 0;
+    Done.
+Done.
+
+# --- expression parsing (precedence: term > factor > atom, matching
+# compiler/parser.py's expr/_term/_factor/_atom exactly) -----------------
+
+Action ParseAtom;
+    Call CurKind;
+    ParseAtom_K = @_;
+
+    If ParseAtom_K is equal to "LPAREN";
+        Add 1 to TokPos;
+        Call ParseExpr;
+        Call ExpectKind "RPAREN";
+        Return 1;
+    Done.
+
+    If ParseAtom_K is equal to "STRING";
+        Call CurValue;
+        ParseAtom_V = @_;
+        Add 1 to TokPos;
+        Append "LIT_STR" to AstOut;
+        Append ParseAtom_V to AstOut;
+        Return 1;
+    Done.
+
+    If ParseAtom_K is equal to "INTEGER";
+        Call CurValue;
+        ParseAtom_V = @_;
+        Add 1 to TokPos;
+        Append "LIT_INT" to AstOut;
+        Append ParseAtom_V to AstOut;
+        Return 1;
+    Done.
+
+    If ParseAtom_K is equal to "DECIMAL";
+        Call CurValue;
+        ParseAtom_V = @_;
+        Add 1 to TokPos;
+        Append "LIT_DEC" to AstOut;
+        Append ParseAtom_V to AstOut;
+        Return 1;
+    Done.
+
+    If ParseAtom_K is equal to "AT";
+        Add 1 to TokPos;
+        Call CurValue;
+        ParseAtom_V = @_;
+        Add 1 to TokPos;
+        Append "VAR" to AstOut;
+        Append "1" to AstOut;
+        Append ParseAtom_V to AstOut;
+        Return 1;
+    Done.
+
+    If ParseAtom_K is equal to "MINUS";
+        Add 1 to TokPos;
+        Append "LIT_INT" to AstOut;
+        Append "0" to AstOut;
+        Call ParseAtom;
+        Append "BIN" to AstOut;
+        Append "-" to AstOut;
+        Return 1;
+    Done.
+
+    If ParseAtom_K is equal to "IDENT";
+        Call CurValue;
+        ParseAtom_V = @_;
+        Add 1 to TokPos;
+        Append "VAR" to AstOut;
+        Append "0" to AstOut;
+        Append ParseAtom_V to AstOut;
+        Return 1;
+    Done.
+
+    ParseFailed = 1;
+    Return 0;
+Done.
+
+Action ParseFactor;
+    Call ParseAtom;
+    Call ParseFactorTail;
+Done.
+
+Action ParseFactorTail;
+    Call CurKind;
+    ParseFactorTail_K = @_;
+    If ParseFactorTail_K is equal to "STAR" or ParseFactorTail_K is equal to "SLASH";
+        ParseFactorTail_Op = "*";
+        If ParseFactorTail_K is equal to "SLASH";
+            ParseFactorTail_Op = "/";
+        Done.
+        Add 1 to TokPos;
+        Call ParseAtom;
+        Append "BIN" to AstOut;
+        Append ParseFactorTail_Op to AstOut;
+        If ParseFailed is equal to 0;
+            Call ParseFactorTail;
+        Done.
+    Done.
+Done.
+
+Action ParseTerm;
+    Call ParseFactor;
+    Call ParseTermTail;
+Done.
+
+Action ParseTermTail;
+    Call CurKind;
+    ParseTermTail_K = @_;
+    If ParseTermTail_K is equal to "PLUS" or ParseTermTail_K is equal to "MINUS";
+        ParseTermTail_Op = "+";
+        If ParseTermTail_K is equal to "MINUS";
+            ParseTermTail_Op = "-";
+        Done.
+        Add 1 to TokPos;
+        Call ParseFactor;
+        Append "BIN" to AstOut;
+        Append ParseTermTail_Op to AstOut;
+        If ParseFailed is equal to 0;
+            Call ParseTermTail;
+        Done.
+    Done.
+Done.
+
+Action ParseExpr;
+    Call ParseTerm;
+Done.
+
+# --- condition parsing (comparisons, and/or, is-class) -------------------
+
+Action ParseComparisonOp;
+    Call IsWord "greater";
+    ParseComparisonOp_W1 = @_;
+    If ParseComparisonOp_W1 is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectWord "than";
+        Call IsWord "or";
+        ParseComparisonOp_W1b = @_;
+        If ParseComparisonOp_W1b is equal to 1;
+            Add 1 to TokPos;
+            Call ExpectWord "equal";
+            Call IsWord "to";
+            ParseComparisonOp_W1c = @_;
+            If ParseComparisonOp_W1c is equal to 1;
+                Add 1 to TokPos;
+            Done.
+            Return "ge";
+        Else;
+            Return "gt";
+        Done.
+    Done.
+
+    Call IsWord "less";
+    ParseComparisonOp_W2 = @_;
+    If ParseComparisonOp_W2 is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectWord "than";
+        Call IsWord "or";
+        ParseComparisonOp_W2b = @_;
+        If ParseComparisonOp_W2b is equal to 1;
+            Add 1 to TokPos;
+            Call ExpectWord "equal";
+            Call IsWord "to";
+            ParseComparisonOp_W2c = @_;
+            If ParseComparisonOp_W2c is equal to 1;
+                Add 1 to TokPos;
+            Done.
+            Return "le";
+        Else;
+            Return "lt";
+        Done.
+    Done.
+
+    Call IsWord "equal";
+    ParseComparisonOp_W3 = @_;
+    If ParseComparisonOp_W3 is equal to 1;
+        Add 1 to TokPos;
+        Call IsWord "to";
+        ParseComparisonOp_W3b = @_;
+        If ParseComparisonOp_W3b is equal to 1;
+            Add 1 to TokPos;
+        Done.
+        Return "eq";
+    Done.
+
+    Call IsWord "equals";
+    ParseComparisonOp_W4 = @_;
+    If ParseComparisonOp_W4 is equal to 1;
+        Add 1 to TokPos;
+        Call IsWord "to";
+        ParseComparisonOp_W4b = @_;
+        If ParseComparisonOp_W4b is equal to 1;
+            Add 1 to TokPos;
+        Done.
+        Return "eq";
+    Done.
+
+    Call IsWord "not";
+    ParseComparisonOp_W5 = @_;
+    If ParseComparisonOp_W5 is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectWord "equal";
+        Call IsWord "to";
+        ParseComparisonOp_W5b = @_;
+        If ParseComparisonOp_W5b is equal to 1;
+            Add 1 to TokPos;
+        Done.
+        Return "ne";
+    Done.
+
+    Call IsWord "at";
+    ParseComparisonOp_W6 = @_;
+    If ParseComparisonOp_W6 is equal to 1;
+        Add 1 to TokPos;
+        Call IsWord "least";
+        ParseComparisonOp_W6a = @_;
+        If ParseComparisonOp_W6a is equal to 1;
+            Add 1 to TokPos;
+            Return "ge";
+        Done.
+        Call IsWord "most";
+        ParseComparisonOp_W6b = @_;
+        If ParseComparisonOp_W6b is equal to 1;
+            Add 1 to TokPos;
+            Return "le";
+        Done.
+    Done.
+
+    ParseFailed = 1;
+    Return "";
+Done.
+
+Action ParseComparison;
+    Call ParseExpr;
+    Call IsWord "is";
+    ParseComparison_HasIs = @_;
+    If ParseComparison_HasIs is equal to 1;
+        Add 1 to TokPos;
+    Done.
+
+    Call CurKind;
+    ParseComparison_K = @_;
+    Call CurValue;
+    ParseComparison_V = @_;
+    ParseComparison_IsClassWord = 0;
+    If ParseComparison_K is equal to "IDENT";
+        If ParseComparison_V is equal to "digit";
+            ParseComparison_IsClassWord = 1;
+        Done.
+        If ParseComparison_V is equal to "alpha";
+            ParseComparison_IsClassWord = 1;
+        Done.
+        If ParseComparison_V is equal to "space";
+            ParseComparison_IsClassWord = 1;
+        Done.
+        If ParseComparison_V is equal to "alnum";
+            ParseComparison_IsClassWord = 1;
+        Done.
+        If ParseComparison_V is equal to "quote";
+            ParseComparison_IsClassWord = 1;
+        Done.
+    Done.
+
+    If ParseComparison_IsClassWord is equal to 1;
+        Add 1 to TokPos;
+        Append "ISCLASS" to AstOut;
+        Append ParseComparison_V to AstOut;
+    Else;
+        Call ParseComparisonOp;
+        ParseComparison_Op = @_;
+        Call ParseExpr;
+        Append "CMP" to AstOut;
+        Append ParseComparison_Op to AstOut;
+    Done.
+Done.
+
+Action ParseAndCondition;
+    Call ParseComparison;
+    Call ParseAndConditionTail;
+Done.
+
+Action ParseAndConditionTail;
+    Call IsWord "and";
+    ParseAndConditionTail_IsAnd = @_;
+    If ParseAndConditionTail_IsAnd is equal to 1;
+        Add 1 to TokPos;
+        Call ParseComparison;
+        Append "AND" to AstOut;
+        If ParseFailed is equal to 0;
+            Call ParseAndConditionTail;
+        Done.
+    Done.
+Done.
+
+Action ParseCondition;
+    Call ParseAndCondition;
+    Call ParseConditionTail;
+Done.
+
+Action ParseConditionTail;
+    Call IsWord "or";
+    ParseConditionTail_IsOr = @_;
+    If ParseConditionTail_IsOr is equal to 1;
+        Add 1 to TokPos;
+        Call ParseAndCondition;
+        Append "OR" to AstOut;
+        If ParseFailed is equal to 0;
+            Call ParseConditionTail;
+        Done.
+    Done.
+Done.
+
+# --- parameter lists (Action) and argument lists (Call): both accept the
+# canonical paren-less form and the legacy parenthesized form, matching
+# compiler/parser.py::_param_list / _arg_list (ADR-0002). --------------
+
+Action ParseOneParam;
+    Call CurValue;
+    ParseOneParam_Name = @_;
+    Add 1 to TokPos;
+    ParseOneParam_Typ = "NONE";
+    Call CurKind;
+    ParseOneParam_K = @_;
+    If ParseOneParam_K is equal to "COLON";
+        Add 1 to TokPos;
+        Call CurValue;
+        ParseOneParam_Typ = @_;
+        Add 1 to TokPos;
+    Done.
+    Append ParseOneParam_Name to AstOut;
+    Append ParseOneParam_Typ to AstOut;
+Done.
+
+Action ParseParamsTail;
+    Call CurKind;
+    ParseParamsTail_K = @_;
+    If ParseParamsTail_K is equal to "COMMA";
+        Add 1 to TokPos;
+        Call ParseOneParam;
+        If ParseFailed is equal to 0;
+            Call ParseParamsTail;
+        Done.
+    Done.
+Done.
+
+Action ParseParams;
+    Call CurKind;
+    ParseParams_K = @_;
+    If ParseParams_K is equal to "LPAREN";
+        Add 1 to TokPos;
+        Call CurKind;
+        ParseParams_K2 = @_;
+        If ParseParams_K2 is equal to "RPAREN";
+            Add 1 to TokPos;
+        Else;
+            Call ParseOneParam;
+            Call ParseParamsTail;
+            Call ExpectKind "RPAREN";
+        Done.
+    Else;
+        Call CurKind;
+        ParseParams_K4 = @_;
+        If ParseParams_K4 is equal to "SEMI";
+            ParseParams_NoOp = 0;
+        Else;
+            Call ParseOneParam;
+            Call ParseParamsTail;
+        Done.
+    Done.
+    Append "END_PARAMS" to AstOut;
+Done.
+
+Action ParseArgsTail;
+    Call CurKind;
+    ParseArgsTail_K = @_;
+    If ParseArgsTail_K is equal to "COMMA";
+        Add 1 to TokPos;
+        Call ParseExpr;
+        If ParseFailed is equal to 0;
+            Call ParseArgsTail;
+        Done.
+    Done.
+Done.
+
+Action ParseArgs;
+    Call CurKind;
+    ParseArgs_K = @_;
+    If ParseArgs_K is equal to "LPAREN";
+        Add 1 to TokPos;
+        Call CurKind;
+        ParseArgs_K2 = @_;
+        If ParseArgs_K2 is equal to "RPAREN";
+            Add 1 to TokPos;
+        Else;
+            Call ParseExpr;
+            Call ParseArgsTail;
+            Call ExpectKind "RPAREN";
+        Done.
+    Else;
+        Call CurKind;
+        ParseArgs_K4 = @_;
+        If ParseArgs_K4 is equal to "SEMI";
+            ParseArgs_NoOp = 0;
+        Else;
+            Call ParseExpr;
+            Call ParseArgsTail;
+        Done.
+    Done.
+    Append "END_ARGS" to AstOut;
+Done.
+
+# --- statements -----------------------------------------------------------
+
+Action IsDeclAhead;
+    Call PeekKind 1;
+    IsDeclAhead_K1 = @_;
+    Call PeekValue 1;
+    IsDeclAhead_V1 = @_;
+    If IsDeclAhead_K1 is equal to "IDENT" and IsDeclAhead_V1 is equal to "is";
+        Call PeekValue 2;
+        IsDeclAhead_V2 = @_;
+        IsDeclAhead_IsCompareWord = 0;
+        If IsDeclAhead_V2 is equal to "greater";
+            IsDeclAhead_IsCompareWord = 1;
+        Done.
+        If IsDeclAhead_V2 is equal to "less";
+            IsDeclAhead_IsCompareWord = 1;
+        Done.
+        If IsDeclAhead_V2 is equal to "equal";
+            IsDeclAhead_IsCompareWord = 1;
+        Done.
+        If IsDeclAhead_V2 is equal to "equals";
+            IsDeclAhead_IsCompareWord = 1;
+        Done.
+        If IsDeclAhead_V2 is equal to "not";
+            IsDeclAhead_IsCompareWord = 1;
+        Done.
+        If IsDeclAhead_IsCompareWord is equal to 1;
+            Return 0;
+        Else;
+            Return 1;
+        Done.
+    Else;
+        Return 0;
+    Done.
+Done.
+
+Action ParseValueListTail;
+    Call CurKind;
+    ParseValueListTail_K = @_;
+    If ParseValueListTail_K is equal to "COMMA";
+        Add 1 to TokPos;
+        Call ParseExpr;
+        If ParseFailed is equal to 0;
+            Call ParseValueListTail;
+        Done.
+    Done.
+Done.
+
+Action ParseValueList;
+    Call ParseExpr;
+    Call ParseValueListTail;
+    Append "END_VALUES" to AstOut;
+Done.
+
+Action ParseStatement;
+    Call CurKind;
+    ParseStatement_K = @_;
+    Call CurValue;
+    ParseStatement_V = @_;
+
+    If ParseStatement_K is equal to "IDENT";
+        Call IsDeclAhead;
+        ParseStatement_IsDecl = @_;
+        If ParseStatement_IsDecl is equal to 1;
+            Add 1 to TokPos;
+            Add 1 to TokPos;
+            Call CurValue;
+            ParseStatement_Typ = @_;
+            Add 1 to TokPos;
+            Call ExpectKind "SEMI";
+            Append "DECL" to AstOut;
+            Append ParseStatement_V to AstOut;
+            Append ParseStatement_Typ to AstOut;
+            Return 1;
+        Done.
+
+        Call PeekKind 1;
+        ParseStatement_NextK = @_;
+
+        If ParseStatement_NextK is equal to "COLON";
+            Add 1 to TokPos;
+            Add 1 to TokPos;
+            Call CurValue;
+            ParseStatement_Typ2 = @_;
+            Add 1 to TokPos;
+            Call ExpectKind "EQUAL";
+            Append "ASSIGN" to AstOut;
+            Append ParseStatement_V to AstOut;
+            Append ParseStatement_Typ2 to AstOut;
+            Call ParseValueList;
+            Call ExpectKind "SEMI";
+            Return 1;
+        Done.
+
+        If ParseStatement_NextK is equal to "EQUAL";
+            Add 1 to TokPos;
+            Add 1 to TokPos;
+            Append "ASSIGN" to AstOut;
+            Append ParseStatement_V to AstOut;
+            Append "NONE" to AstOut;
+            Call ParseValueList;
+            Call ExpectKind "SEMI";
+            Return 1;
+        Done.
+    Done.
+
+    Call IsWord "Print";
+    ParseStatement_IsPrint = @_;
+    If ParseStatement_IsPrint is equal to 1;
+        Add 1 to TokPos;
+        Append "PRINT" to AstOut;
+        Call ParseExpr;
+        Call ExpectKind "DOT";
+        Return 1;
+    Done.
+
+    Call IsWord "Add";
+    ParseStatement_IsAdd = @_;
+    If ParseStatement_IsAdd is equal to 1;
+        Add 1 to TokPos;
+        Append "ADD" to AstOut;
+        Call ParseExpr;
+        Call ExpectWord "to";
+        Call CurValue;
+        ParseStatement_Tgt = @_;
+        Add 1 to TokPos;
+        Append ParseStatement_Tgt to AstOut;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Update";
+    ParseStatement_IsUpdate = @_;
+    If ParseStatement_IsUpdate is equal to 1;
+        Add 1 to TokPos;
+        Call CurValue;
+        ParseStatement_UName = @_;
+        Add 1 to TokPos;
+        Call ExpectWord "to";
+        Append "UPDATE" to AstOut;
+        Append ParseStatement_UName to AstOut;
+        Call ParseExpr;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Return";
+    ParseStatement_IsReturn = @_;
+    If ParseStatement_IsReturn is equal to 1;
+        Add 1 to TokPos;
+        Append "RETURN" to AstOut;
+        Call ParseExpr;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Call";
+    ParseStatement_IsCall = @_;
+    If ParseStatement_IsCall is equal to 1;
+        Add 1 to TokPos;
+        Call CurValue;
+        ParseStatement_CName = @_;
+        Add 1 to TokPos;
+        Append "CALL" to AstOut;
+        Append ParseStatement_CName to AstOut;
+        Call ParseArgs;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Action";
+    ParseStatement_IsAction = @_;
+    If ParseStatement_IsAction is equal to 1;
+        Add 1 to TokPos;
+        Call CurValue;
+        ParseStatement_AName = @_;
+        Add 1 to TokPos;
+        Append "ACTION" to AstOut;
+        Append ParseStatement_AName to AstOut;
+        Call ParseParams;
+        Call ExpectKind "SEMI";
+        Call ParseBlock "Done", "";
+        Call ExpectWord "Done";
+        Call ExpectKind "DOT";
+        Return 1;
+    Done.
+
+    Call IsWord "If";
+    ParseStatement_IsIf = @_;
+    If ParseStatement_IsIf is equal to 1;
+        Add 1 to TokPos;
+        Append "IF" to AstOut;
+        Call ParseCondition;
+        Call ExpectKind "SEMI";
+        Call ParseBlock "Else", "Done";
+        Call IsWord "Else";
+        ParseStatement_HasElse = @_;
+        If ParseStatement_HasElse is equal to 1;
+            Add 1 to TokPos;
+            Call ExpectKind "SEMI";
+            Call ParseBlock "Done", "";
+        Else;
+            Append "END_BLOCK" to AstOut;
+        Done.
+        Call ExpectWord "Done";
+        Call ExpectKind "DOT";
+        Return 1;
+    Done.
+
+    Call IsWord "Repeat";
+    ParseStatement_IsRepeat = @_;
+    If ParseStatement_IsRepeat is equal to 1;
+        Add 1 to TokPos;
+        Append "REPEAT" to AstOut;
+        Call ParseExpr;
+        Call ExpectKind "SEMI";
+        Call ParseBlock "Done", "";
+        Call ExpectWord "Done";
+        Call ExpectKind "DOT";
+        Return 1;
+    Done.
+
+    Call IsWord "While";
+    ParseStatement_IsWhile = @_;
+    If ParseStatement_IsWhile is equal to 1;
+        Add 1 to TokPos;
+        Append "WHILE" to AstOut;
+        Call ParseCondition;
+        Call ExpectKind "SEMI";
+        Call ParseBlock "Done", "";
+        Call ExpectWord "Done";
+        Call ExpectKind "DOT";
+        Return 1;
+    Done.
+
+    ParseFailed = 1;
+    Add 1 to TokPos;
+    Return 0;
+Done.
+
+Action ParseBlockLoop Stop1, Stop2;
+    Call CurKind;
+    ParseBlockLoop_K = @_;
+    If ParseBlockLoop_K is equal to "EOF";
+        ParseBlockLoop_NoOp = 0;
+    Else;
+        Call CurValue;
+        ParseBlockLoop_V = @_;
+        ParseBlockLoop_IsStop = 0;
+        If ParseBlockLoop_K is equal to "IDENT";
+            If ParseBlockLoop_V is equal to Stop1;
+                ParseBlockLoop_IsStop = 1;
+            Done.
+            If ParseBlockLoop_V is equal to Stop2;
+                ParseBlockLoop_IsStop = 1;
+            Done.
+        Done.
+        If ParseBlockLoop_IsStop is equal to 1;
+            ParseBlockLoop_NoOp2 = 0;
+        Else;
+            Call ParseStatement;
+            If ParseFailed is equal to 0;
+                Call ParseBlockLoop Stop1, Stop2;
+            Done.
+        Done.
+    Done.
+Done.
+
+Action ParseBlock Stop1, Stop2;
+    Call ParseBlockLoop Stop1, Stop2;
+    Append "END_BLOCK" to AstOut;
+Done.
+
+Action ParseProgram;
+    Append "PROGRAM" to AstOut;
+    Call ParseBlock "", "";
+Done.
+
+Call ParseProgram;
