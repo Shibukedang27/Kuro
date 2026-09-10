@@ -160,6 +160,19 @@ class Lowering:
             dest = b.emit_value("CALL", st.name, *args, span=st.span)
             b.emit("STORE_LIST", "_", (dest,), span=st.span)
             return
+        if isinstance(st, ActionDecl):
+            # A *nested* ActionDecl (inside If/Repeat/While/another
+            # Action's body) reaches here — top-level ones never do,
+            # they're filtered out of `top` in run() and lowered
+            # separately via _lower_action. A nested one is real,
+            # resolvable Kuro source (compiler/resolver.py deliberately
+            # does not reject it — see docs/architecture/
+            # self-hosted-semantics.md §3b) that is simply never
+            # registered as callable, so it produces no IR of its own;
+            # previously this fell through to the AssertionError below
+            # and crashed the whole compilation instead of compiling the
+            # (inert) program, found via Stage 7's differential testing.
+            return
         raise AssertionError(f"unhandled statement {st!r}")
 
     def _lower_repeat(self, st: RepeatStmt, b: IRBuilder):

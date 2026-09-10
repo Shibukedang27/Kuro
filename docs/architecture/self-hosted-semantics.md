@@ -95,6 +95,20 @@ Done.
 Call Nested 5;   # error[E4003]: unknown action 'Nested'
 ```
 
+**Addendum, found later in Stage 7 while differentially testing
+`self_host/resolver.kuro`**: a nested `Action` with no `Call` site (just
+the `If Action Nested ...; Done. Done.` part, no attempt to call it) used
+to **crash the Python compiler entirely** — `compiler/lower.py`'s
+`Lowering._lower_stmt` had no case for a nested `ActionDecl` (only
+top-level ones are filtered out of `main` and lowered separately) and hit
+its final `raise AssertionError(f"unhandled statement {st!r}")`. Fixed:
+a nested `ActionDecl` now lowers to nothing (matching that it's already
+established as inert/uncallable — there's nothing to execute or to make
+callable). This was a real, previously-undiscovered "must not crash"
+violation on syntactically valid, resolvable input, not a semantic change
+— the program still can't call the nested action, it just no longer
+crashes the whole compiler while failing to.
+
 **3c. The resolver's own duplicate-parameter check (`E2005` in
 `_collect_globals`) is dead code in practice.** `compiler/parser.py`'s
 `_param_list` already calls `_check_duplicate_params` unconditionally for

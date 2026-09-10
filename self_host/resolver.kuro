@@ -1,0 +1,587 @@
+# Stage 7, self-hosted resolver — PASS 1 ONLY (top-level collection),
+# mirroring compiler/resolver.py's _collect_globals exactly (see
+# docs/architecture/self-hosted-semantics.md §1 and ADR-0012). Pass 2
+# (usage checking + type checking, combined — ADR-0014) lives in
+# self_host/typecheck.kuro.
+#
+# This file assumes TokenKinds/TokenValues/TokenStarts/Source/TokCount and
+# the diagnostic infrastructure (DiagCodes/DiagLines/DiagCols/
+# DiagMessages, ComputeLineCol) already exist — normally supplied by
+# self_host/lexer.kuro and self_host/parser.kuro when concatenated ahead
+# of this file (ADR-0010's Decision 1: no real Kuro module system exists,
+# so this remains a build-time convenience, not a language feature). The
+# small BEGIN/END_STANDALONE block below supplies tiny defaults so this
+# file also runs on its own.
+#
+# WHY THIS FILE DOES NOT WALK AstOut: see ADR-0014. Postfix-encoded
+# expressions are not unambiguously re-parseable from the flat text alone
+# (proven there, not assumed) — this file re-scans TokenKinds/TokenValues
+# directly instead, with its own cursor (SemPos), independently
+# recognizing only what pass 1 actually needs: top-level Decl/Assign/
+# Action shapes, skipping everything else without needing to understand
+# expression grammar at all (no `;`/`.` token can ever appear inside an
+# expression — both only appear as statement/block terminators, and a
+# decimal literal's `.` is lexed as part of the DECIMAL token, not a
+# separate DOT — so skipping to the next `;`/`.` is always exactly
+# skipping one leaf statement).
+
+# --- BEGIN_STANDALONE (stripped by the differential test harness) ---
+Source = "Age is Integers;\nAge = 25;";
+TokenKinds = "IDENT", "IDENT", "SEMI", "IDENT", "EQUAL", "INTEGER", "SEMI";
+TokenValues = "Age", "is", ";", "Age", "=", "25", ";";
+TokenStarts = 0, 4, 14, 16, 20, 22, 24;
+TokCount = 7;
+DiagCodes is Text;
+DiagLines is Text;
+DiagCols is Text;
+DiagMessages is Text;
+# --- END_STANDALONE ---
+
+SemPos = 0;
+
+SymNames is Text;
+SymTypes is Text;
+
+ActionNames is Text;
+ActionArity is Text;
+ActionParamPos is Text;
+
+# A Decl-only list has no runtime entry at all until the first Append
+# (compiler/interpreter.py: DECLTYPE is a no-op), so `Length` on one that
+# has never been appended to raises E4001 "undefined value" - not a rare
+# edge case here, since plenty of real programs declare no Action at all
+# and would hit this on the very first ActionExists check. Seeded with one
+# harmless sentinel entry each, keeping the parallel arrays' lengths in
+# sync; "" never matches a real Kuro identifier (they can't be empty), and
+# -1 never matches a real, meaningful arity/position, so every lookup
+# helper's exact-equality search simply never matches the sentinel row.
+Append "" to SymNames;
+Append "" to SymTypes;
+Append "" to ActionNames;
+Append -1 to ActionArity;
+Append -1 to ActionParamPos;
+
+BASE_TYPE_1 = "Integers";
+BASE_TYPE_2 = "Decimals";
+BASE_TYPE_3 = "Text";
+BASE_TYPE_4 = "Symbols";
+
+# --- shared low-level token access (position given explicitly, so both
+# this file's SemPos and self_host/typecheck.kuro's own cursor can reuse
+# it without depending on self_host/parser.kuro's TokPos-specific
+# PeekKind/PeekValue, which this file does not touch) ------------------
+
+Action KindAt Pos;
+    Compare KindAt_InBounds Pos less than TokCount;
+    If KindAt_InBounds is equal to 1;
+        Get TokenKinds Pos;
+        Return @_;
+    Else;
+        Return "EOF";
+    Done.
+Done.
+
+Action ValueAt Pos;
+    Compare ValueAt_InBounds Pos less than TokCount;
+    If ValueAt_InBounds is equal to 1;
+        Get TokenValues Pos;
+        Return @_;
+    Else;
+        Return "";
+    Done.
+Done.
+
+Action StartAt Pos;
+    Compare StartAt_InBounds Pos less than TokCount;
+    If StartAt_InBounds is equal to 1;
+        Get TokenStarts Pos;
+        Return @_;
+    Else;
+        Length Source;
+        Return @_;
+    Done.
+Done.
+
+Action RecordSemDiag Code, Pos, Message;
+    Call StartAt Pos;
+    RecordSemDiag_Off = @_;
+    Call ComputeLineCol RecordSemDiag_Off;
+    Append Code to DiagCodes;
+    Append DiagCurLine to DiagLines;
+    Append DiagCurCol to DiagCols;
+    Append Message to DiagMessages;
+Done.
+
+# --- symbol table (parallel arrays — ADR-0012/ADR-0014) -----------------
+
+Action IsBaseType Typ;
+    If Typ is equal to BASE_TYPE_1;
+        Return 1;
+    Done.
+    If Typ is equal to BASE_TYPE_2;
+        Return 1;
+    Done.
+    If Typ is equal to BASE_TYPE_3;
+        Return 1;
+    Done.
+    If Typ is equal to BASE_TYPE_4;
+        Return 1;
+    Done.
+    Return 0;
+Done.
+
+Action SymHasType Name;
+    Length SymNames;
+    SymHasType_N = @_;
+    SymHasType_Found = 0;
+    Repeat SymHasType_N;
+        Get SymNames Index;
+        SymHasType_Nm = @_;
+        If SymHasType_Nm is equal to Name;
+            SymHasType_Found = 1;
+        Done.
+    Done.
+    Return SymHasType_Found;
+Done.
+
+Action SymGetType Name;
+    Length SymNames;
+    SymGetType_N = @_;
+    SymGetType_Result = "";
+    Repeat SymGetType_N;
+        Get SymNames Index;
+        SymGetType_Nm = @_;
+        If SymGetType_Nm is equal to Name;
+            Get SymTypes Index;
+            SymGetType_Result = @_;
+        Done.
+    Done.
+    Return SymGetType_Result;
+Done.
+
+Action ActionExists Name;
+    Length ActionNames;
+    ActionExists_N = @_;
+    ActionExists_Found = 0;
+    Repeat ActionExists_N;
+        Get ActionNames Index;
+        ActionExists_Nm = @_;
+        If ActionExists_Nm is equal to Name;
+            ActionExists_Found = 1;
+        Done.
+    Done.
+    Return ActionExists_Found;
+Done.
+
+# --- pass 1 scan ----------------------------------------------------------
+# Only recognizes top-level Decl / Assign(-with-literal-values) / Action
+# headers, exactly matching compiler/resolver.py::_collect_globals; every
+# other top-level statement (and everything nested, regardless of shape)
+# is skipped without being interpreted at all — pass 1 does not need to.
+
+Action SkipToTerminator;
+    SkipToTerminator_Looping = 1;
+    While SkipToTerminator_Looping is equal to 1;
+        Call KindAt SemPos;
+        SkipToTerminator_K = @_;
+        If SkipToTerminator_K is equal to "EOF";
+            SkipToTerminator_Looping = 0;
+        Else;
+            If SkipToTerminator_K is equal to "SEMI" or SkipToTerminator_K is equal to "DOT";
+                Add 1 to SemPos;
+                SkipToTerminator_Looping = 0;
+            Else;
+                Add 1 to SemPos;
+            Done.
+        Done.
+    Done.
+Done.
+
+# Skips one whole block-opening construct (If/Repeat/While/Action), whose
+# header has already been skipped to its own ';' (SkipToTerminator already
+# called for the header). Recurses via SkipOneStatement (NOT
+# SkipTopLevelStatement - see that distinction's comment above
+# SkipOneStatement below: nested content must never be registered, only
+# skipped) for whatever is nested inside, stopping once "Done" "." is
+# consumed at this level - 'Else' is transparent here (just another
+# statement boundary handled by the generic leaf-skip fallback, since
+# `Else;` has nothing of its own to register or recurse into).
+Action SkipBlockBody;
+    SkipBlockBody_Looping = 1;
+    While SkipBlockBody_Looping is equal to 1;
+        Call KindAt SemPos;
+        SkipBlockBody_K = @_;
+        If SkipBlockBody_K is equal to "EOF";
+            SkipBlockBody_Looping = 0;
+        Else;
+            Call ValueAt SemPos;
+            SkipBlockBody_V = @_;
+            If SkipBlockBody_K is equal to "IDENT" and SkipBlockBody_V is equal to "Done";
+                Add 1 to SemPos;
+                Call KindAt SemPos;
+                SkipBlockBody_K2 = @_;
+                If SkipBlockBody_K2 is equal to "DOT";
+                    Add 1 to SemPos;
+                Done.
+                SkipBlockBody_Looping = 0;
+            Else;
+                Call SkipOneStatement;
+            Done.
+        Done.
+    Done.
+Done.
+
+Action IsBlockOpenerWord Word;
+    If Word is equal to "If";
+        Return 1;
+    Done.
+    If Word is equal to "Repeat";
+        Return 1;
+    Done.
+    If Word is equal to "While";
+        Return 1;
+    Done.
+    If Word is equal to "Action";
+        Return 1;
+    Done.
+    Return 0;
+Done.
+
+# Skips exactly one statement, WITHOUT EVER registering anything in the
+# symbol table - unlike SkipTopLevelStatement, which recognizes and
+# registers Decl/Assign/Action shapes. Used both for (a) nested content of
+# any depth, via SkipBlockBody (a nested Decl/Assign/Action must never be
+# collected - docs/architecture/self-hosted-semantics.md §3a/§3b), and
+# (b) SkipTopLevelStatement's own fallback for top-level statement kinds
+# pass 1 doesn't care about (Print/Add/.../If/Repeat/While) - a bare
+# SkipToTerminator alone is NOT correct for a top-level If/Repeat/While
+# either, since it would only skip to the header's own ';' and then
+# incorrectly resume scanning the block's BODY as if it were top-level.
+Action SkipOneStatement;
+    Call KindAt SemPos;
+    SkipOneStatement_K = @_;
+    SkipOneStatement_IsBlock = 0;
+    If SkipOneStatement_K is equal to "IDENT";
+        Call ValueAt SemPos;
+        SkipOneStatement_V = @_;
+        Call IsBlockOpenerWord SkipOneStatement_V;
+        SkipOneStatement_IsBlock = @_;
+    Done.
+    If SkipOneStatement_IsBlock is equal to 1;
+        Add 1 to SemPos;
+        If SkipOneStatement_V is equal to "Action";
+            Add 1 to SemPos;
+            Call SkipParamsHeader;
+        Done.
+        Call SkipToTerminator;
+        Call SkipBlockBody;
+    Else;
+        Call SkipToTerminator;
+    Done.
+Done.
+
+Action IsDeclAheadSem;
+    Call KindAt SemPos;
+    IsDeclAheadSem_K0 = @_;
+    Call ValueAt SemPos;
+    IsDeclAheadSem_V0 = @_;
+    Call KindAt SemPos + 1;
+    IsDeclAheadSem_K1 = @_;
+    Call ValueAt SemPos + 1;
+    IsDeclAheadSem_V1 = @_;
+    If IsDeclAheadSem_K0 is equal to "IDENT" and IsDeclAheadSem_K1 is equal to "IDENT" and IsDeclAheadSem_V1 is equal to "is";
+        Call ValueAt SemPos + 2;
+        IsDeclAheadSem_V2 = @_;
+        IsDeclAheadSem_IsCompareWord = 0;
+        If IsDeclAheadSem_V2 is equal to "greater";
+            IsDeclAheadSem_IsCompareWord = 1;
+        Done.
+        If IsDeclAheadSem_V2 is equal to "less";
+            IsDeclAheadSem_IsCompareWord = 1;
+        Done.
+        If IsDeclAheadSem_V2 is equal to "equal";
+            IsDeclAheadSem_IsCompareWord = 1;
+        Done.
+        If IsDeclAheadSem_V2 is equal to "equals";
+            IsDeclAheadSem_IsCompareWord = 1;
+        Done.
+        If IsDeclAheadSem_V2 is equal to "not";
+            IsDeclAheadSem_IsCompareWord = 1;
+        Done.
+        If IsDeclAheadSem_IsCompareWord is equal to 1;
+            Return 0;
+        Else;
+            Return 1;
+        Done.
+    Else;
+        Return 0;
+    Done.
+Done.
+
+Action SkipParamsHeader;
+    Call KindAt SemPos;
+    SkipParamsHeader_K = @_;
+    If SkipParamsHeader_K is equal to "LPAREN";
+        SkipParamsHeader_Looping = 1;
+        While SkipParamsHeader_Looping is equal to 1;
+            Call KindAt SemPos;
+            SkipParamsHeader_K2 = @_;
+            If SkipParamsHeader_K2 is equal to "RPAREN" or SkipParamsHeader_K2 is equal to "EOF";
+                Add 1 to SemPos;
+                SkipParamsHeader_Looping = 0;
+            Else;
+                Add 1 to SemPos;
+            Done.
+        Done.
+    Else;
+        SkipParamsHeader_Looping2 = 1;
+        While SkipParamsHeader_Looping2 is equal to 1;
+            Call KindAt SemPos;
+            SkipParamsHeader_K3 = @_;
+            If SkipParamsHeader_K3 is equal to "SEMI" or SkipParamsHeader_K3 is equal to "EOF";
+                SkipParamsHeader_Looping2 = 0;
+            Else;
+                Add 1 to SemPos;
+            Done.
+        Done.
+    Done.
+Done.
+
+Action CountParamsAt StartPos;
+    # Counts comma-separated parameter names starting at StartPos (right
+    # after 'Action Name'), without advancing SemPos - used both to
+    # register an action's arity in pass 1 and, later, by
+    # self_host/typecheck.kuro to re-derive a specific parameter's
+    # declared type on demand (ADR-0014 - avoids a ragged per-action
+    # symbol structure Kuro cannot represent cleanly).
+    CountParamsAt_P = StartPos;
+    Call KindAt CountParamsAt_P;
+    CountParamsAt_K = @_;
+    CountParamsAt_HasParens = 0;
+    If CountParamsAt_K is equal to "LPAREN";
+        CountParamsAt_HasParens = 1;
+        Add 1 to CountParamsAt_P;
+    Done.
+    Call KindAt CountParamsAt_P;
+    CountParamsAt_K2 = @_;
+    CountParamsAt_AtEnd = 0;
+    If CountParamsAt_HasParens is equal to 1;
+        If CountParamsAt_K2 is equal to "RPAREN";
+            CountParamsAt_AtEnd = 1;
+        Done.
+    Else;
+        If CountParamsAt_K2 is equal to "SEMI";
+            CountParamsAt_AtEnd = 1;
+        Done.
+    Done.
+    If CountParamsAt_AtEnd is equal to 1;
+        Return 0;
+    Done.
+    CountParamsAt_Count = 1;
+    Add 1 to CountParamsAt_P;
+    Call KindAt CountParamsAt_P;
+    CountParamsAt_K3 = @_;
+    If CountParamsAt_K3 is equal to "COLON";
+        Add 1 to CountParamsAt_P;
+        Add 1 to CountParamsAt_P;
+    Done.
+    CountParamsAt_Looping = 1;
+    While CountParamsAt_Looping is equal to 1;
+        Call KindAt CountParamsAt_P;
+        CountParamsAt_K4 = @_;
+        If CountParamsAt_K4 is equal to "COMMA";
+            CountParamsAt_Count = CountParamsAt_Count + 1;
+            Add 1 to CountParamsAt_P;
+            Add 1 to CountParamsAt_P;
+            Call KindAt CountParamsAt_P;
+            CountParamsAt_K5 = @_;
+            If CountParamsAt_K5 is equal to "COLON";
+                Add 1 to CountParamsAt_P;
+                Add 1 to CountParamsAt_P;
+            Done.
+        Else;
+            CountParamsAt_Looping = 0;
+        Done.
+    Done.
+    Return CountParamsAt_Count;
+Done.
+
+Action SkipTopLevelStatement;
+    Call KindAt SemPos;
+    SkipTopLevelStatement_K = @_;
+    Call ValueAt SemPos;
+    SkipTopLevelStatement_V = @_;
+
+    If SkipTopLevelStatement_K is equal to "IDENT";
+        Call IsDeclAheadSem;
+        SkipTopLevelStatement_IsDecl = @_;
+        If SkipTopLevelStatement_IsDecl is equal to 1;
+            SkipTopLevelStatement_DeclPos = SemPos;
+            SkipTopLevelStatement_Name = SkipTopLevelStatement_V;
+            Call ValueAt SemPos + 2;
+            SkipTopLevelStatement_Typ = @_;
+            Call IsBaseType SkipTopLevelStatement_Typ;
+            SkipTopLevelStatement_IsBase = @_;
+            If SkipTopLevelStatement_IsBase is equal to 1;
+                Call SymHasType SkipTopLevelStatement_Name;
+                SkipTopLevelStatement_Already = @_;
+                If SkipTopLevelStatement_Already is equal to 1;
+                    Call RecordSemDiag "E4002", SkipTopLevelStatement_DeclPos, "duplicate declaration " + SkipTopLevelStatement_Name;
+                Else;
+                    Append SkipTopLevelStatement_Name to SymNames;
+                    Append SkipTopLevelStatement_Typ to SymTypes;
+                Done.
+            Else;
+                Call RecordSemDiag "E3003", SkipTopLevelStatement_DeclPos, "unknown type " + SkipTopLevelStatement_Typ;
+            Done.
+            Call SkipToTerminator;
+            Return 1;
+        Done.
+
+        Call KindAt SemPos + 1;
+        SkipTopLevelStatement_NextK = @_;
+        If SkipTopLevelStatement_NextK is equal to "COLON";
+            # `Name : Type = ...;` — the declared type is used directly
+            # (compiler/resolver.py never attempts literal inference for
+            # a typed Assign at all), not inferred from the values.
+            SkipTopLevelStatement_Name3 = SkipTopLevelStatement_V;
+            Call SymHasType SkipTopLevelStatement_Name3;
+            SkipTopLevelStatement_Already3 = @_;
+            If SkipTopLevelStatement_Already3 is equal to 0;
+                Call ValueAt SemPos + 2;
+                SkipTopLevelStatement_DeclaredTyp = @_;
+                Append SkipTopLevelStatement_Name3 to SymNames;
+                Append SkipTopLevelStatement_DeclaredTyp to SymTypes;
+            Done.
+            Call SkipToTerminator;
+            Return 1;
+        Done.
+
+        If SkipTopLevelStatement_NextK is equal to "EQUAL";
+            SkipTopLevelStatement_Name2 = SkipTopLevelStatement_V;
+            Call SymHasType SkipTopLevelStatement_Name2;
+            SkipTopLevelStatement_Already2 = @_;
+            If SkipTopLevelStatement_Already2 is equal to 0;
+                Call InferAssignTypeAt SemPos;
+                SkipTopLevelStatement_Inferred = @_;
+                If SkipTopLevelStatement_Inferred is not equal to "";
+                    Append SkipTopLevelStatement_Name2 to SymNames;
+                    Append SkipTopLevelStatement_Inferred to SymTypes;
+                Done.
+            Done.
+            Call SkipToTerminator;
+            Return 1;
+        Done.
+    Done.
+
+    If SkipTopLevelStatement_K is equal to "IDENT" and SkipTopLevelStatement_V is equal to "Action";
+        SkipTopLevelStatement_ActionDeclPos = SemPos;
+        Add 1 to SemPos;
+        Call ValueAt SemPos;
+        SkipTopLevelStatement_AName = @_;
+        Add 1 to SemPos;
+        SkipTopLevelStatement_ParamsPos = SemPos;
+        Call CountParamsAt SkipTopLevelStatement_ParamsPos;
+        SkipTopLevelStatement_Arity = @_;
+        Call ActionExists SkipTopLevelStatement_AName;
+        SkipTopLevelStatement_AlreadyAction = @_;
+        If SkipTopLevelStatement_AlreadyAction is equal to 1;
+            Call RecordSemDiag "E4002", SkipTopLevelStatement_ActionDeclPos, "duplicate action " + SkipTopLevelStatement_AName;
+        Else;
+            Append SkipTopLevelStatement_AName to ActionNames;
+            Append SkipTopLevelStatement_Arity to ActionArity;
+            Append SkipTopLevelStatement_ParamsPos to ActionParamPos;
+        Done.
+        Call SkipParamsHeader;
+        Call SkipToTerminator;
+        Call SkipBlockBody;
+        Return 1;
+    Done.
+
+    # Everything else pass 1 doesn't care about - Print/Add/Update/Take/
+    # Get/Length/Set/Append/Compare/Return/Call/Entered, AND top-level
+    # If/Repeat/While (which SkipOneStatement correctly whole-block-skips,
+    # not just to their header's own ';').
+    Call SkipOneStatement;
+    Return 1;
+Done.
+
+Action InferAssignTypeAt AtPos;
+    # Mirrors compiler/resolver.py::_infer_literal_list_type: a top-level
+    # (untyped - the ": Type" form is handled entirely separately, by the
+    # caller, without calling this at all) Assign's type is only inferred
+    # when EVERY comma-separated value is a bare literal token and they
+    # all share one kind; anything else (including a single non-literal
+    # value like `1 + 2`, which is NOT a bare literal even though it only
+    # involves literals) infers nothing, matching Python exactly. A
+    # segment is only accepted as "a bare literal" if the token
+    # immediately following it is COMMA (another value) or SEMI (the
+    # Assign's own terminator) - anything else (e.g. PLUS) means this
+    # "value" is actually a larger expression, and inference fails
+    # entirely, not just for that one segment.
+    InferAssignTypeAt_P = AtPos + 2;
+    InferAssignTypeAt_Kind = "";
+    InferAssignTypeAt_Ok = 1;
+    InferAssignTypeAt_Looping = 1;
+    While InferAssignTypeAt_Looping is equal to 1 and InferAssignTypeAt_Ok is equal to 1;
+        Call KindAt InferAssignTypeAt_P;
+        InferAssignTypeAt_TK = @_;
+        InferAssignTypeAt_ThisKind = "";
+        If InferAssignTypeAt_TK is equal to "STRING";
+            InferAssignTypeAt_ThisKind = "Text";
+        Done.
+        If InferAssignTypeAt_TK is equal to "INTEGER";
+            InferAssignTypeAt_ThisKind = "Integers";
+        Done.
+        If InferAssignTypeAt_TK is equal to "DECIMAL";
+            InferAssignTypeAt_ThisKind = "Decimals";
+        Done.
+        If InferAssignTypeAt_ThisKind is equal to "";
+            InferAssignTypeAt_Ok = 0;
+        Else;
+            If InferAssignTypeAt_Kind is equal to "";
+                InferAssignTypeAt_Kind = InferAssignTypeAt_ThisKind;
+            Else;
+                If InferAssignTypeAt_Kind is not equal to InferAssignTypeAt_ThisKind;
+                    InferAssignTypeAt_Ok = 0;
+                Done.
+            Done.
+            Add 1 to InferAssignTypeAt_P;
+            Call KindAt InferAssignTypeAt_P;
+            InferAssignTypeAt_NK = @_;
+            If InferAssignTypeAt_NK is equal to "COMMA";
+                Add 1 to InferAssignTypeAt_P;
+            Else;
+                If InferAssignTypeAt_NK is equal to "SEMI";
+                    InferAssignTypeAt_Looping = 0;
+                Else;
+                    # The "value" wasn't just a bare literal after all
+                    # (e.g. `1 + 2`) - the whole inference fails, matching
+                    # Python treating a non-Literal value the same way.
+                    InferAssignTypeAt_Ok = 0;
+                    InferAssignTypeAt_Looping = 0;
+                Done.
+            Done.
+        Done.
+    Done.
+    If InferAssignTypeAt_Ok is equal to 1;
+        Return InferAssignTypeAt_Kind;
+    Else;
+        Return "";
+    Done.
+Done.
+
+Action ResolverPass1;
+    ResolverPass1_Looping = 1;
+    While ResolverPass1_Looping is equal to 1;
+        Call KindAt SemPos;
+        ResolverPass1_K = @_;
+        If ResolverPass1_K is equal to "EOF";
+            ResolverPass1_Looping = 0;
+        Else;
+            Call SkipTopLevelStatement;
+        Done.
+    Done.
+Done.
+
+Call ResolverPass1;

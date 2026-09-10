@@ -92,3 +92,17 @@ def test_validate_catches_bad_jump_target():
     prog = IRProgram(main=[Instr("JUMP", ("nowhere",))])
     problems = validate(prog)
     assert problems and "nowhere" in problems[0]
+
+
+def test_nested_action_decl_lowers_without_crashing():
+    # Regression (found via Stage 7 differential testing against
+    # self_host/resolver.kuro): an Action declared inside an If/Repeat/
+    # While/another Action's body is valid, resolvable Kuro source
+    # (compiler/resolver.py deliberately does not reject it - it is
+    # simply never registered as callable, see docs/architecture/
+    # self-hosted-semantics.md §3b) but previously crashed
+    # Lowering._lower_stmt with an AssertionError instead of compiling
+    # the (inert) program, since only top-level ActionDecls were handled.
+    ir = build_ir("If 1 is equal to 1;\nAction Nested A;\nReturn A;\nDone.\nDone.")
+    assert validate(ir) == []
+    assert "Nested" not in ir.functions
