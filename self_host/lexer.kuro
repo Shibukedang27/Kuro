@@ -49,6 +49,14 @@ Length Source;
 SourceLen = @_;
 Pos = 0;
 
+# Structured output for Stage 6 (ADR-0010): every token this lexer emits is
+# also appended (kind, then value) to these two parallel lists, so a parser
+# can read them with Get/Length instead of having to parse the Print
+# stream back out of text. Declared with no initial value (Decl only) so
+# the first Append cleanly starts a fresh list — see ADR-0010's Decision 3.
+TokenKinds is Text;
+TokenValues is Text;
+
 Repeat SourceLen;
     If Pos is less than SourceLen;
         Get Source Pos;
@@ -127,7 +135,9 @@ Repeat SourceLen;
                         Done.
                     Done.
                     Print "STRING".
+                    Append "STRING" to TokenKinds;
                     Print StrBuf.
+                    Append StrBuf to TokenValues;
                 Else;
                     If Ch is digit;
                         NumBuf = "";
@@ -167,10 +177,13 @@ Repeat SourceLen;
                         Done.
                         If IsDecimal is equal to 1;
                             Print "DECIMAL".
+                            Append "DECIMAL" to TokenKinds;
                         Else;
                             Print "INTEGER".
+                            Append "INTEGER" to TokenKinds;
                         Done.
                         Print NumBuf.
+                        Append NumBuf to TokenValues;
                     Else;
                         If Ch is alpha or Ch is equal to Underscore;
                             IdBuf = "";
@@ -192,66 +205,92 @@ Repeat SourceLen;
                                 Done.
                             Done.
                             Print "IDENT".
+                            Append "IDENT" to TokenKinds;
                             Print IdBuf.
+                            Append IdBuf to TokenValues;
                         Else;
                             If Ch is equal to EqCh;
                                 Print "EQUAL".
+                                Append "EQUAL" to TokenKinds;
                                 Print Ch.
+                                Append Ch to TokenValues;
                                 Add 1 to Pos;
                             Else;
                                 If Ch is equal to CommaCh;
                                     Print "COMMA".
+                                    Append "COMMA" to TokenKinds;
                                     Print Ch.
+                                    Append Ch to TokenValues;
                                     Add 1 to Pos;
                                 Else;
                                     If Ch is equal to SemiCh;
                                         Print "SEMI".
+                                        Append "SEMI" to TokenKinds;
                                         Print Ch.
+                                        Append Ch to TokenValues;
                                         Add 1 to Pos;
                                     Else;
                                         If Ch is equal to DotCh;
                                             Print "DOT".
+                                            Append "DOT" to TokenKinds;
                                             Print Ch.
+                                            Append Ch to TokenValues;
                                             Add 1 to Pos;
                                         Else;
                                             If Ch is equal to LParenCh;
                                                 Print "LPAREN".
+                                                Append "LPAREN" to TokenKinds;
                                                 Print Ch.
+                                                Append Ch to TokenValues;
                                                 Add 1 to Pos;
                                             Else;
                                                 If Ch is equal to RParenCh;
                                                     Print "RPAREN".
+                                                    Append "RPAREN" to TokenKinds;
                                                     Print Ch.
+                                                    Append Ch to TokenValues;
                                                     Add 1 to Pos;
                                                 Else;
                                                     If Ch is equal to AtCh;
                                                         Print "AT".
+                                                        Append "AT" to TokenKinds;
                                                         Print Ch.
+                                                        Append Ch to TokenValues;
                                                         Add 1 to Pos;
                                                     Else;
                                                         If Ch is equal to PlusCh;
                                                             Print "PLUS".
+                                                            Append "PLUS" to TokenKinds;
                                                             Print Ch.
+                                                            Append Ch to TokenValues;
                                                             Add 1 to Pos;
                                                         Else;
                                                             If Ch is equal to MinusCh;
                                                                 Print "MINUS".
+                                                                Append "MINUS" to TokenKinds;
                                                                 Print Ch.
+                                                                Append Ch to TokenValues;
                                                                 Add 1 to Pos;
                                                             Else;
                                                                 If Ch is equal to StarCh;
                                                                     Print "STAR".
+                                                                    Append "STAR" to TokenKinds;
                                                                     Print Ch.
+                                                                    Append Ch to TokenValues;
                                                                     Add 1 to Pos;
                                                                 Else;
                                                                     If Ch is equal to Slash;
                                                                         Print "SLASH".
+                                                                        Append "SLASH" to TokenKinds;
                                                                         Print Ch.
+                                                                        Append Ch to TokenValues;
                                                                         Add 1 to Pos;
                                                                     Else;
                                                                         If Ch is equal to ColonCh;
                                                                             Print "COLON".
+                                                                            Append "COLON" to TokenKinds;
                                                                             Print Ch.
+                                                                            Append Ch to TokenValues;
                                                                             Add 1 to Pos;
                                                                         Else;
                                                                             Add 1 to Pos;
