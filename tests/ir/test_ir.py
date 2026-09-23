@@ -105,4 +105,4 @@ def test_nested_action_decl_lowers_without_crashing():
     # the (inert) program, since only top-level ActionDecls were handled.
     ir = build_ir("If 1 is equal to 1;\nAction Nested A;\nReturn A;\nDone.\nDone.")
     assert validate(ir) == []
-    assert "Nested" not in ir.functions
+    assert "Nested" in ir.functions

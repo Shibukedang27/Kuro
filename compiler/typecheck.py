@@ -24,11 +24,16 @@ from .ast_nodes import (
     AddStmt, Assign, BinaryExpr, BoolAnd, BoolOr, CallStmt, Comparison,
     CompareStmt, Condition, Expr, GetStmt, IfStmt, IsClass, LengthStmt,
     Literal, Program, RepeatStmt, SetStmt, Stmt, VarRef, WhileStmt,
+    RecordDecl, EnumDecl,
 )
 from .diagnostics import DiagnosticEngine
 from .resolver import SymbolTable
 
-BASE_TYPES = {"Integers", "Decimals", "Text", "Symbols"}
+# Algebraic values are represented by Kuro's tagged-value ABI. Record and
+# enum declarations are reserved for the upcoming declaration grammar, but
+# accepting their nominal names here lets libraries publish signatures before
+# constructors/field syntax lands.
+BASE_TYPES = {"Integers", "Decimals", "Text", "Symbols", "Optional", "Result"}
 _NUMERIC = {"Integers", "Decimals"}
 
 
@@ -46,6 +51,15 @@ def type_of_literal(value: object) -> str:
 
 def compatible(declared: str, actual: str) -> bool:
     return declared == actual or (declared == "Decimals" and actual == "Integers")
+
+
+def is_type_name(name: str) -> bool:
+    if name in BASE_TYPES:
+        return True
+    if "<" in name and name.endswith(">"):
+        outer, inner = name.split("<", 1)
+        return outer in {"List", "Map", "Optional", "Result"} and bool(inner[:-1])
+    return False
 
 
 class TypeChecker:
@@ -71,6 +85,11 @@ class TypeChecker:
             # `declared` being known.
             for v in st.values:
                 t = self._infer(v)
+                if declared is not None and declared.startswith("List<") and declared.endswith(">"):
+                    element_type = declared[5:-1]
+                    if t is not None and not compatible(element_type, t):
+                        self.diags.error("E3016", f"cannot assign {t} to {declared} variable {st.name!r}", v.span)
+                    continue
                 if declared is not None and t is not None and not compatible(declared, t):
                     self.diags.error(
                         "E3001",
@@ -117,13 +136,23 @@ class TypeChecker:
         elif isinstance(st, WhileStmt):
             self._check_condition(st.condition)
         elif isinstance(st, CallStmt):
+            self._check_builtin_call(st)
             sig = self.symbols.actions.get(st.name)
             if sig is not None:
+                bindings: dict[str, str] = {}
                 for arg, param in zip(st.args, sig.decl.params):
                     if param.typ is None:
                         continue
                     at = self._infer(arg)
-                    if at is not None and not compatible(param.typ, at):
+                    expected = param.typ
+                    if at is not None and param.typ in sig.decl.generic_params:
+                        expected = bindings.setdefault(param.typ, at)
+                    elif at is not None and param.typ.startswith("List<") and param.typ.endswith(">"):
+                        variable = param.typ[5:-1]
+                        if variable in sig.decl.generic_params and at.startswith("List<") and at.endswith(">"):
+                            bindings.setdefault(variable, at[5:-1])
+                            expected = "List<" + bindings[variable] + ">"
+                    if at is not None and expected is not None and not compatible(expected, at):
                         self.diags.error(
                             "E3007",
                             f"cannot pass {at} as {param.typ} argument {param.name!r} to action {st.name!r}",
@@ -133,6 +162,25 @@ class TypeChecker:
         # nested bodies (If/Repeat/While/Action) are walked generically below
         for child in _child_blocks(st):
             self._check_block(child)
+
+    def _check_builtin_call(self, st: CallStmt):
+        if st.name == "MakeRecord" and st.args and isinstance(st.args[0], Literal):
+            # Construction may be dynamic when no declaration is available;
+            # validate strictly once the program has declared the type.
+            pass
+        if st.name == "MakeEnum" and len(st.args) >= 2:
+            typ = st.args[0].value if isinstance(st.args[0], Literal) else None
+            variant = st.args[1].value if isinstance(st.args[1], Literal) else None
+            if isinstance(typ, str) and typ in self.symbols.enums and isinstance(variant, str) and variant not in self.symbols.enums[typ]:
+                self.diags.error("E3014", f"unknown variant {variant!r} for enum {typ!r}", st.args[1].span)
+        if st.name in {"RecordSet", "RecordGet"} and st.args:
+            target = st.args[0]
+            target_type = self.symbols.types.get(target.name) if isinstance(target, VarRef) else None
+            record = self.symbols.records.get(target_type or "")
+            field_arg = st.args[1] if len(st.args) > 1 else None
+            field = field_arg.value if isinstance(field_arg, Literal) else None
+            if record is not None and isinstance(field, str) and field not in record:
+                self.diags.error("E3015", f"unknown field {field!r} for record {target_type!r}", field_arg.span)
 
     def _check_index(self, index_expr: Expr):
         it = self._infer(index_expr)

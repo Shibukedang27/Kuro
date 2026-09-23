@@ -1,0 +1,245 @@
+# Kuro bytecode artifact loader.
+#
+# Wire format (kuro.bytecode/1): UTF-8 text, one bytecode token per line.
+# The optional kuro.input/1 line ends the artifact and makes every remaining
+# byte available to BC_INPUT. The reserved marker is encoded as \i when it is
+# an ordinary bytecode value, keeping the framing unambiguous.
+
+ArtifactSource is Text;
+Take user ArtifactSource;
+
+BytecodeOut is Text;
+ArtifactMagic = "kuro.bytecode/1";
+ArtifactLine = "";
+ArtifactLineNumber = 0;
+ArtifactIndex = 0;
+ArtifactFailed = 0;
+ArtifactTokenCount = 0;
+ArtifactEscape = "\\";
+ArtifactInputMagic = "kuro.input/1";
+ArtifactReadingInput = 0;
+VMInput = "";
+
+Action ArtifactDecodeLine EncodedLine;
+    ArtifactDecodedLine = "";
+    ArtifactEncodedEmpty = ArtifactEscape + "e";
+    If EncodedLine is equal to ArtifactEncodedEmpty;
+        Return ArtifactDecodedLine;
+    Done.
+    Length EncodedLine;
+    ArtifactEncodedLength = @_;
+    ArtifactDecodeIndex = 0;
+    While ArtifactDecodeIndex is less than ArtifactEncodedLength and ArtifactFailed is equal to 0;
+        Get EncodedLine ArtifactDecodeIndex;
+        ArtifactDecodeCharacter = @_;
+        If ArtifactDecodeCharacter is equal to ArtifactEscape;
+            Add 1 to ArtifactDecodeIndex;
+            If ArtifactDecodeIndex is less than ArtifactEncodedLength;
+                Get EncodedLine ArtifactDecodeIndex;
+                ArtifactEscapedCharacter = @_;
+                If ArtifactEscapedCharacter is equal to "n";
+                    ArtifactDecodedLine = ArtifactDecodedLine + "\n";
+                Else;
+                    If ArtifactEscapedCharacter is equal to "i";
+                        ArtifactDecodedLine = ArtifactDecodedLine + ArtifactInputMagic;
+                    Else;
+                    If ArtifactEscapedCharacter is equal to "r";
+                        ArtifactDecodedLine = ArtifactDecodedLine + "\r";
+                    Else;
+                        If ArtifactEscapedCharacter is equal to "t";
+                            ArtifactDecodedLine = ArtifactDecodedLine + "\t";
+                        Else;
+                            If ArtifactEscapedCharacter is equal to ArtifactEscape;
+                                ArtifactDecodedLine = ArtifactDecodedLine + ArtifactEscape;
+                            Else;
+                                ArtifactFailed = 1;
+                            Done.
+                        Done.
+                    Done.
+                    Done.
+                Done.
+            Else;
+                ArtifactFailed = 1;
+            Done.
+        Else;
+            ArtifactDecodedLine = ArtifactDecodedLine + ArtifactDecodeCharacter;
+        Done.
+        Add 1 to ArtifactDecodeIndex;
+    Done.
+    Return ArtifactDecodedLine;
+Done.
+
+Action ArtifactCommitLine;
+    If ArtifactLineNumber is equal to 0;
+        If ArtifactLine is not equal to ArtifactMagic;
+            ArtifactFailed = 1;
+        Done.
+    Else;
+        If ArtifactLine is equal to ArtifactInputMagic;
+            If ArtifactTokenCount is greater than 0;
+                ArtifactReadingInput = 1;
+            Else;
+                ArtifactFailed = 1;
+            Done.
+        Else;
+        If ArtifactLine is equal to "";
+            ArtifactFailed = 1;
+        Else;
+            Call ArtifactDecodeLine ArtifactLine;
+            ArtifactDecodedToken = @_;
+            If ArtifactFailed is equal to 0;
+                If ArtifactTokenCount is less than 65536;
+                    Append ArtifactDecodedToken to BytecodeOut;
+                    Add 1 to ArtifactTokenCount;
+                Else;
+                    ArtifactFailed = 1;
+                Done.
+            Else;
+                ArtifactFailed = 1;
+            Done.
+        Done.
+        Done.
+    Done.
+    Add 1 to ArtifactLineNumber;
+    ArtifactLine = "";
+Done.
+
+Length ArtifactSource;
+ArtifactLength = @_;
+While ArtifactIndex is less than ArtifactLength;
+    Get ArtifactSource ArtifactIndex;
+    ArtifactCharacter = @_;
+    If ArtifactReadingInput is equal to 1;
+        VMInput = VMInput + ArtifactCharacter;
+    Else;
+        If ArtifactCharacter is equal to "\n";
+            Call ArtifactCommitLine;
+        Else;
+            If ArtifactCharacter is equal to "\r";
+                ArtifactFailed = 1;
+            Else;
+                ArtifactLine = ArtifactLine + ArtifactCharacter;
+            Done.
+        Done.
+    Done.
+    Add 1 to ArtifactIndex;
+Done.
+
+If ArtifactReadingInput is equal to 0 and ArtifactLine is not equal to "";
+    Call ArtifactCommitLine;
+Done.
+
+If ArtifactLineNumber is less than 2;
+    ArtifactFailed = 1;
+Done.
+
+# Validate operand availability before the VM can read the stream. Operand
+# values are data, even when they happen to spell an opcode.
+ArtifactScan = 0;
+ArtifactIfDepth = 0;
+ArtifactRepeatDepth = 0;
+ArtifactWhileDepth = 0;
+ArtifactFunctionDepth = 0;
+ArtifactCallDepth = 0;
+While ArtifactScan is less than ArtifactTokenCount and ArtifactFailed is equal to 0;
+    Get BytecodeOut ArtifactScan;
+    ArtifactOp = @_;
+    ArtifactArity = 0;
+    ArtifactKnown = 0;
+    If ArtifactOp is equal to "BC_CONST" or ArtifactOp is equal to "BC_LOADVAR" or ArtifactOp is equal to "BC_STORE_LIST" or ArtifactOp is equal to "BC_BINOP" or ArtifactOp is equal to "BC_CMP" or ArtifactOp is equal to "BC_BOOL" or ArtifactOp is equal to "BC_ISCLASS" or ArtifactOp is equal to "BC_UPDATE" or ArtifactOp is equal to "BC_ADD" or ArtifactOp is equal to "BC_APPEND" or ArtifactOp is equal to "BC_LENGTH" or ArtifactOp is equal to "BC_SET" or ArtifactOp is equal to "BC_INPUT" or ArtifactOp is equal to "BC_FUNC_BEGIN" or ArtifactOp is equal to "BC_CALL_BEGIN";
+        ArtifactArity = 1;
+        ArtifactKnown = 1;
+    Done.
+    If ArtifactOp is equal to "BC_GET" or ArtifactOp is equal to "BC_DECLTYPE" or ArtifactOp is equal to "BC_PARAM";
+        ArtifactArity = 2;
+        ArtifactKnown = 1;
+    Done.
+    If ArtifactOp is equal to "BC_PRINT" or ArtifactOp is equal to "BC_IF_BEGIN" or ArtifactOp is equal to "BC_ELSE_BEGIN" or ArtifactOp is equal to "BC_IF_END" or ArtifactOp is equal to "BC_REPEAT_BEGIN" or ArtifactOp is equal to "BC_REPEAT_END" or ArtifactOp is equal to "BC_WHILE_BEGIN" or ArtifactOp is equal to "BC_WHILE_TEST" or ArtifactOp is equal to "BC_WHILE_END" or ArtifactOp is equal to "BC_FUNC_END" or ArtifactOp is equal to "BC_RETURN" or ArtifactOp is equal to "BC_CALL_END";
+        ArtifactKnown = 1;
+    Done.
+
+    If ArtifactOp is equal to "BC_IF_BEGIN";
+        Add 1 to ArtifactIfDepth;
+    Done.
+    If ArtifactOp is equal to "BC_ELSE_BEGIN";
+        If ArtifactIfDepth is equal to 0;
+            ArtifactFailed = 1;
+        Done.
+    Done.
+    If ArtifactOp is equal to "BC_IF_END";
+        If ArtifactIfDepth is equal to 0;
+            ArtifactFailed = 1;
+        Else;
+            ArtifactIfDepth = ArtifactIfDepth - 1;
+        Done.
+    Done.
+    If ArtifactOp is equal to "BC_REPEAT_BEGIN";
+        Add 1 to ArtifactRepeatDepth;
+    Done.
+    If ArtifactOp is equal to "BC_REPEAT_END";
+        If ArtifactRepeatDepth is equal to 0;
+            ArtifactFailed = 1;
+        Else;
+            ArtifactRepeatDepth = ArtifactRepeatDepth - 1;
+        Done.
+    Done.
+    If ArtifactOp is equal to "BC_WHILE_BEGIN";
+        Add 1 to ArtifactWhileDepth;
+    Done.
+    If ArtifactOp is equal to "BC_WHILE_TEST";
+        If ArtifactWhileDepth is equal to 0;
+            ArtifactFailed = 1;
+        Done.
+    Done.
+    If ArtifactOp is equal to "BC_WHILE_END";
+        If ArtifactWhileDepth is equal to 0;
+            ArtifactFailed = 1;
+        Else;
+            ArtifactWhileDepth = ArtifactWhileDepth - 1;
+        Done.
+    Done.
+    If ArtifactOp is equal to "BC_FUNC_BEGIN";
+        If ArtifactFunctionDepth is not equal to 0 or ArtifactIfDepth is not equal to 0 or ArtifactRepeatDepth is not equal to 0 or ArtifactWhileDepth is not equal to 0;
+            ArtifactFailed = 1;
+        Else;
+            ArtifactFunctionDepth = 1;
+        Done.
+    Done.
+    If ArtifactOp is equal to "BC_PARAM" or ArtifactOp is equal to "BC_RETURN";
+        If ArtifactFunctionDepth is equal to 0;
+            ArtifactFailed = 1;
+        Done.
+    Done.
+    If ArtifactOp is equal to "BC_FUNC_END";
+        If ArtifactFunctionDepth is not equal to 1 or ArtifactIfDepth is not equal to 0 or ArtifactRepeatDepth is not equal to 0 or ArtifactWhileDepth is not equal to 0;
+            ArtifactFailed = 1;
+        Else;
+            ArtifactFunctionDepth = 0;
+        Done.
+    Done.
+    If ArtifactOp is equal to "BC_CALL_BEGIN";
+        Add 1 to ArtifactCallDepth;
+    Done.
+    If ArtifactOp is equal to "BC_CALL_END";
+        If ArtifactCallDepth is equal to 0;
+            ArtifactFailed = 1;
+        Else;
+            ArtifactCallDepth = ArtifactCallDepth - 1;
+        Done.
+    Done.
+    ArtifactScan = ArtifactScan + 1 + ArtifactArity;
+    If ArtifactKnown is equal to 0 or ArtifactScan is greater than ArtifactTokenCount;
+        ArtifactFailed = 1;
+    Done.
+Done.
+
+If ArtifactIfDepth is not equal to 0 or ArtifactRepeatDepth is not equal to 0 or ArtifactWhileDepth is not equal to 0 or ArtifactFunctionDepth is not equal to 0 or ArtifactCallDepth is not equal to 0;
+    ArtifactFailed = 1;
+Done.
+
+# Force the VM down its normal unsupported-opcode error path when framing is
+# invalid. This keeps artifact validation and execution under one exit-status
+# contract without relying on a host exception mechanism.
+If ArtifactFailed is equal to 1;
+    BytecodeOut = "BC_INVALID_ARTIFACT", "BC_INVALID_ARTIFACT";
+Done.

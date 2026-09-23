@@ -31,6 +31,8 @@ class TokKind(Enum):
     STAR = auto()        # *
     SLASH = auto()       # /
     COLON = auto()       # :
+    LT = auto()          # <
+    GT = auto()          # >
 
     EOF = auto()
 
@@ -49,6 +51,8 @@ PUNCTUATION: dict[str, TokKind] = {
     "*": TokKind.STAR,
     "/": TokKind.SLASH,
     ":": TokKind.COLON,
+    "<": TokKind.LT,
+    ">": TokKind.GT,
 }
 
 

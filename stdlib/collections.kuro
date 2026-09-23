@@ -1,0 +1,51 @@
+# Kuro collection library.
+
+Action KuroCollectionLength Values;
+    Length Values;
+    Return @_;
+Done.
+
+Action KuroCollectionAt Values, Position;
+    Get Values Position;
+    Return @_;
+Done.
+
+Action KuroCollectionSet Values, Position, Value;
+    Set Values Position to Value;
+    Return Values;
+Done.
+
+Action KuroCollectionAppend Values, Value;
+    Append Value to Values;
+    Return Values;
+Done.
+
+Action KuroCollectionContains Values, Target;
+    KuroContainsIndex = 0;
+    KuroContainsFound = 0;
+    Length Values;
+    KuroContainsLength = @_;
+    While KuroContainsIndex is less than KuroContainsLength;
+        Get Values KuroContainsIndex;
+        If @_ is equal to Target;
+            KuroContainsFound = 1;
+        Done.
+        KuroContainsIndex = KuroContainsIndex + 1;
+    Done.
+    Return KuroContainsFound;
+Done.
+
+Action KuroCollectionIndexOf Values, Target;
+    KuroIndexOfIndex = 0;
+    KuroIndexOfFound = -1;
+    Length Values;
+    KuroIndexOfLength = @_;
+    While KuroIndexOfIndex is less than KuroIndexOfLength;
+        Get Values KuroIndexOfIndex;
+        If @_ is equal to Target;
+            KuroIndexOfFound = KuroIndexOfIndex;
+        Done.
+        KuroIndexOfIndex = KuroIndexOfIndex + 1;
+    Done.
+    Return KuroIndexOfFound;
+Done.

@@ -1,0 +1,21 @@
+# Deterministic cooperative concurrency primitives.
+
+Action KuroMakeChannel;
+    Call MakeChannel;
+    Return @_;
+Done.
+
+Action KuroSend Channel, Value;
+    Call Send Channel, Value;
+    Return @_;
+Done.
+
+Action KuroReceive Channel;
+    Call Receive Channel;
+    Return @_;
+Done.
+
+Action KuroChannelHas Channel;
+    Call ChannelHas Channel;
+    Return @_;
+Done.

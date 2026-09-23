@@ -1,0 +1,62 @@
+#!/bin/sh
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+RUNTIME=${KURO_NATIVE_RUNTIME:-"$ROOT/dist/kuro-runtime"}
+COMPILER=${KURO_NATIVE_COMPILER:-"$ROOT/dist/kuro-compiler"}
+BYTECODE=${KURO_NATIVE_BYTECODE:-"$ROOT/dist/kuro-bytecode"}
+CODEGEN=${KURO_NATIVE_CODEGEN:-"$ROOT/dist/kuro-codegen"}
+COMPILER_SOURCE=${KURO_NATIVE_COMPILER_SOURCE:-"$COMPILER.source.kuro"}
+
+case "${1:-}" in
+  run)
+    [ "$#" -eq 2 ] || { echo "usage: kuro-native run <file.kuro>" >&2; exit 2; }
+    exec "$RUNTIME" < "$2"
+    ;;
+  compile)
+    [ "$#" -eq 2 ] || { echo "usage: kuro-native compile <file.kuro>" >&2; exit 2; }
+    exec "$COMPILER" < "$2"
+    ;;
+  exec)
+    [ "$#" -eq 2 ] || { echo "usage: kuro-native exec <file.kurobc>" >&2; exit 2; }
+    exec "$BYTECODE" < "$2"
+    ;;
+  codegen)
+    [ "$#" -eq 2 ] || { echo "usage: kuro-native codegen <file.kurobc>" >&2; exit 2; }
+    exec "$CODEGEN" < "$2"
+    ;;
+  doctor)
+    [ "$#" -eq 1 ] || { echo "usage: kuro-native doctor" >&2; exit 2; }
+    [ -x "$RUNTIME" ] || { echo "runtime image missing: $RUNTIME" >&2; exit 1; }
+    [ -x "$COMPILER" ] || { echo "compiler image missing: $COMPILER" >&2; exit 1; }
+    [ -x "$BYTECODE" ] || { echo "bytecode launcher missing: $BYTECODE" >&2; exit 1; }
+    [ -x "$CODEGEN" ] || { echo "native code generator missing: $CODEGEN" >&2; exit 1; }
+    [ -f "$COMPILER_SOURCE" ] || { echo "native compiler source artifact missing: $COMPILER_SOURCE" >&2; exit 1; }
+    if command -v otool >/dev/null 2>&1; then
+      if otool -L "$RUNTIME" "$COMPILER" "$BYTECODE" "$CODEGEN" | grep -Eqi 'python|node|rust|libc\\+\\+'; then
+        echo "foreign runtime dependency detected" >&2
+        exit 1
+      fi
+    fi
+    probe=$(mktemp "${TMPDIR:-/tmp}/kuro-native-doctor.XXXXXX")
+    trap 'rm -f "$probe"' EXIT HUP INT TERM
+    "$COMPILER" < "$COMPILER_SOURCE" > "$probe"
+    marker=$(head -n 1 "$probe")
+    [ "$marker" = "kuro.bytecode/1" ] || { echo "native compiler self-build failed" >&2; exit 1; }
+    count=$(($(wc -l < "$probe") - 1))
+    printf 'kuro.bytecode/1\nBC_CONST\n5\nBC_PRINT\n' > "$probe"
+    artifact_output=$("$BYTECODE" < "$probe")
+    [ "$artifact_output" = 5 ] || { echo "native bytecode launcher failed" >&2; exit 1; }
+    printf 'kuro.bytecode/1\nBC_CONST\nKuro\nBC_PRINT\n' > "$probe"
+    codegen_output=$("$CODEGEN" < "$probe")
+    case "$codegen_output" in
+      *".globl _main"*) ;;
+      *) echo "native Kuro code generator failed" >&2; exit 1 ;;
+    esac
+    echo "native production images verified (full self-compile values: $count; bytecode launcher: ok; codegen: ok)"
+    ;;
+  *)
+    echo "usage: kuro-native <run|compile|exec|codegen|doctor> [file]" >&2
+    exit 2
+    ;;
+esac

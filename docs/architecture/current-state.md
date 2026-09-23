@@ -1,8 +1,12 @@
-# Kuro Architecture Audit — Current State (Stage 0)
+# Kuro Architecture Audit — Current State (Stage 8 bootstrap)
 
-Date: 2026-09-10
-Author: Compiler engineering session (Claude Code)
-Scope: `bootstrap/python/kuro.py`, the only implementation found prior to this session.
+Date: 2026-09-12
+Author: Compiler engineering session
+Scope: the repository's hosted compiler and Kuro-authored self-hosting pipeline.
+
+This file began as the Stage 0 historical audit. The active implementation is
+now split across `compiler/`, `self_host/`, and `cli/`; the original findings
+below are retained as migration context.
 
 ## 1. What exists
 
@@ -159,12 +163,41 @@ raw Python traceback to the user.
 
 ## 9. What does not exist yet (honest inventory, not a roadmap)
 
-Modules system, package manager, standard library, LSP, formatter, linter,
-REPL, debugger, profiler, any IR beyond a debug-print log, any backend beyond
-this single tree-walking evaluator, memory-management design, concurrency,
-generics, records/enums/Optional/Result, closures, and self-hosting. None of
-these are stubbed in this repository; per spec §55/§53, nothing here claims
-to exist until it is real.
+The hosted compiler, Kuro-authored lowering/bytecode/VM path, structured
+control flow, recursive calls, input, collections, modules, package manager,
+formatter, linter, REPL, debugger, profiler, project scaffolding, portable
+IR bundles, and a first macOS arm64 native backend now exist and are covered
+by tests. The native backend is capability-checked: it currently handles
+constant programs plus dynamic integer arithmetic/comparisons, `If`, `While`,
+`Add`, and text output, while rejecting unsupported operations explicitly.
+
+Python-free production images now exist for the Kuro-authored compiler,
+runtime, bytecode launcher, and macOS arm64 code generator. The native compiler
+can compile its own Kuro source, and the release gate verifies source execution,
+artifact execution, and artifact-to-native execution. Python and the system
+assembler/linker are still used to construct those images, so reproducible
+self-rebuilding without the hosted bootstrap is not complete.
+
+The remaining major gaps are full Kuro-owned image construction, complete
+native lowering for the whole language, portable linking and tested Windows/
+Linux outputs, a production standard library and garbage collector, production
+concurrency, complete generics/records/enums/Optional/Result/closures, and
+production-grade package, debugger, profiler, release, and compatibility
+protocols.
+
+### 2026-09-22 cross-target verification update
+
+The macOS x86-64 compiler, runtime, bytecode launcher, and code-generator
+images now build and run under Rosetta. The x86-64 compiler can compile its
+own complete Kuro source to a bytecode artifact; the x86-64 launcher executes
+that artifact, compiles `Print 6 * 7.`, and executes the resulting artifact
+to print `42`. A regression test covers this complete chain. The four Linux
+x86-64 images cross-build as ELF files, but have not yet been executed on a
+Linux host. The Kuro-authored code generator still emits macOS arm64 assembly
+regardless of the host image's CPU architecture. These milestones do not mean
+that the native compiler can construct its own machine-code image: Python is
+still used for the initial image build and system assemblers/linkers remain
+required. Windows and Linux runtime correctness remain unverified.
 
 ## 10. Immediate consequences for this session's plan
 

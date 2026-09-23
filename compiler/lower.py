@@ -23,7 +23,8 @@ from .ast_nodes import (
     ActionDecl, AddStmt, Assign, BinaryExpr, BoolAnd, BoolOr, CallStmt,
     Comparison, CompareStmt, Condition, Decl, Expr, GetStmt, IfStmt, Input,
     IsClass, Literal, LengthStmt, AppendStmt, PrintStmt, Program, RepeatStmt,
-    ReturnStmt, SetStmt, Stmt, UpdateStmt, VarRef, WhileStmt,
+    ReturnStmt, SetStmt, Stmt, UpdateStmt, VarRef, WhileStmt, RecordDecl,
+    EnumDecl,
 )
 from .ir import IRBuilder, IRFunction, IRProgram
 from .resolver import SymbolTable
@@ -39,7 +40,7 @@ class Lowering:
     def run(self) -> IRProgram:
         b = IRBuilder()
         top = [st for st in self.program.statements if not isinstance(st, ActionDecl)]
-        for st in self.program.statements:
+        for st in _walk_statements(self.program.statements):
             if isinstance(st, ActionDecl):
                 self._lower_action(st)
         self._lower_block(top, b)
@@ -89,6 +90,8 @@ class Lowering:
 
     # --- statements --------------------------------------------------
     def _lower_stmt(self, st: Stmt, b: IRBuilder):
+        if isinstance(st, (RecordDecl, EnumDecl)):
+            return
         if isinstance(st, Decl):
             b.emit("DECLTYPE", st.name, st.typ, span=st.span)
             return
@@ -221,3 +224,12 @@ class Lowering:
 
 def lower(program: Program, symbols: SymbolTable) -> IRProgram:
     return Lowering(program, symbols).run()
+
+
+def _walk_statements(statements: list[Stmt]):
+    for st in statements:
+        yield st
+        for attr in ("then_body", "else_body", "body"):
+            child = getattr(st, attr, None)
+            if isinstance(child, list):
+                yield from _walk_statements(child)

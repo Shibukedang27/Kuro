@@ -1,0 +1,1112 @@
+# Stage 8: Kuro-authored bytecode VM foundation.
+#
+# The VM deliberately uses Kuro collections for its own environment and
+# operand stack. VMNames/VMValues are parallel arrays, so bytecode variable
+# names remain data rather than becoming hard-coded host-language variables.
+# This is the key step toward a Kuro-owned runtime.
+
+# --- BEGIN_STANDALONE_BYTECODE (stripped by the Stage 8 harness) ---
+BytecodeOut = "BC_CONST", "7", "BC_STORE_LIST", "N", "BC_LOADVAR", "N", "BC_PRINT";
+# --- END_STANDALONE_BYTECODE ---
+
+# --- BEGIN_VM_INPUT_DEFAULT (stripped when an artifact loader provides it) ---
+VMInput = "";
+# --- END_VM_INPUT_DEFAULT ---
+VMNames is Text;
+VMValues is Text;
+# A declared-but-unassigned Kuro collection cannot be measured before its
+# first Append. Seed one slot and track the logical number of entries so the
+# VM can still represent an empty environment without host support.
+VMNames = "__vm_empty__", "__vm_empty__";
+VMValues = "__vm_empty__", "__vm_empty__";
+VMNameCount = 0;
+VMCollectionNames is Text;
+VMCollectionNames = "__vm_empty__", "__vm_empty__";
+VMCollectionCount = 0;
+VMCollectionOwners is Text;
+VMCollectionItems is Text;
+VMCollectionOwners = "__vm_empty__", "__vm_empty__";
+VMCollectionItems = "__vm_empty__", "__vm_empty__";
+VMCollectionEntryCount = 0;
+VMStack is Text;
+VMStackKinds is Integers;
+VMOutput is Text;
+VMOutputCount = 0;
+VMPos = 0;
+VMCodeLen = 0;
+VMTop = 0;
+VMFailed = 0;
+VMCallPending = 0;
+VMCallName = "";
+VMFunctionBody = 0;
+VMReturnValue = 0;
+VMReturnPending = 0;
+VMLastResult = 0;
+VMInputAvailable = 1;
+VMParamNames is Text;
+VMParamNames = "__vm_empty__", "__vm_empty__";
+VMParamCount = 0;
+VMFrameDepth = 0;
+VMFrameEntryCount = 0;
+VMFrameNames is Text;
+VMFrameValues is Text;
+VMFrameStarts is Integers;
+VMFrameCounts is Integers;
+VMFrameNames = "__vm_empty__", "__vm_empty__";
+VMFrameValues = "__vm_empty__", "__vm_empty__";
+VMFrameStarts = 0, 0;
+VMFrameCounts = 0, 0;
+VMFrameSlotCapacity = 2;
+VMFrameReturns is Integers;
+VMFrameReturns = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+VMFrameReturnCapacity = 10;
+VMReturnPositions is Integers;
+VMReturnPositions = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+VMReturnPositionCapacity = 10;
+VMWhileDepth = 0;
+VMWhileCapacity = 10;
+VMWhileDone is Integers;
+VMWhileBodyDone is Integers;
+VMWhileDone = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+VMWhileBodyDone = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+VMStack = "__vm_empty__", "__vm_empty__";
+VMStackKinds = 0, 0;
+VMLastPoppedKind = 0;
+
+Action VMFindName Name, SearchPos;
+    VMFindName_Len = VMNameCount;
+    If SearchPos is less than VMFindName_Len;
+        Get VMNames SearchPos;
+        If @_ is equal to Name;
+            Return SearchPos;
+        Else;
+            VMFindName_Next = SearchPos + 1;
+            Call VMFindName Name, VMFindName_Next;
+            Return @_;
+        Done.
+    Else;
+        Return -1;
+    Done.
+Done.
+
+Action VMFindFrameName Name, SearchPos, EndPos;
+    If SearchPos is less than EndPos;
+        Get VMFrameNames SearchPos;
+        If @_ is equal to Name;
+            Return SearchPos;
+        Else;
+            VMFindFrameName_Next = SearchPos + 1;
+            Call VMFindFrameName Name, VMFindFrameName_Next, EndPos;
+            Return @_;
+        Done.
+    Else;
+        Return -1;
+    Done.
+Done.
+
+Action VMFindCollection Name, SearchPos;
+    If SearchPos is less than VMCollectionCount;
+        Get VMCollectionNames SearchPos;
+        If @_ is equal to Name;
+            Return SearchPos;
+        Else;
+            Call VMFindCollection Name, SearchPos + 1;
+            Return @_;
+        Done.
+    Else;
+        Return -1;
+    Done.
+Done.
+
+Action VMMarkCollection Name;
+    Call VMFindCollection Name, 0;
+    If @_ is less than 0;
+        If VMCollectionCount is less than 2;
+            Set VMCollectionNames VMCollectionCount to Name;
+        Else;
+            Append Name to VMCollectionNames;
+        Done.
+        Add 1 to VMCollectionCount;
+    Done.
+Done.
+
+Action VMAppendCollectionItem Name, Value;
+    If VMCollectionEntryCount is less than 2;
+        Set VMCollectionOwners VMCollectionEntryCount to Name;
+        Set VMCollectionItems VMCollectionEntryCount to Value;
+    Else;
+        Append Name to VMCollectionOwners;
+        Append Value to VMCollectionItems;
+    Done.
+    Add 1 to VMCollectionEntryCount;
+Done.
+
+Action VMGetCollectionItem Name, WantedIndex;
+    VMGetCollectionItem_Pos = 0;
+    VMGetCollectionItem_Seen = 0;
+    VMGetCollectionItem_Found = 0;
+    VMGetCollectionItem_Value = 0;
+    While VMGetCollectionItem_Pos is less than VMCollectionEntryCount and VMGetCollectionItem_Found is equal to 0;
+        Get VMCollectionOwners VMGetCollectionItem_Pos;
+        If @_ is equal to Name;
+            If VMGetCollectionItem_Seen is equal to WantedIndex;
+                Get VMCollectionItems VMGetCollectionItem_Pos;
+                VMGetCollectionItem_Value = @_;
+                VMGetCollectionItem_Found = 1;
+            Else;
+                Add 1 to VMGetCollectionItem_Seen;
+            Done.
+        Done.
+        Add 1 to VMGetCollectionItem_Pos;
+    Done.
+    If VMGetCollectionItem_Found is equal to 0;
+        VMFailed = 1;
+    Done.
+    Return VMGetCollectionItem_Value;
+Done.
+
+Action VMLengthCollection Name;
+    VMLengthCollection_Pos = 0;
+    VMLengthCollection_Count = 0;
+    While VMLengthCollection_Pos is less than VMCollectionEntryCount;
+        Get VMCollectionOwners VMLengthCollection_Pos;
+        If @_ is equal to Name;
+            Add 1 to VMLengthCollection_Count;
+        Done.
+        Add 1 to VMLengthCollection_Pos;
+    Done.
+    Return VMLengthCollection_Count;
+Done.
+
+Action VMSetCollectionItem Name, WantedIndex, Value;
+    VMSetCollectionItem_Pos = 0;
+    VMSetCollectionItem_Seen = 0;
+    VMSetCollectionItem_Found = 0;
+    While VMSetCollectionItem_Pos is less than VMCollectionEntryCount and VMSetCollectionItem_Found is equal to 0;
+        Get VMCollectionOwners VMSetCollectionItem_Pos;
+        If @_ is equal to Name;
+            If VMSetCollectionItem_Seen is equal to WantedIndex;
+                Set VMCollectionItems VMSetCollectionItem_Pos to Value;
+                VMSetCollectionItem_Found = 1;
+            Else;
+                Add 1 to VMSetCollectionItem_Seen;
+            Done.
+        Done.
+        Add 1 to VMSetCollectionItem_Pos;
+    Done.
+    If VMSetCollectionItem_Found is equal to 0;
+        VMFailed = 1;
+    Done.
+Done.
+
+Action VMCopyCollection SourceName, DestinationName;
+    Call VMMarkCollection DestinationName;
+    VMCopyCollection_Pos = 0;
+    While VMCopyCollection_Pos is less than VMCollectionEntryCount;
+        Get VMCollectionOwners VMCopyCollection_Pos;
+        If @_ is equal to SourceName;
+            Get VMCollectionItems VMCopyCollection_Pos;
+            Call VMAppendCollectionItem DestinationName, @_;
+        Done.
+        Add 1 to VMCopyCollection_Pos;
+    Done.
+Done.
+
+Action VMSetResult Value;
+    If VMFrameDepth is greater than 0;
+        Set VMFrameReturns VMFrameDepth to Value;
+    Else;
+        VMLastResult = Value;
+    Done.
+Done.
+
+Action VMPush Value;
+    Length VMStack;
+    VMPush_Len = @_;
+    If VMTop is less than VMPush_Len;
+        Set VMStack VMTop to Value;
+        Set VMStackKinds VMTop to 0;
+    Else;
+        Append Value to VMStack;
+        Append 0 to VMStackKinds;
+    Done.
+    Add 1 to VMTop;
+Done.
+
+Action VMPushCollection Name;
+    Call VMPush Name;
+    VMPushCollection_Index = VMTop - 1;
+    Set VMStackKinds VMPushCollection_Index to 1;
+Done.
+
+Action VMPop;
+    If VMTop is greater than 0;
+        VMTop = VMTop - 1;
+        Get VMStackKinds VMTop;
+        VMLastPoppedKind = @_;
+        Get VMStack VMTop;
+        Return @_;
+    Else;
+        VMFailed = 1;
+        Return 0;
+    Done.
+Done.
+
+Action VMLoad Name;
+    VMLoad_Index = -1;
+    If Name is equal to "_";
+        If VMFrameDepth is greater than 0;
+            Get VMFrameReturns VMFrameDepth;
+            Return @_;
+        Else;
+            Return VMLastResult;
+        Done.
+    Done.
+    If VMFrameDepth is greater than 0;
+        Get VMFrameStarts VMFrameDepth;
+        VMLoad_Start = @_;
+        Get VMFrameCounts VMFrameDepth;
+        VMLoad_Count = @_;
+        VMLoad_End = VMLoad_Start + VMLoad_Count;
+        Call VMFindFrameName Name, VMLoad_Start, VMLoad_End;
+        VMLoad_Index = @_;
+        If VMLoad_Index is greater than or equal to 0;
+            Get VMFrameValues VMLoad_Index;
+            Return @_;
+        Done.
+    Done.
+    Call VMFindName Name, 0;
+    VMLoad_Index = @_;
+    If VMLoad_Index is greater than or equal to 0;
+        Get VMValues VMLoad_Index;
+        Return @_;
+    Else;
+        VMFailed = 1;
+        Return 0;
+    Done.
+Done.
+
+Action VMStore Name, Value;
+    VMStore_WroteFrame = 0;
+    If VMFrameDepth is greater than 0;
+        Get VMFrameStarts VMFrameDepth;
+        VMStore_Start = @_;
+        Get VMFrameCounts VMFrameDepth;
+        VMStore_Count = @_;
+        VMStore_End = VMStore_Start + VMStore_Count;
+        Call VMFindFrameName Name, VMStore_Start, VMStore_End;
+        VMStore_Index = @_;
+        If VMStore_Index is greater than or equal to 0;
+            Set VMFrameValues VMStore_Index to Value;
+            VMStore_WroteFrame = 1;
+        Done.
+    Done.
+    If VMStore_WroteFrame is equal to 0;
+        Call VMFindName Name, 0;
+        VMStore_Index = @_;
+        If VMStore_Index is greater than or equal to 0;
+            Set VMValues VMStore_Index to Value;
+        Else;
+            If VMNameCount is less than 2;
+                Set VMNames VMNameCount to Name;
+                Set VMValues VMNameCount to Value;
+            Else;
+                Append Name to VMNames;
+                Append Value to VMValues;
+            Done.
+            Add 1 to VMNameCount;
+        Done.
+    Done.
+Done.
+
+Action VMStoreFrame Name, Value;
+    Get VMFrameCounts VMFrameDepth;
+    VMStoreFrame_Count = @_;
+    If VMFrameEntryCount is equal to 0;
+        Set VMFrameNames 0 to Name;
+        Set VMFrameValues 0 to Value;
+    Else;
+        If VMFrameEntryCount is equal to 1;
+            Set VMFrameNames 1 to Name;
+            Set VMFrameValues 1 to Value;
+        Else;
+            Length VMFrameNames;
+            VMStoreFrame_Capacity = @_;
+            If VMFrameEntryCount is less than VMStoreFrame_Capacity;
+                Set VMFrameNames VMFrameEntryCount to Name;
+                Set VMFrameValues VMFrameEntryCount to Value;
+            Else;
+                Append Name to VMFrameNames;
+                Append Value to VMFrameValues;
+            Done.
+        Done.
+    Done.
+    Add 1 to VMFrameEntryCount;
+    VMStoreFrame_NewCount = VMStoreFrame_Count + 1;
+    Set VMFrameCounts VMFrameDepth to VMStoreFrame_NewCount;
+Done.
+
+Action VMReadOperand;
+    Get BytecodeOut VMPos;
+    VMPos = VMPos + 1;
+    Return @_;
+Done.
+
+# Skip the remainder of an If branch. VMPos points at the first instruction
+# after BC_IF_BEGIN. Nested If markers are counted so an inner branch cannot
+# terminate the outer branch scan.
+Action VMSkipFalse Depth;
+    VMSkipFalse_Depth = Depth;
+    VMSkipFalse_Done = 0;
+    While VMPos is less than VMCodeLen and VMSkipFalse_Done is equal to 0;
+        Get BytecodeOut VMPos;
+        VMSkipFalse_Op = @_;
+        Add 1 to VMPos;
+        If VMSkipFalse_Op is equal to "BC_IF_BEGIN";
+            Add 1 to VMSkipFalse_Depth;
+        Else;
+            If VMSkipFalse_Op is equal to "BC_ELSE_BEGIN" and VMSkipFalse_Depth is equal to 0;
+                VMSkipFalse_Done = 1;
+            Else;
+                If VMSkipFalse_Op is equal to "BC_IF_END";
+                    If VMSkipFalse_Depth is equal to 0;
+                        VMSkipFalse_Done = 1;
+                    Else;
+                        VMSkipFalse_Depth = VMSkipFalse_Depth - 1;
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+Done.
+
+# A true branch must skip its Else branch when the marker is reached.
+Action VMSkipElse Depth;
+    VMSkipElse_Depth = Depth;
+    VMSkipElse_Done = 0;
+    While VMPos is less than VMCodeLen and VMSkipElse_Done is equal to 0;
+        Get BytecodeOut VMPos;
+        VMSkipElse_Op = @_;
+        Add 1 to VMPos;
+        If VMSkipElse_Op is equal to "BC_IF_BEGIN";
+            Add 1 to VMSkipElse_Depth;
+        Else;
+            If VMSkipElse_Op is equal to "BC_IF_END";
+                If VMSkipElse_Depth is equal to 0;
+                    VMSkipElse_Done = 1;
+                Else;
+                    VMSkipElse_Depth = VMSkipElse_Depth - 1;
+                Done.
+            Done.
+        Done.
+    Done.
+Done.
+
+Action VMSkipRepeat Depth;
+    VMSkipRepeat_Depth = Depth;
+    VMSkipRepeat_Done = 0;
+    While VMPos is less than VMCodeLen and VMSkipRepeat_Done is equal to 0;
+        Get BytecodeOut VMPos;
+        VMSkipRepeat_Op = @_;
+        Add 1 to VMPos;
+        If VMSkipRepeat_Op is equal to "BC_REPEAT_BEGIN";
+            Add 1 to VMSkipRepeat_Depth;
+        Else;
+            If VMSkipRepeat_Op is equal to "BC_REPEAT_END";
+                If VMSkipRepeat_Depth is equal to 0;
+                    VMSkipRepeat_Done = 1;
+                Else;
+                    VMSkipRepeat_Depth = VMSkipRepeat_Depth - 1;
+                Done.
+            Done.
+        Done.
+    Done.
+Done.
+
+Action VMRunRepeat Count, Start;
+    If Count is greater than 0;
+        VMRunRepeat_Remaining = Count;
+        While VMRunRepeat_Remaining is greater than 0 and VMFailed is equal to 0;
+            VMPos = Start;
+            VMRunRepeat_BodyDone = 0;
+            While VMPos is less than VMCodeLen and VMRunRepeat_BodyDone is equal to 0 and VMFailed is equal to 0;
+                Get BytecodeOut VMPos;
+                If @_ is equal to "BC_REPEAT_END";
+                    Add 1 to VMPos;
+                    VMRunRepeat_BodyDone = 1;
+                Else;
+                    Call VMStep;
+                Done.
+            Done.
+            VMRunRepeat_Remaining = VMRunRepeat_Remaining - 1;
+        Done.
+    Else;
+        Call VMSkipRepeat 0;
+    Done.
+Done.
+
+Action VMSkipWhile Depth;
+    VMSkipWhile_Depth = Depth;
+    VMSkipWhile_Done = 0;
+    While VMPos is less than VMCodeLen and VMSkipWhile_Done is equal to 0;
+        Get BytecodeOut VMPos;
+        VMSkipWhile_Op = @_;
+        Add 1 to VMPos;
+        If VMSkipWhile_Op is equal to "BC_WHILE_BEGIN";
+            Add 1 to VMSkipWhile_Depth;
+        Else;
+            If VMSkipWhile_Op is equal to "BC_WHILE_END";
+                If VMSkipWhile_Depth is equal to 0;
+                    VMSkipWhile_Done = 1;
+                Else;
+                    VMSkipWhile_Depth = VMSkipWhile_Depth - 1;
+                Done.
+            Done.
+        Done.
+    Done.
+Done.
+
+Action VMRunWhile Start;
+    Add 1 to VMWhileDepth;
+    If VMWhileDepth is greater than or equal to VMWhileCapacity;
+        Append 0 to VMWhileDone;
+        Append 0 to VMWhileBodyDone;
+        Add 1 to VMWhileCapacity;
+    Done.
+    Set VMWhileDone VMWhileDepth to 0;
+    VMRunWhile_Done = 0;
+    While VMPos is less than VMCodeLen and VMRunWhile_Done is equal to 0 and VMFailed is equal to 0;
+        Get BytecodeOut VMPos;
+        If @_ is equal to "BC_WHILE_TEST";
+            VMPos = VMPos + 1;
+            Call VMPop;
+            If @_ is equal to 0;
+                Call VMSkipWhile 0;
+                Set VMWhileDone VMWhileDepth to 1;
+                VMRunWhile_Done = 1;
+            Else;
+                Set VMWhileBodyDone VMWhileDepth to 0;
+                VMRunWhile_BodyDone = 0;
+                While VMPos is less than VMCodeLen and VMRunWhile_BodyDone is equal to 0 and VMFailed is equal to 0;
+                    Get BytecodeOut VMPos;
+                    If @_ is equal to "BC_WHILE_END";
+                        VMPos = VMPos + 1;
+                        Set VMWhileBodyDone VMWhileDepth to 1;
+                        VMRunWhile_BodyDone = 1;
+                    Else;
+                        Call VMStep;
+                        Get VMWhileBodyDone VMWhileDepth;
+                        VMRunWhile_BodyDone = @_;
+                    Done.
+                Done.
+                VMPos = Start;
+            Done.
+        Else;
+            Call VMStep;
+        Done.
+        Get VMWhileDone VMWhileDepth;
+        VMRunWhile_Done = @_;
+    Done.
+    VMWhileDepth = VMWhileDepth - 1;
+Done.
+
+Action VMSkipFunction;
+    VMSkipFunction_Done = 0;
+    While VMPos is less than VMCodeLen and VMSkipFunction_Done is equal to 0;
+        Get BytecodeOut VMPos;
+        If @_ is equal to "BC_FUNC_END";
+            VMPos = VMPos + 1;
+            VMSkipFunction_Done = 1;
+        Else;
+            VMPos = VMPos + 1;
+        Done.
+    Done.
+Done.
+
+Action VMCollectParams Pos;
+    Get BytecodeOut Pos;
+    If @_ is equal to "BC_PARAM";
+        VMParamNamePos = Pos + 1;
+        Get BytecodeOut VMParamNamePos;
+        Append @_ to VMParamNames;
+        VMParamCount = VMParamCount + 1;
+        VMParamNext = Pos + 3;
+        Call VMCollectParams VMParamNext;
+    Else;
+        VMFunctionBody = Pos;
+    Done.
+Done.
+
+Action VMFindFunction Pos;
+    VMFindFunction_Pos = Pos;
+    VMFindFunction_Done = 0;
+    While VMFindFunction_Pos is less than VMCodeLen and VMFindFunction_Done is equal to 0;
+        Get BytecodeOut VMFindFunction_Pos;
+        If @_ is equal to "BC_FUNC_BEGIN";
+            VMFindNamePos = VMFindFunction_Pos + 1;
+            Get BytecodeOut VMFindNamePos;
+            If @_ is equal to VMCallName;
+                VMParamNames = "__vm_empty__", "__vm_empty__";
+                VMParamCount = 0;
+                VMParamStart = VMFindFunction_Pos + 2;
+                Call VMCollectParams VMParamStart;
+                VMFindFunction_Done = 1;
+            Done.
+        Done.
+        Add 1 to VMFindFunction_Pos;
+    Done.
+    If VMFindFunction_Done is equal to 0;
+        VMFailed = 1;
+    Done.
+Done.
+
+Action VMInvoke Name;
+    VMFailed = 0;
+    VMCallName = Name;
+    Call VMFindFunction 0;
+    If VMFailed is equal to 0;
+        VMFrameDepth = VMFrameDepth + 1;
+        If VMFrameDepth is less than VMReturnPositionCapacity;
+            Set VMReturnPositions VMFrameDepth to VMPos;
+        Else;
+            Append VMPos to VMReturnPositions;
+            Add 1 to VMReturnPositionCapacity;
+        Done.
+        If VMFrameDepth is less than VMFrameReturnCapacity;
+            Set VMFrameReturns VMFrameDepth to 0;
+        Else;
+            Append 0 to VMFrameReturns;
+            Add 1 to VMFrameReturnCapacity;
+        Done.
+        If VMFrameDepth is less than VMFrameSlotCapacity;
+            Set VMFrameStarts VMFrameDepth to VMFrameEntryCount;
+            Set VMFrameCounts VMFrameDepth to 0;
+        Else;
+            Append VMFrameEntryCount to VMFrameStarts;
+            Append 0 to VMFrameCounts;
+            Add 1 to VMFrameSlotCapacity;
+        Done.
+        VMInvoke_Index = VMParamCount - 1;
+        While VMInvoke_Index is greater than or equal to 0;
+            Call VMPop;
+            VMInvoke_Value = @_;
+            VMInvoke_NamePos = VMInvoke_Index + 2;
+            Get VMParamNames VMInvoke_NamePos;
+            VMInvoke_Name = @_;
+            Call VMStoreFrame VMInvoke_Name, VMInvoke_Value;
+            VMInvoke_Index = VMInvoke_Index - 1;
+        Done.
+        VMReturnPending = 0;
+        VMPos = VMFunctionBody;
+        While VMPos is less than VMCodeLen and VMReturnPending is equal to 0 and VMFailed is equal to 0;
+            Call VMStep;
+        Done.
+        Get VMReturnPositions VMFrameDepth;
+        VMPos = @_;
+        Get VMFrameStarts VMFrameDepth;
+        VMFrameEntryCount = @_;
+        VMFrameDepth = VMFrameDepth - 1;
+        Call VMSetResult VMReturnValue;
+        Call VMPush VMReturnValue;
+    Done.
+Done.
+
+# AstOut stores literal spellings as text. Decode them entirely through Kuro
+# character access and arithmetic so the VM does not depend on a host parser.
+VMNumericOk = 1;
+
+Action VMDecodeDigit Char;
+    If Char is equal to "0";
+        Return 0;
+    Else;
+        If Char is equal to "1";
+            Return 1;
+        Else;
+            If Char is equal to "2";
+                Return 2;
+            Else;
+                If Char is equal to "3";
+                    Return 3;
+                Else;
+                    If Char is equal to "4";
+                        Return 4;
+                    Else;
+                        If Char is equal to "5";
+                            Return 5;
+                        Else;
+                            If Char is equal to "6";
+                                Return 6;
+                            Else;
+                                If Char is equal to "7";
+                                    Return 7;
+                                Else;
+                                    If Char is equal to "8";
+                                        Return 8;
+                                    Else;
+                                        If Char is equal to "9";
+                                            Return 9;
+                                        Else;
+                                            VMNumericOk = 0;
+                                            Return 0;
+                                        Done.
+                                    Done.
+                                Done.
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+Done.
+
+Action VMDecodeNumber Value, Pos, Count, Accumulated, DecimalDivisor, DecimalMode;
+    If Pos is less than Count;
+        Get Value Pos;
+        VMDecodeNumber_Char = @_;
+        If VMDecodeNumber_Char is equal to ".";
+            VMDecodeNumber_Next = Pos + 1;
+            Call VMDecodeNumber Value, VMDecodeNumber_Next, Count, Accumulated, DecimalDivisor, 1;
+            Return @_;
+        Else;
+            Call VMDecodeDigit VMDecodeNumber_Char;
+            VMDecodeNumber_Digit = @_;
+            VMDecodeNumber_NextAcc = Accumulated * 10 + VMDecodeNumber_Digit;
+            If DecimalMode is equal to 1;
+                VMDecodeNumber_NextDivisor = DecimalDivisor * 10;
+            Else;
+                VMDecodeNumber_NextDivisor = DecimalDivisor;
+            Done.
+            VMDecodeNumber_Next = Pos + 1;
+            Call VMDecodeNumber Value, VMDecodeNumber_Next, Count, VMDecodeNumber_NextAcc, VMDecodeNumber_NextDivisor, DecimalMode;
+            Return @_;
+        Done.
+    Else;
+        If DecimalMode is equal to 1;
+            VMDecodeNumber_FloatAcc = Accumulated * 1.0;
+            VMDecodeNumber_FloatDivisor = DecimalDivisor * 1.0;
+            Return VMDecodeNumber_FloatAcc / VMDecodeNumber_FloatDivisor;
+        Else;
+            Return Accumulated;
+        Done.
+    Done.
+Done.
+
+Action VMDecodeConstant Value;
+    Length Value;
+    VMDecodeConstant_Count = @_;
+    If VMDecodeConstant_Count is equal to 0;
+        Return Value;
+    Done.
+    VMNumericOk = 1;
+    # Keep the recursive accumulator and decimal divisor as integers.  The
+    # decoder converts them to floating point only at the final division, so
+    # native integer literals and decimal literals share no ambiguous ABI.
+    If VMDecodeConstant_Count is equal to 1;
+        Get Value 0;
+        Call VMDecodeDigit @_;
+        If VMNumericOk is equal to 1;
+            Return @_;
+        Done.
+    Done.
+    Call VMDecodeNumber Value, 0, VMDecodeConstant_Count, 0, 1, 0;
+    VMDecodeConstant_Number = @_;
+    If VMNumericOk is equal to 1;
+        Return VMDecodeConstant_Number;
+    Else;
+        Return Value;
+    Done.
+Done.
+
+Action VMStep;
+    VMFailed = 0;
+    Get BytecodeOut VMPos;
+    VMStep_Op = @_;
+    Add 1 to VMPos;
+    If VMStep_Op is equal to "BC_IF_BEGIN";
+        Call VMPop;
+        If @_ is equal to 0;
+            Call VMSkipFalse 0;
+        Done.
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_ELSE_BEGIN";
+        Call VMSkipElse 0;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_IF_END";
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_REPEAT_BEGIN";
+        Call VMPop;
+        VMStep_Count = @_;
+        VMStep_Start = VMPos;
+        Call VMRunRepeat VMStep_Count, VMStep_Start;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_REPEAT_END";
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_WHILE_BEGIN";
+        VMStep_WhileStart = VMPos;
+        Call VMRunWhile VMStep_WhileStart;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_WHILE_TEST" or VMStep_Op is equal to "BC_WHILE_END";
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_FUNC_BEGIN";
+        Call VMSkipFunction;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_FUNC_END";
+        If VMFrameDepth is greater than 0;
+            VMReturnValue = 0;
+            VMReturnPending = 1;
+        Done.
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_CALL_BEGIN";
+        Call VMReadOperand;
+        VMCallName = @_;
+        VMCallPending = 1;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_CALL_END";
+        If VMCallPending is equal to 1;
+            Call VMInvoke VMCallName;
+            VMCallPending = 0;
+            VMReturnPending = 0;
+        Done.
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_RETURN";
+        Call VMPop;
+        VMReturnValue = @_;
+        VMReturnPending = 1;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_CONST";
+        Call VMReadOperand;
+        Call VMDecodeConstant @_;
+        Call VMPush @_;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_LOADVAR";
+        Call VMReadOperand;
+        VMStep_Name = @_;
+        If VMStep_Name is equal to "_";
+            If VMFrameDepth is greater than 0;
+                Get VMFrameReturns VMFrameDepth;
+                Call VMPush @_;
+            Else;
+                Call VMPush VMLastResult;
+            Done.
+        Else;
+            Call VMFindCollection VMStep_Name, 0;
+            If @_ is greater than or equal to 0;
+                Call VMPushCollection VMStep_Name;
+            Else;
+                Call VMLoad VMStep_Name;
+                Call VMPush @_;
+            Done.
+        Done.
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_STORE_LIST";
+        Call VMReadOperand;
+        VMStep_Name = @_;
+        Call VMPop;
+        VMStep_Value = @_;
+        If VMLastPoppedKind is equal to 1;
+            Call VMCopyCollection VMStep_Value, VMStep_Name;
+        Else;
+            Call VMStore VMStep_Name, VMStep_Value;
+        Done.
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_DECLTYPE";
+        # Type declarations have already been checked by the compiler. The
+        # runtime consumes their metadata but does not need to allocate a
+        # value until the corresponding store or input instruction executes.
+        Call VMReadOperand;
+        Call VMReadOperand;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_INPUT";
+        Call VMReadOperand;
+        VMStep_Name = @_;
+        If VMInputAvailable is equal to 1;
+            Call VMStore VMStep_Name, VMInput;
+            VMInputAvailable = 0;
+        Else;
+            Call VMStore VMStep_Name, "";
+        Done.
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_BINOP";
+        Call VMReadOperand;
+        VMStep_OpName = @_;
+        Call VMPop;
+        VMStep_Right = @_;
+        Call VMPop;
+        VMStep_Left = @_;
+        If VMStep_OpName is equal to "+";
+            VMStep_Result = VMStep_Left + VMStep_Right;
+        Else;
+            If VMStep_OpName is equal to "-";
+                VMStep_Result = VMStep_Left - VMStep_Right;
+            Else;
+                If VMStep_OpName is equal to "*";
+                    VMStep_Result = VMStep_Left * VMStep_Right;
+                Else;
+                    If VMStep_OpName is equal to "/";
+                        VMStep_Result = VMStep_Left / VMStep_Right;
+                    Else;
+                        VMFailed = 1;
+                        VMStep_Result = 0;
+                    Done.
+                Done.
+            Done.
+        Done.
+        Call VMPush VMStep_Result;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_CMP";
+        Call VMReadOperand;
+        VMStep_OpName = @_;
+        Call VMPop;
+        VMStep_Right = @_;
+        Call VMPop;
+        VMStep_Left = @_;
+        VMStep_Result = 0;
+        If VMStep_OpName is equal to "eq";
+            If VMStep_Left is equal to VMStep_Right;
+                VMStep_Result = 1;
+            Done.
+        Else;
+            If VMStep_OpName is equal to "neq";
+                If VMStep_Left is not equal to VMStep_Right;
+                    VMStep_Result = 1;
+                Done.
+            Else;
+                If VMStep_OpName is equal to "lt";
+                    If VMStep_Left is less than VMStep_Right;
+                        VMStep_Result = 1;
+                    Done.
+                Else;
+                    If VMStep_OpName is equal to "lte" or VMStep_OpName is equal to "le";
+                        If VMStep_Left is less than or equal to VMStep_Right;
+                            VMStep_Result = 1;
+                        Done.
+                    Else;
+                        If VMStep_OpName is equal to "gt";
+                            If VMStep_Left is greater than VMStep_Right;
+                                VMStep_Result = 1;
+                            Done.
+                        Else;
+                            If VMStep_OpName is equal to "gte" or VMStep_OpName is equal to "ge";
+                                If VMStep_Left is greater than or equal to VMStep_Right;
+                                    VMStep_Result = 1;
+                                Done.
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+        Call VMPush VMStep_Result;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_BOOL";
+        Call VMReadOperand;
+        VMStep_OpName = @_;
+        Call VMPop;
+        VMStep_Right = @_;
+        Call VMPop;
+        VMStep_Left = @_;
+        VMStep_Result = 0;
+        If VMStep_OpName is equal to "AND";
+            If VMStep_Left is equal to 1 and VMStep_Right is equal to 1;
+                VMStep_Result = 1;
+            Done.
+        Else;
+            If VMStep_OpName is equal to "OR";
+                If VMStep_Left is equal to 1 or VMStep_Right is equal to 1;
+                    VMStep_Result = 1;
+                Done.
+            Done.
+        Done.
+        Call VMPush VMStep_Result;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_ISCLASS";
+        Call VMReadOperand;
+        VMStep_Class = @_;
+        Call VMPop;
+        VMStep_ClassValue = @_;
+        VMStep_Result = 0;
+        If VMStep_Class is equal to "digit";
+            If VMStep_ClassValue is digit;
+                VMStep_Result = 1;
+            Done.
+        Else;
+            If VMStep_Class is equal to "alpha";
+                If VMStep_ClassValue is alpha;
+                    VMStep_Result = 1;
+                Done.
+            Else;
+                If VMStep_Class is equal to "alnum";
+                    If VMStep_ClassValue is alnum;
+                        VMStep_Result = 1;
+                    Done.
+                Else;
+                    If VMStep_Class is equal to "space";
+                        If VMStep_ClassValue is space;
+                            VMStep_Result = 1;
+                        Done.
+                    Else;
+                        If VMStep_Class is equal to "quote";
+                            If VMStep_ClassValue is quote;
+                                VMStep_Result = 1;
+                            Done.
+                        Else;
+                            VMFailed = 1;
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+        Call VMPush VMStep_Result;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_UPDATE" or VMStep_Op is equal to "BC_ADD";
+        Call VMReadOperand;
+        VMStep_Name = @_;
+        Call VMPop;
+        VMStep_Value = @_;
+        If VMStep_Op is equal to "BC_ADD";
+            Call VMLoad VMStep_Name;
+            VMStep_Value = @_ + VMStep_Value;
+        Done.
+        Call VMStore VMStep_Name, VMStep_Value;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_GET";
+        Call VMReadOperand;
+        VMStep_Name = @_;
+        Call VMReadOperand;
+        VMStep_Indexed = @_;
+        Call VMFindCollection VMStep_Name, 0;
+        VMStep_CollectionIndex = @_;
+        If VMStep_CollectionIndex is greater than or equal to 0;
+            Call VMPop;
+            VMStep_Index = @_;
+            Call VMGetCollectionItem VMStep_Name, VMStep_Index;
+            VMStep_Current = @_;
+        Else;
+            Call VMLoad VMStep_Name;
+            VMStep_Current = @_;
+            If VMStep_Indexed is equal to "1";
+                Call VMPop;
+                VMStep_Index = @_;
+                Get VMStep_Current VMStep_Index;
+                VMStep_Current = @_;
+            Done.
+        Done.
+        Call VMSetResult VMStep_Current;
+        Call VMPush VMStep_Current;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_LENGTH";
+        Call VMReadOperand;
+        VMStep_Name = @_;
+        Call VMFindCollection VMStep_Name, 0;
+        If @_ is greater than or equal to 0;
+            Call VMLengthCollection VMStep_Name;
+            VMStep_Length = @_;
+        Else;
+            Call VMLoad VMStep_Name;
+            VMStep_Current = @_;
+            Length VMStep_Current;
+            VMStep_Length = @_;
+        Done.
+        Call VMSetResult VMStep_Length;
+        Call VMPush VMStep_Length;
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_SET";
+        Call VMReadOperand;
+        VMStep_Name = @_;
+        Call VMPop;
+        VMStep_Value = @_;
+        Call VMPop;
+        VMStep_Index = @_;
+        Call VMFindCollection VMStep_Name, 0;
+        If @_ is greater than or equal to 0;
+            Call VMSetCollectionItem VMStep_Name, VMStep_Index, VMStep_Value;
+        Else;
+            Call VMLoad VMStep_Name;
+            VMStep_Current = @_;
+            Set VMStep_Current VMStep_Index to VMStep_Value;
+            Call VMStore VMStep_Name, VMStep_Current;
+        Done.
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_APPEND";
+        Call VMReadOperand;
+        VMStep_Name = @_;
+        Call VMPop;
+        VMStep_Value = @_;
+        Call VMFindName VMStep_Name, 0;
+        VMStep_NameIndex = @_;
+        If VMStep_NameIndex is less than 0;
+            Call VMMarkCollection VMStep_Name;
+            Call VMAppendCollectionItem VMStep_Name, VMStep_Value;
+        Else;
+            Call VMFindCollection VMStep_Name, 0;
+            If @_ is greater than or equal to 0;
+                Call VMAppendCollectionItem VMStep_Name, VMStep_Value;
+            Else;
+                Call VMLoad VMStep_Name;
+                VMStep_Current = @_;
+                VMStep_Current = VMStep_Current + VMStep_Value;
+                Call VMStore VMStep_Name, VMStep_Current;
+            Done.
+        Done.
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_PRINT";
+        Call VMPop;
+        VMStep_Value = @_;
+        If VMLastPoppedKind is equal to 1;
+            VMStep_PrintIndex = 0;
+            Call VMLengthCollection VMStep_Value;
+            VMStep_PrintCount = @_;
+            While VMStep_PrintIndex is less than VMStep_PrintCount;
+                Call VMGetCollectionItem VMStep_Value, VMStep_PrintIndex;
+                Append @_ to VMOutput;
+                Add 1 to VMOutputCount;
+                Add 1 to VMStep_PrintIndex;
+            Done.
+        Else;
+            Append VMStep_Value to VMOutput;
+            Add 1 to VMOutputCount;
+        Done.
+        Return 0;
+    Done.
+    VMFailed = 1;
+Done.
+
+Action VMRun;
+    Length BytecodeOut;
+    VMCodeLen = @_;
+    While VMPos is less than VMCodeLen;
+        Call VMStep;
+        If VMFailed is equal to 1;
+            VMPos = VMCodeLen;
+        Done.
+    Done.
+Done.
+
+Call VMRun;

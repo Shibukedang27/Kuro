@@ -1,15 +1,10 @@
 # Memory Management (spec section 12)
 
-## Status: deferred, not yet decided for a native backend — documented honestly rather than guessed
+## Status: tracing collection policy selected; native allocator integration remains
 
-This document exists because spec section 12 requires the decision to be
-recorded here once made. As of this session, **no native memory model has
-been designed or built**, because there is no native backend yet (Stage 9;
-see `docs/architecture/current-state.md` section 9 for the honest inventory
-of what doesn't exist). Writing a memory-management design in the abstract,
-before a backend exists to constrain it, would be exactly the kind of
-speculative architecture spec section 66 warns against ("do not create
-architecture purely inside your head").
+Kuro uses tracing mark/sweep as its ownership policy. The hosted bytecode VM
+implements the reachability boundary in `compiler/memory.py`; native runtime
+allocation must implement the same root/child contract.
 
 ## What actually governs memory today
 

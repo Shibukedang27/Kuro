@@ -1,0 +1,800 @@
+# Kuro-owned native code-generation stage.
+#
+# This first backend slice consumes the flat bytecode stream and emits a
+# freestanding macOS arm64 assembly image for literal PRINT programs. It is
+# intentionally capability-checked: unsupported bytecode is reported instead
+# of silently falling back to a foreign compiler.
+
+NativeOut is Text;
+NativeFailed = 0;
+NativePos = 0;
+NativeLengthText = "";
+NativeBackslash = "\\";
+NativeQuote = "\"";
+NativeTarget = "aarch64-macos";
+
+Action NativeDigitText Digit;
+    If Digit is equal to 0;
+        Return "0";
+    Done.
+    If Digit is equal to 1;
+        Return "1";
+    Done.
+    If Digit is equal to 2;
+        Return "2";
+    Done.
+    If Digit is equal to 3;
+        Return "3";
+    Done.
+    If Digit is equal to 4;
+        Return "4";
+    Done.
+    If Digit is equal to 5;
+        Return "5";
+    Done.
+    If Digit is equal to 6;
+        Return "6";
+    Done.
+    If Digit is equal to 7;
+        Return "7";
+    Done.
+    If Digit is equal to 8;
+        Return "8";
+    Done.
+    Return "9";
+Done.
+
+Action NativeLengthToText Count;
+    NativeLengthWork = Count;
+    NativeLengthThousands = 0;
+    NativeLengthHundreds = 0;
+    NativeLengthTens = 0;
+    While NativeLengthWork is greater than or equal to 1000;
+        NativeLengthWork = NativeLengthWork - 1000;
+        Add 1 to NativeLengthThousands;
+    Done.
+    While NativeLengthWork is greater than or equal to 100;
+        NativeLengthWork = NativeLengthWork - 100;
+        Add 1 to NativeLengthHundreds;
+    Done.
+    While NativeLengthWork is greater than or equal to 10;
+        NativeLengthWork = NativeLengthWork - 10;
+        Add 1 to NativeLengthTens;
+    Done.
+    NativeLengthResult = "";
+    If NativeLengthThousands is greater than 0;
+        Call NativeDigitText NativeLengthThousands;
+        NativeLengthResult = NativeLengthResult + @_;
+    Done.
+    If NativeLengthThousands is greater than 0 or NativeLengthHundreds is greater than 0;
+        Call NativeDigitText NativeLengthHundreds;
+        NativeLengthResult = NativeLengthResult + @_;
+    Done.
+    If NativeLengthThousands is greater than 0 or NativeLengthHundreds is greater than 0 or NativeLengthTens is greater than 0;
+        Call NativeDigitText NativeLengthTens;
+        NativeLengthResult = NativeLengthResult + @_;
+    Done.
+    Call NativeDigitText NativeLengthWork;
+    NativeLengthOnes = @_;
+    NativeLengthResult = NativeLengthResult + NativeLengthOnes;
+    Return NativeLengthResult;
+Done.
+
+Action EmitLiteralPrint;
+    Length BytecodeOut;
+    NativeBytecodeLen = @_;
+    If NativeBytecodeLen is equal to 3;
+        Get BytecodeOut 0;
+        If @_ is equal to "BC_CONST";
+            Get BytecodeOut 2;
+            If @_ is equal to "BC_PRINT";
+                Get BytecodeOut 1;
+                NativeLiteral = @_;
+                Length NativeLiteral;
+                NativeLiteralLength = @_;
+                If NativeLiteralLength is less than 1000;
+                    Call NativeLengthToText NativeLiteralLength;
+                    NativeLengthText = @_;
+                    NativeEscapedLiteral = "";
+                    NativeEscapeIndex = 0;
+                    While NativeEscapeIndex is less than NativeLiteralLength;
+                        Get NativeLiteral NativeEscapeIndex;
+                        NativeEscapeCharacter = @_;
+                        If NativeEscapeCharacter is equal to NativeBackslash or NativeEscapeCharacter is equal to NativeQuote;
+                            NativeEscapedLiteral = NativeEscapedLiteral + NativeBackslash + NativeEscapeCharacter;
+                        Else;
+                            If NativeEscapeCharacter is equal to "\n";
+                                NativeEscapedLiteral = NativeEscapedLiteral + NativeBackslash + "n";
+                            Else;
+                                If NativeEscapeCharacter is equal to "\r";
+                                    NativeEscapedLiteral = NativeEscapedLiteral + NativeBackslash + "r";
+                                Else;
+                                    If NativeEscapeCharacter is equal to "\t";
+                                        NativeEscapedLiteral = NativeEscapedLiteral + NativeBackslash + "t";
+                                    Else;
+                                        NativeEscapedLiteral = NativeEscapedLiteral + NativeEscapeCharacter;
+                                    Done.
+                                Done.
+                            Done.
+                        Done.
+                        Add 1 to NativeEscapeIndex;
+                    Done.
+                Done.
+                If NativeLengthText is not equal to "";
+                    If NativeTarget is equal to "aarch64-macos";
+                        NativeOut = ".section __TEXT,__text\n.globl _main\n_main:\n";
+                        NativeOut = NativeOut + "    adrp x1, L_kuro_literal@PAGE\n";
+                        NativeOut = NativeOut + "    add x1, x1, L_kuro_literal@PAGEOFF\n";
+                        NativeOut = NativeOut + "    mov x0, #1\n    mov x2, #";
+                        NativeOut = NativeOut + NativeLengthText + "\n    mov x16, #4\n    svc #0x80\n    mov x0, #0\n    mov x16, #1\n    svc #0x80\n";
+                        NativeOut = NativeOut + ".section __TEXT,__cstring\nL_kuro_literal:\n.asciz \"";
+                    Else;
+                        NativeOut = ".section .text\n.globl _start\n_start:\n";
+                        NativeWriteSyscall = "$1";
+                        NativeExitSyscall = "$60";
+                        If NativeTarget is equal to "x86_64-macos";
+                            NativeOut = ".section __TEXT,__text\n.globl _start\n_start:\n";
+                            NativeWriteSyscall = "$0x2000004";
+                            NativeExitSyscall = "$0x2000001";
+                        Done.
+                        NativeOut = NativeOut + "    mov $1, %rdi\n    lea L_kuro_literal(%rip), %rsi\n    mov $" + NativeLengthText + ", %rdx\n    mov " + NativeWriteSyscall + ", %rax\n    syscall\n    mov $0, %rdi\n    mov " + NativeExitSyscall + ", %rax\n    syscall\n";
+                        If NativeTarget is equal to "x86_64-macos";
+                            NativeOut = NativeOut + ".section __TEXT,__cstring\nL_kuro_literal:\n.asciz \"";
+                        Else;
+                            NativeOut = NativeOut + ".section .rodata\nL_kuro_literal:\n.asciz \"";
+                        Done.
+                    Done.
+                    NativeOut = NativeOut + NativeEscapedLiteral + "\"\n";
+                    Print NativeOut.
+                Done.
+                If NativeLengthText is equal to "";
+                    NativeFailed = 1;
+                Done.
+            Else;
+                NativeFailed = 1;
+            Done.
+        Else;
+            NativeFailed = 1;
+        Done.
+    Else;
+        NativeFailed = 1;
+    Done.
+Done.
+
+Action NativeValidateUnsignedInteger Value;
+    Length Value;
+    NativeIntegerLength = @_;
+    NativeIntegerValid = 1;
+    If NativeIntegerLength is equal to 0 or NativeIntegerLength is greater than 4;
+        NativeIntegerValid = 0;
+    Done.
+    NativeIntegerIndex = 0;
+    While NativeIntegerIndex is less than NativeIntegerLength;
+        Get Value NativeIntegerIndex;
+        If @_ is digit;
+        Else;
+            NativeIntegerValid = 0;
+        Done.
+        Add 1 to NativeIntegerIndex;
+    Done.
+    Return NativeIntegerValid;
+Done.
+
+Action EmitIntegerBinaryPrint;
+    NativeArithmeticValid = 1;
+    Get BytecodeOut 0;
+    If @_ is not equal to "BC_CONST";
+        NativeArithmeticValid = 0;
+    Done.
+    Get BytecodeOut 2;
+    If @_ is not equal to "BC_CONST";
+        NativeArithmeticValid = 0;
+    Done.
+    Get BytecodeOut 4;
+    If @_ is not equal to "BC_BINOP";
+        NativeArithmeticValid = 0;
+    Done.
+    Get BytecodeOut 6;
+    If @_ is not equal to "BC_PRINT";
+        NativeArithmeticValid = 0;
+    Done.
+    Get BytecodeOut 1;
+    NativeLeft = @_;
+    Get BytecodeOut 3;
+    NativeRight = @_;
+    Get BytecodeOut 5;
+    NativeOperator = @_;
+    Call NativeValidateUnsignedInteger NativeLeft;
+    If @_ is equal to 0;
+        NativeArithmeticValid = 0;
+    Done.
+    Call NativeValidateUnsignedInteger NativeRight;
+    If @_ is equal to 0;
+        NativeArithmeticValid = 0;
+    Done.
+
+    NativeInstruction = "";
+    If NativeOperator is equal to "+";
+        NativeInstruction = "    add x0, x0, x1\n";
+    Done.
+    If NativeOperator is equal to "-";
+        NativeInstruction = "    sub x0, x0, x1\n";
+    Done.
+    If NativeOperator is equal to "*";
+        NativeInstruction = "    mul x0, x0, x1\n";
+    Done.
+    If NativeOperator is equal to "/";
+        NativeInstruction = "    sdiv x0, x0, x1\n";
+        If NativeRight is equal to "0";
+            NativeArithmeticValid = 0;
+        Done.
+    Done.
+    If NativeInstruction is equal to "";
+        NativeArithmeticValid = 0;
+    Done.
+
+    If NativeArithmeticValid is equal to 1;
+        NativeOut = ".section __TEXT,__text\n.globl _main\n_main:\n    mov x0, #";
+        NativeOut = NativeOut + NativeLeft + "\n    mov x1, #" + NativeRight + "\n";
+        NativeOut = NativeOut + NativeInstruction;
+        NativeOut = NativeOut + "    bl _kuro_print_int\n    mov x0, #0\n    mov x16, #1\n    svc #0x80\n";
+        NativeOut = NativeOut + "_kuro_print_int:\n    sub sp, sp, #32\n    add x3, sp, #31\n    mov w4, #10\n    strb w4, [x3]\n    mov x2, #1\n    mov x5, #10\n    mov x6, #0\n    cmp x0, #0\n    b.ge L_kuro_digits\n    neg x0, x0\n    mov x6, #1\nL_kuro_digits:\n    udiv x7, x0, x5\n    msub x8, x7, x5, x0\n    add x8, x8, #48\n    sub x3, x3, #1\n    strb w8, [x3]\n    add x2, x2, #1\n    mov x0, x7\n    cbnz x0, L_kuro_digits\n    cbz x6, L_kuro_write\n    sub x3, x3, #1\n    mov w8, #45\n    strb w8, [x3]\n    add x2, x2, #1\nL_kuro_write:\n    mov x0, #1\n    mov x1, x3\n    mov x16, #4\n    svc #0x80\n    add sp, sp, #32\n    ret\n";
+        Print NativeOut.
+    Else;
+        NativeFailed = 1;
+    Done.
+Done.
+
+NativeVariableNames is Text;
+NativeVariableCount = 0;
+NativeIfLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeIfElseSeen = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeRepeatLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeRepeatStackDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeWhileLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeWhileStackDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeWhileTestSeen = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+
+Action NativeFindVariable Name, Index;
+    If Index is less than NativeVariableCount;
+        Get NativeVariableNames Index;
+        If @_ is equal to Name;
+            Return Index;
+        Else;
+            NativeFindNext = Index + 1;
+            Call NativeFindVariable Name, NativeFindNext;
+            Return @_;
+        Done.
+    Else;
+        Return -1;
+    Done.
+Done.
+
+Action EmitStraightIntegerProgram;
+    Length BytecodeOut;
+    NativeStraightLength = @_;
+    NativeStraightPos = 0;
+    NativeStackDepth = 0;
+    NativeVariableCount = 0;
+    NativeIfDepth = 0;
+    NativeIfCounter = 0;
+    NativeRepeatDepth = 0;
+    NativeRepeatCounter = 0;
+    NativeWhileDepth = 0;
+    NativeWhileCounter = 0;
+    NativeX86 = 0;
+    NativeOut = ".section __TEXT,__text\n.globl _main\n_main:\n    sub sp, sp, #2048\n";
+    If NativeTarget is equal to "x86_64-macos" or NativeTarget is equal to "x86_64-linux";
+        NativeX86 = 1;
+        NativeOut = ".section .text\n.globl _start\n_start:\n    sub $2048, %rsp\n";
+        If NativeTarget is equal to "x86_64-macos";
+            NativeOut = ".section __TEXT,__text\n.globl _start\n_start:\n    sub $2048, %rsp\n";
+        Done.
+    Done.
+    If NativeStraightLength is greater than 64;
+        NativeFailed = 1;
+    Done.
+
+    While NativeStraightPos is less than NativeStraightLength and NativeFailed is equal to 0;
+        Get BytecodeOut NativeStraightPos;
+        NativeStraightOp = @_;
+        Add 1 to NativeStraightPos;
+        NativeStraightKnown = 0;
+
+        If NativeStraightOp is equal to "BC_CONST";
+            NativeStraightKnown = 1;
+            If NativeStraightPos is less than NativeStraightLength and NativeStackDepth is less than 128;
+                Get BytecodeOut NativeStraightPos;
+                NativeStraightValue = @_;
+                Add 1 to NativeStraightPos;
+                Call NativeValidateUnsignedInteger NativeStraightValue;
+                If @_ is equal to 1;
+                    NativeStackOffset = NativeStackDepth * 8;
+                    Call NativeLengthToText NativeStackOffset;
+                    NativeStackOffsetText = @_;
+                    If NativeX86 is equal to 1;
+                        NativeOut = NativeOut + "    mov $" + NativeStraightValue + ", %rax\n    mov %rax, " + NativeStackOffsetText + "(%rsp)\n";
+                    Else;
+                        NativeOut = NativeOut + "    mov x0, #" + NativeStraightValue + "\n    str x0, [sp, #" + NativeStackOffsetText + "]\n";
+                    Done.
+                    Add 1 to NativeStackDepth;
+                Else;
+                    NativeFailed = 1;
+                Done.
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_BINOP";
+            NativeStraightKnown = 1;
+            If NativeStraightPos is less than NativeStraightLength and NativeStackDepth is greater than 1;
+                Get BytecodeOut NativeStraightPos;
+                NativeStraightOperator = @_;
+                Add 1 to NativeStraightPos;
+                NativeRightOffset = NativeStackDepth * 8 - 8;
+                NativeLeftOffset = NativeStackDepth * 8 - 16;
+                Call NativeLengthToText NativeRightOffset;
+                NativeRightOffsetText = @_;
+                Call NativeLengthToText NativeLeftOffset;
+                NativeLeftOffsetText = @_;
+                NativeStraightInstruction = "";
+                If NativeStraightOperator is equal to "+";
+                    NativeStraightInstruction = "    add x0, x0, x1\n";
+                Done.
+                If NativeStraightOperator is equal to "-";
+                    NativeStraightInstruction = "    sub x0, x0, x1\n";
+                Done.
+                If NativeStraightOperator is equal to "*";
+                    NativeStraightInstruction = "    mul x0, x0, x1\n";
+                Done.
+                If NativeStraightOperator is equal to "/";
+                    NativeStraightInstruction = "    cbz x1, L_kuro_division_error\n    sdiv x0, x0, x1\n";
+                Done.
+                If NativeStraightInstruction is equal to "";
+                    NativeFailed = 1;
+                Else;
+                    If NativeX86 is equal to 1;
+                        NativeStraightInstruction = "";
+                        If NativeStraightOperator is equal to "+";
+                            NativeStraightInstruction = "    add %rcx, %rax\n";
+                        Done.
+                        If NativeStraightOperator is equal to "-";
+                            NativeStraightInstruction = "    sub %rcx, %rax\n";
+                        Done.
+                        If NativeStraightOperator is equal to "*";
+                            NativeStraightInstruction = "    imul %rcx, %rax\n";
+                        Done.
+                        If NativeStraightOperator is equal to "/";
+                            NativeStraightInstruction = "    test %rcx, %rcx\n    jz L_kuro_division_error\n    cqo\n    idiv %rcx\n";
+                        Done.
+                        NativeOut = NativeOut + "    mov " + NativeLeftOffsetText + "(%rsp), %rax\n    mov " + NativeRightOffsetText + "(%rsp), %rcx\n";
+                        NativeOut = NativeOut + NativeStraightInstruction + "    mov %rax, " + NativeLeftOffsetText + "(%rsp)\n";
+                    Else;
+                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeLeftOffsetText + "]\n    ldr x1, [sp, #" + NativeRightOffsetText + "]\n";
+                        NativeOut = NativeOut + NativeStraightInstruction + "    str x0, [sp, #" + NativeLeftOffsetText + "]\n";
+                    Done.
+                    NativeStackDepth = NativeStackDepth - 1;
+                Done.
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_CMP";
+            NativeStraightKnown = 1;
+            If NativeStraightPos is less than NativeStraightLength and NativeStackDepth is greater than 1;
+                Get BytecodeOut NativeStraightPos;
+                NativeCompareOperator = @_;
+                Add 1 to NativeStraightPos;
+                NativeRightOffset = NativeStackDepth * 8 - 8;
+                NativeLeftOffset = NativeStackDepth * 8 - 16;
+                Call NativeLengthToText NativeRightOffset;
+                NativeRightOffsetText = @_;
+                Call NativeLengthToText NativeLeftOffset;
+                NativeLeftOffsetText = @_;
+                NativeCompareInstruction = "";
+                If NativeCompareOperator is equal to "eq";
+                    NativeCompareInstruction = "    cset w0, eq\n";
+                Done.
+                If NativeCompareOperator is equal to "neq";
+                    NativeCompareInstruction = "    cset w0, ne\n";
+                Done.
+                If NativeCompareOperator is equal to "lt";
+                    NativeCompareInstruction = "    cset w0, lt\n";
+                Done.
+                If NativeCompareOperator is equal to "lte" or NativeCompareOperator is equal to "le";
+                    NativeCompareInstruction = "    cset w0, le\n";
+                Done.
+                If NativeCompareOperator is equal to "gt";
+                    NativeCompareInstruction = "    cset w0, gt\n";
+                Done.
+                If NativeCompareOperator is equal to "gte" or NativeCompareOperator is equal to "ge";
+                    NativeCompareInstruction = "    cset w0, ge\n";
+                Done.
+                If NativeCompareInstruction is equal to "";
+                    NativeFailed = 1;
+                Else;
+                    If NativeX86 is equal to 1;
+                        NativeCompareInstruction = "";
+                        If NativeCompareOperator is equal to "eq";
+                            NativeCompareInstruction = "sete";
+                        Done.
+                        If NativeCompareOperator is equal to "neq";
+                            NativeCompareInstruction = "setne";
+                        Done.
+                        If NativeCompareOperator is equal to "lt";
+                            NativeCompareInstruction = "setl";
+                        Done.
+                        If NativeCompareOperator is equal to "lte" or NativeCompareOperator is equal to "le";
+                            NativeCompareInstruction = "setle";
+                        Done.
+                        If NativeCompareOperator is equal to "gt";
+                            NativeCompareInstruction = "setg";
+                        Done.
+                        If NativeCompareOperator is equal to "gte" or NativeCompareOperator is equal to "ge";
+                            NativeCompareInstruction = "setge";
+                        Done.
+                        NativeOut = NativeOut + "    mov " + NativeLeftOffsetText + "(%rsp), %rax\n    mov " + NativeRightOffsetText + "(%rsp), %rcx\n    cmp %rcx, %rax\n    " + NativeCompareInstruction + " %al\n    movzbq %al, %rax\n    mov %rax, " + NativeLeftOffsetText + "(%rsp)\n";
+                    Else;
+                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeLeftOffsetText + "]\n    ldr x1, [sp, #" + NativeRightOffsetText + "]\n    cmp x0, x1\n";
+                        NativeOut = NativeOut + NativeCompareInstruction + "    str x0, [sp, #" + NativeLeftOffsetText + "]\n";
+                    Done.
+                    NativeStackDepth = NativeStackDepth - 1;
+                Done.
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_IF_BEGIN";
+            NativeStraightKnown = 1;
+            If NativeStackDepth is greater than 0 and NativeIfDepth is less than 16;
+                NativeStackOffset = NativeStackDepth * 8 - 8;
+                Call NativeLengthToText NativeStackOffset;
+                NativeStackOffsetText = @_;
+                Call NativeLengthToText NativeIfCounter;
+                NativeIfLabelText = @_;
+                Set NativeIfLabels NativeIfDepth to NativeIfCounter;
+                Set NativeIfElseSeen NativeIfDepth to 0;
+                If NativeX86 is equal to 1;
+                    NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    test %rax, %rax\n    jz L_kuro_else_" + NativeIfLabelText + "\n";
+                Else;
+                    NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    cbz x0, L_kuro_else_" + NativeIfLabelText + "\n";
+                Done.
+                NativeStackDepth = NativeStackDepth - 1;
+                Add 1 to NativeIfDepth;
+                Add 1 to NativeIfCounter;
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_ELSE_BEGIN";
+            NativeStraightKnown = 1;
+            If NativeIfDepth is greater than 0;
+                NativeIfIndex = NativeIfDepth - 1;
+                Get NativeIfElseSeen NativeIfIndex;
+                If @_ is equal to 0;
+                    Set NativeIfElseSeen NativeIfIndex to 1;
+                    Get NativeIfLabels NativeIfIndex;
+                    Call NativeLengthToText @_;
+                    NativeIfLabelText = @_;
+                    If NativeX86 is equal to 1;
+                        NativeOut = NativeOut + "    jmp L_kuro_endif_" + NativeIfLabelText + "\nL_kuro_else_" + NativeIfLabelText + ":\n";
+                    Else;
+                        NativeOut = NativeOut + "    b L_kuro_endif_" + NativeIfLabelText + "\nL_kuro_else_" + NativeIfLabelText + ":\n";
+                    Done.
+                Else;
+                    NativeFailed = 1;
+                Done.
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_IF_END";
+            NativeStraightKnown = 1;
+            If NativeIfDepth is greater than 0;
+                NativeIfIndex = NativeIfDepth - 1;
+                Get NativeIfLabels NativeIfIndex;
+                Call NativeLengthToText @_;
+                NativeIfLabelText = @_;
+                Get NativeIfElseSeen NativeIfIndex;
+                If @_ is equal to 1;
+                    NativeOut = NativeOut + "L_kuro_endif_" + NativeIfLabelText + ":\n";
+                Else;
+                    NativeOut = NativeOut + "L_kuro_else_" + NativeIfLabelText + ":\n";
+                Done.
+                NativeIfDepth = NativeIfDepth - 1;
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_REPEAT_BEGIN";
+            NativeStraightKnown = 1;
+            If NativeStackDepth is greater than 0 and NativeRepeatDepth is less than 16;
+                NativeStackOffset = NativeStackDepth * 8 - 8;
+                NativeRepeatOffset = 1536 + NativeRepeatDepth * 8;
+                Call NativeLengthToText NativeStackOffset;
+                NativeStackOffsetText = @_;
+                Call NativeLengthToText NativeRepeatOffset;
+                NativeRepeatOffsetText = @_;
+                Call NativeLengthToText NativeRepeatCounter;
+                NativeRepeatLabelText = @_;
+                NativeStackDepth = NativeStackDepth - 1;
+                Set NativeRepeatLabels NativeRepeatDepth to NativeRepeatCounter;
+                Set NativeRepeatStackDepths NativeRepeatDepth to NativeStackDepth;
+                If NativeX86 is equal to 1;
+                    NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    mov %rax, " + NativeRepeatOffsetText + "(%rsp)\n";
+                    NativeOut = NativeOut + "L_kuro_repeat_" + NativeRepeatLabelText + ":\n    cmpq $0, " + NativeRepeatOffsetText + "(%rsp)\n    jle L_kuro_endrepeat_" + NativeRepeatLabelText + "\n";
+                Else;
+                    NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    str x0, [sp, #" + NativeRepeatOffsetText + "]\n";
+                    NativeOut = NativeOut + "L_kuro_repeat_" + NativeRepeatLabelText + ":\n    ldr x0, [sp, #" + NativeRepeatOffsetText + "]\n    cmp x0, #0\n    b.le L_kuro_endrepeat_" + NativeRepeatLabelText + "\n";
+                Done.
+                Add 1 to NativeRepeatDepth;
+                Add 1 to NativeRepeatCounter;
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_REPEAT_END";
+            NativeStraightKnown = 1;
+            If NativeRepeatDepth is greater than 0;
+                NativeRepeatIndex = NativeRepeatDepth - 1;
+                Get NativeRepeatStackDepths NativeRepeatIndex;
+                If @_ is equal to NativeStackDepth;
+                    Get NativeRepeatLabels NativeRepeatIndex;
+                    Call NativeLengthToText @_;
+                    NativeRepeatLabelText = @_;
+                    NativeRepeatOffset = 1536 + NativeRepeatIndex * 8;
+                    Call NativeLengthToText NativeRepeatOffset;
+                    NativeRepeatOffsetText = @_;
+                    If NativeX86 is equal to 1;
+                        NativeOut = NativeOut + "    subq $1, " + NativeRepeatOffsetText + "(%rsp)\n    jmp L_kuro_repeat_" + NativeRepeatLabelText + "\nL_kuro_endrepeat_" + NativeRepeatLabelText + ":\n";
+                    Else;
+                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeRepeatOffsetText + "]\n    sub x0, x0, #1\n    str x0, [sp, #" + NativeRepeatOffsetText + "]\n    b L_kuro_repeat_" + NativeRepeatLabelText + "\nL_kuro_endrepeat_" + NativeRepeatLabelText + ":\n";
+                    Done.
+                    NativeRepeatDepth = NativeRepeatDepth - 1;
+                Else;
+                    NativeFailed = 1;
+                Done.
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_WHILE_BEGIN";
+            NativeStraightKnown = 1;
+            If NativeWhileDepth is less than 16;
+                Call NativeLengthToText NativeWhileCounter;
+                NativeWhileLabelText = @_;
+                Set NativeWhileLabels NativeWhileDepth to NativeWhileCounter;
+                Set NativeWhileStackDepths NativeWhileDepth to NativeStackDepth;
+                Set NativeWhileTestSeen NativeWhileDepth to 0;
+                NativeOut = NativeOut + "L_kuro_while_" + NativeWhileLabelText + ":\n";
+                Add 1 to NativeWhileDepth;
+                Add 1 to NativeWhileCounter;
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_WHILE_TEST";
+            NativeStraightKnown = 1;
+            If NativeWhileDepth is greater than 0;
+                NativeWhileIndex = NativeWhileDepth - 1;
+                Get NativeWhileTestSeen NativeWhileIndex;
+                NativeWhileSeen = @_;
+                Get NativeWhileStackDepths NativeWhileIndex;
+                NativeWhileEntryDepth = @_;
+                If NativeWhileSeen is equal to 0 and NativeStackDepth is equal to NativeWhileEntryDepth + 1;
+                    Set NativeWhileTestSeen NativeWhileIndex to 1;
+                    Get NativeWhileLabels NativeWhileIndex;
+                    Call NativeLengthToText @_;
+                    NativeWhileLabelText = @_;
+                    NativeStackOffset = NativeStackDepth * 8 - 8;
+                    Call NativeLengthToText NativeStackOffset;
+                    NativeStackOffsetText = @_;
+                    If NativeX86 is equal to 1;
+                        NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    test %rax, %rax\n    jz L_kuro_endwhile_" + NativeWhileLabelText + "\n";
+                    Else;
+                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    cbz x0, L_kuro_endwhile_" + NativeWhileLabelText + "\n";
+                    Done.
+                    NativeStackDepth = NativeStackDepth - 1;
+                Else;
+                    NativeFailed = 1;
+                Done.
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_WHILE_END";
+            NativeStraightKnown = 1;
+            If NativeWhileDepth is greater than 0;
+                NativeWhileIndex = NativeWhileDepth - 1;
+                Get NativeWhileTestSeen NativeWhileIndex;
+                NativeWhileSeen = @_;
+                Get NativeWhileStackDepths NativeWhileIndex;
+                NativeWhileEntryDepth = @_;
+                If NativeWhileSeen is equal to 1 and NativeStackDepth is equal to NativeWhileEntryDepth;
+                    Get NativeWhileLabels NativeWhileIndex;
+                    Call NativeLengthToText @_;
+                    NativeWhileLabelText = @_;
+                    If NativeX86 is equal to 1;
+                        NativeOut = NativeOut + "    jmp L_kuro_while_" + NativeWhileLabelText + "\nL_kuro_endwhile_" + NativeWhileLabelText + ":\n";
+                    Else;
+                        NativeOut = NativeOut + "    b L_kuro_while_" + NativeWhileLabelText + "\nL_kuro_endwhile_" + NativeWhileLabelText + ":\n";
+                    Done.
+                    NativeWhileDepth = NativeWhileDepth - 1;
+                Else;
+                    NativeFailed = 1;
+                Done.
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_STORE_LIST";
+            NativeStraightKnown = 1;
+            If NativeStraightPos is less than NativeStraightLength and NativeStackDepth is greater than 0;
+                Get BytecodeOut NativeStraightPos;
+                NativeVariableName = @_;
+                Add 1 to NativeStraightPos;
+                Call NativeFindVariable NativeVariableName, 0;
+                NativeVariableSlot = @_;
+                If NativeVariableSlot is less than 0;
+                    If NativeVariableCount is less than 32;
+                        NativeVariableSlot = NativeVariableCount;
+                        Append NativeVariableName to NativeVariableNames;
+                        Add 1 to NativeVariableCount;
+                    Else;
+                        NativeFailed = 1;
+                    Done.
+                Done.
+                NativeStackOffset = NativeStackDepth * 8 - 8;
+                NativeVariableOffset = 1024 + NativeVariableSlot * 8;
+                Call NativeLengthToText NativeStackOffset;
+                NativeStackOffsetText = @_;
+                Call NativeLengthToText NativeVariableOffset;
+                NativeVariableOffsetText = @_;
+                If NativeX86 is equal to 1;
+                    NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
+                Else;
+                    NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
+                Done.
+                NativeStackDepth = NativeStackDepth - 1;
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_LOADVAR";
+            NativeStraightKnown = 1;
+            If NativeStraightPos is less than NativeStraightLength and NativeStackDepth is less than 128;
+                Get BytecodeOut NativeStraightPos;
+                NativeVariableName = @_;
+                Add 1 to NativeStraightPos;
+                Call NativeFindVariable NativeVariableName, 0;
+                NativeVariableSlot = @_;
+                If NativeVariableSlot is less than 0;
+                    NativeFailed = 1;
+                Else;
+                    NativeVariableOffset = 1024 + NativeVariableSlot * 8;
+                    NativeStackOffset = NativeStackDepth * 8;
+                    Call NativeLengthToText NativeVariableOffset;
+                    NativeVariableOffsetText = @_;
+                    Call NativeLengthToText NativeStackOffset;
+                    NativeStackOffsetText = @_;
+                    If NativeX86 is equal to 1;
+                        NativeOut = NativeOut + "    mov " + NativeVariableOffsetText + "(%rsp), %rax\n    mov %rax, " + NativeStackOffsetText + "(%rsp)\n";
+                    Else;
+                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeVariableOffsetText + "]\n    str x0, [sp, #" + NativeStackOffsetText + "]\n";
+                    Done.
+                    Add 1 to NativeStackDepth;
+                Done.
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_UPDATE" or NativeStraightOp is equal to "BC_ADD";
+            NativeStraightKnown = 1;
+            If NativeStraightPos is less than NativeStraightLength and NativeStackDepth is greater than 0;
+                Get BytecodeOut NativeStraightPos;
+                NativeVariableName = @_;
+                Add 1 to NativeStraightPos;
+                Call NativeFindVariable NativeVariableName, 0;
+                NativeVariableSlot = @_;
+                If NativeVariableSlot is less than 0;
+                    NativeFailed = 1;
+                Else;
+                    NativeStackOffset = NativeStackDepth * 8 - 8;
+                    NativeVariableOffset = 1024 + NativeVariableSlot * 8;
+                    Call NativeLengthToText NativeStackOffset;
+                    NativeStackOffsetText = @_;
+                    Call NativeLengthToText NativeVariableOffset;
+                    NativeVariableOffsetText = @_;
+                    If NativeX86 is equal to 1;
+                        NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n";
+                        If NativeStraightOp is equal to "BC_ADD";
+                            NativeOut = NativeOut + "    add " + NativeVariableOffsetText + "(%rsp), %rax\n";
+                        Done.
+                        NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
+                    Else;
+                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n";
+                        If NativeStraightOp is equal to "BC_ADD";
+                            NativeOut = NativeOut + "    ldr x1, [sp, #" + NativeVariableOffsetText + "]\n    add x0, x1, x0\n";
+                        Done.
+                        NativeOut = NativeOut + "    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
+                    Done.
+                    NativeStackDepth = NativeStackDepth - 1;
+                Done.
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_PRINT";
+            NativeStraightKnown = 1;
+            If NativeStackDepth is greater than 0;
+                NativeStackOffset = NativeStackDepth * 8 - 8;
+                Call NativeLengthToText NativeStackOffset;
+                NativeStackOffsetText = @_;
+                If NativeX86 is equal to 1;
+                    NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    call _kuro_print_int\n";
+                Else;
+                    NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    bl _kuro_print_int\n";
+                Done.
+                NativeStackDepth = NativeStackDepth - 1;
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightKnown is equal to 0;
+            NativeFailed = 1;
+        Done.
+    Done.
+
+    If NativeStackDepth is not equal to 0 or NativeIfDepth is not equal to 0 or NativeRepeatDepth is not equal to 0 or NativeWhileDepth is not equal to 0;
+        NativeFailed = 1;
+    Done.
+    If NativeFailed is equal to 0;
+        If NativeX86 is equal to 1;
+            NativeExitSyscall = "$60";
+            NativeWriteSyscall = "$1";
+            If NativeTarget is equal to "x86_64-macos";
+                NativeExitSyscall = "$0x2000001";
+                NativeWriteSyscall = "$0x2000004";
+            Done.
+            NativeOut = NativeOut + "    mov $0, %rdi\n    mov " + NativeExitSyscall + ", %rax\n    syscall\nL_kuro_division_error:\n    mov $1, %rdi\n    mov " + NativeExitSyscall + ", %rax\n    syscall\n";
+            NativeOut = NativeOut + "_kuro_print_int:\n    push %rbp\n    mov %rsp, %rbp\n    sub $32, %rsp\n    lea 31(%rsp), %rsi\n    movb $10, (%rsi)\n    mov $1, %rcx\n    xor %r8d, %r8d\n    test %rax, %rax\n    jns L_kuro_positive\n    neg %rax\n    mov $1, %r8\nL_kuro_positive:\n    xor %rdx, %rdx\n    mov $10, %r9\n    div %r9\n    add $48, %dl\n    dec %rsi\n    mov %dl, (%rsi)\n    inc %rcx\n    test %rax, %rax\n    jnz L_kuro_positive\n    cmp $0, %r8\n    je L_kuro_write\n    dec %rsi\n    movb $45, (%rsi)\n    inc %rcx\nL_kuro_write:\n    mov " + NativeWriteSyscall + ", %rax\n    mov $1, %rdi\n    mov %rcx, %rdx\n    syscall\n    leave\n    ret\n";
+        Else;
+            NativeOut = NativeOut + "    add sp, sp, #2048\n    mov x0, #0\n    mov x16, #1\n    svc #0x80\nL_kuro_division_error:\n    add sp, sp, #2048\n    mov x0, #1\n    mov x16, #1\n    svc #0x80\n";
+            NativeOut = NativeOut + "_kuro_print_int:\n    sub sp, sp, #32\n    add x3, sp, #31\n    mov w4, #10\n    strb w4, [x3]\n    mov x2, #1\n    mov x5, #10\n    mov x6, #0\n    cmp x0, #0\n    b.ge L_kuro_digits_straight\n    neg x0, x0\n    mov x6, #1\nL_kuro_digits_straight:\n    udiv x7, x0, x5\n    msub x8, x7, x5, x0\n    add x8, x8, #48\n    sub x3, x3, #1\n    strb w8, [x3]\n    add x2, x2, #1\n    mov x0, x7\n    cbnz x0, L_kuro_digits_straight\n    cbz x6, L_kuro_write_straight\n    sub x3, x3, #1\n    mov w8, #45\n    strb w8, [x3]\n    add x2, x2, #1\nL_kuro_write_straight:\n    mov x0, #1\n    mov x1, x3\n    mov x16, #4\n    svc #0x80\n    add sp, sp, #32\n    ret\n";
+        Done.
+        Print NativeOut.
+    Done.
+Done.
+
+Length BytecodeOut;
+NativeProgramLength = @_;
+If NativeTarget is not equal to "aarch64-macos" and NativeTarget is not equal to "x86_64-macos" and NativeTarget is not equal to "x86_64-linux";
+    NativeFailed = 1;
+Done.
+If NativeProgramLength is equal to 3;
+    Get BytecodeOut 1;
+    Call NativeValidateUnsignedInteger @_;
+    If @_ is equal to 1;
+        Call EmitStraightIntegerProgram;
+    Else;
+        Call EmitLiteralPrint;
+    Done.
+Else;
+    Call EmitStraightIntegerProgram;
+Done.
+RuntimeExitCode = NativeFailed;

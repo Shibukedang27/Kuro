@@ -1,0 +1,31 @@
+# Kuro runtime entrypoint.
+#
+# This file is composed after self_host/vm.kuro. The VM executes BytecodeOut;
+# this entrypoint turns that execution into a stable runtime contract for a
+# future native launcher: exit code, failure state, and captured output.
+
+RuntimeExitCode = 0;
+RuntimeFailed = 0;
+RuntimeOutput is Text;
+
+Action RuntimeRun;
+    If VMFailed is not equal to 0;
+        RuntimeFailed = 1;
+        RuntimeExitCode = 1;
+    Else;
+        RuntimeCount = VMOutputCount;
+        RuntimeIndex = 0;
+        If RuntimeCount is greater than 0;
+            RuntimeOutput = VMOutput;
+            While RuntimeIndex is less than RuntimeCount;
+                Get VMOutput RuntimeIndex;
+                Print @_.
+                Add 1 to RuntimeIndex;
+            Done.
+        Else;
+            RuntimeOutput = "";
+        Done.
+    Done.
+Done.
+
+Call RuntimeRun;

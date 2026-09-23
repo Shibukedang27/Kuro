@@ -1,0 +1,51 @@
+# Stage 8 bytecode encoder, written in Kuro.
+# Consumes IROut from self_host/lower.kuro and emits BytecodeOut using the
+# opcode contract in docs/architecture/bytecode.md.
+
+# --- BEGIN_STANDALONE_IR (stripped by the Stage 8 harness) ---
+IROut = "CONST", "7", "STORE_LIST", "N", "PRINT";
+# --- END_STANDALONE_IR ---
+
+BytecodeOut is Text;
+BytecodePos = 0;
+BytecodeFailed = 0;
+
+Action BytecodeConsume OperandCount;
+    If OperandCount is greater than 0;
+        Get IROut BytecodePos;
+        Append @_ to BytecodeOut;
+        Add 1 to BytecodePos;
+        BytecodeConsume_Next = OperandCount - 1;
+        Call BytecodeConsume BytecodeConsume_Next;
+    Done.
+Done.
+
+Action BytecodeStep;
+    Length IROut;
+    BytecodeLen = @_;
+    While BytecodePos is less than BytecodeLen and BytecodeFailed is equal to 0;
+        Get IROut BytecodePos;
+        BytecodeStep_Op = @_;
+        Append "BC_" + BytecodeStep_Op to BytecodeOut;
+        Add 1 to BytecodePos;
+
+        If BytecodeStep_Op is equal to "CONST" or BytecodeStep_Op is equal to "LOADVAR" or BytecodeStep_Op is equal to "STORE_LIST" or BytecodeStep_Op is equal to "UPDATE" or BytecodeStep_Op is equal to "ADD" or BytecodeStep_Op is equal to "APPEND" or BytecodeStep_Op is equal to "FUNC_BEGIN" or BytecodeStep_Op is equal to "CALL_BEGIN" or BytecodeStep_Op is equal to "BINOP" or BytecodeStep_Op is equal to "CMP" or BytecodeStep_Op is equal to "BOOL" or BytecodeStep_Op is equal to "ISCLASS" or BytecodeStep_Op is equal to "LENGTH" or BytecodeStep_Op is equal to "SET" or BytecodeStep_Op is equal to "INPUT";
+            Call BytecodeConsume 1;
+        Else;
+            If BytecodeStep_Op is equal to "GET";
+                Call BytecodeConsume 2;
+            Else;
+            If BytecodeStep_Op is equal to "PARAM" or BytecodeStep_Op is equal to "DECLTYPE";
+                Call BytecodeConsume 2;
+            Else;
+            If BytecodeStep_Op is equal to "PRINT" or BytecodeStep_Op is equal to "RETURN" or BytecodeStep_Op is equal to "IF_BEGIN" or BytecodeStep_Op is equal to "ELSE_BEGIN" or BytecodeStep_Op is equal to "IF_END" or BytecodeStep_Op is equal to "REPEAT_BEGIN" or BytecodeStep_Op is equal to "REPEAT_END" or BytecodeStep_Op is equal to "WHILE_BEGIN" or BytecodeStep_Op is equal to "WHILE_TEST" or BytecodeStep_Op is equal to "WHILE_END" or BytecodeStep_Op is equal to "FUNC_END" or BytecodeStep_Op is equal to "CALL_END";
+                Else;
+                    BytecodeFailed = 1;
+                Done.
+            Done.
+        Done.
+        Done.
+    Done.
+Done.
+
+Call BytecodeStep;

@@ -1,0 +1,2013 @@
+# Stage 5 self-hosting milestone (spec sections 5 and 61): a Kuro
+# tokenizer written in Kuro itself, executed by compiler/ (there is no
+# native Kuro compiler yet, so "self-hosted" here means "runs on the
+# Stage 1-4 Python-hosted interpreter, not that the Python lexer is gone").
+#
+# Cross-tested token-for-token against compiler/lexer.py by
+# self_host/cross_test.py, which substitutes real Kuro source (including
+# this project's own .kuro test fixtures) into the `Source` variable below
+# and compares this program's printed token stream against the Python
+# lexer's tokens for the same text.
+#
+# Known, deliberate limitations (see docs/engineering/ADR-0008-stage5-lexer.md):
+#   - No line:col tracking of its own — superseded by ADR-0011: each
+#     token's starting character offset into Source is now recorded
+#     (TokenStarts, added for Stage 6 completion), and
+#     self_host/parser.kuro converts an offset to line:col on demand by
+#     scanning Source, entirely avoiding the integer-to-text conversion
+#     ADR-0008 originally assumed was required (the offsets are stored as
+#     plain Integers, never printed by this file).
+#   - No error recovery/diagnostics for malformed input — silently skips
+#     characters it cannot classify, unlike compiler/lexer.py's E1xxx
+#     diagnostics.
+#   - O(n) rescanning per token (no `break`/early-exit primitive exists —
+#     see the same ADR), so this is an O(n^2)-ish algorithm. Correct, not
+#     fast; performance work is out of scope for a self-hosting milestone.
+#   - Unicode identifier combining-mark continuation (ADR-0003) is not
+#     replicated here; only `is alpha` / `is alnum` are used.
+
+Quote = "\"";
+Backslash = "\\";
+Hash = "#";
+Slash = "/";
+NL = "\n";
+Tab = "\t";
+CR = "\r";
+Underscore = "_";
+EqCh = "=";
+CommaCh = ",";
+SemiCh = ";";
+DotCh = ".";
+LParenCh = "(";
+RParenCh = ")";
+AtCh = "@";
+PlusCh = "+";
+MinusCh = "-";
+StarCh = "*";
+ColonCh = ":";
+NChar = "n";
+TChar = "t";
+RChar = "r";
+
+Source is Text;
+Take user Source;
+Length Source;
+SourceLen = @_;
+Pos = 0;
+
+# Structured output for Stage 6 (ADR-0010): every token this lexer emits is
+# also appended (kind, then value) to these two parallel lists, so a parser
+# can read them with Get/Length instead of having to parse the Print
+# stream back out of text. Declared with no initial value (Decl only) so
+# the first Append cleanly starts a fresh list — see ADR-0010's Decision 3.
+TokenKinds is Text;
+TokenValues is Text;
+
+# Stage 6 completion (ADR-0011): each token's starting character offset
+# into Source, so self_host/parser.kuro can compute a line:col for its own
+# diagnostics without needing integer-to-text conversion (the offsets are
+# stored as plain Integers, never printed by this file — ADR-0008's "no
+# source locations yet" limitation was specifically about not having a
+# way to render them as text, not about tracking the raw positions).
+# TokStartPos is captured once, right after Ch is read: Pos does not move
+# again until whichever branch below decides to consume characters, so
+# this single capture point is correct for every one of the 16 token
+# kinds this lexer can emit — no per-branch capture needed.
+TokenStarts is Text;
+
+Repeat SourceLen;
+    If Pos is less than SourceLen;
+        Get Source Pos;
+        Ch = @_;
+        TokStartPos = Pos;
+
+        If Ch is space;
+            Add 1 to Pos;
+        Else;
+            NextPos = Pos + 1;
+            NextCh = NL;
+            If NextPos is less than SourceLen;
+                Get Source NextPos;
+                NextCh = @_;
+            Done.
+
+            If Ch is equal to Hash or Ch is equal to Slash and NextCh is equal to Slash;
+                CommentScanning = 1;
+                While CommentScanning is equal to 1 and Pos is less than SourceLen;
+                    Get Source Pos;
+                    Ch2 = @_;
+                    If Ch2 is equal to NL;
+                        CommentScanning = 0;
+                    Else;
+                        Add 1 to Pos;
+                    Done.
+                Done.
+            Else;
+                If Ch is equal to Quote;
+                    Add 1 to Pos;
+                    StrBuf = "";
+                    StrScanning = 1;
+                    While StrScanning is equal to 1 and Pos is less than SourceLen;
+                        Get Source Pos;
+                        Ch2 = @_;
+                        If Ch2 is equal to Quote;
+                            Add 1 to Pos;
+                            StrScanning = 0;
+                        Else;
+                            If Ch2 is equal to Backslash;
+                                EscNextPos = Pos + 1;
+                                EscNextCh = Backslash;
+                                If EscNextPos is less than SourceLen;
+                                    Get Source EscNextPos;
+                                    EscNextCh = @_;
+                                Done.
+                                If EscNextCh is equal to NChar;
+                                    StrBuf = StrBuf + NL;
+                                Else;
+                                    If EscNextCh is equal to TChar;
+                                        StrBuf = StrBuf + Tab;
+                                    Else;
+                                        If EscNextCh is equal to RChar;
+                                            StrBuf = StrBuf + CR;
+                                        Else;
+                                            StrBuf = StrBuf + EscNextCh;
+                                        Done.
+                                    Done.
+                                Done.
+                                Add 2 to Pos;
+                            Else;
+                                StrBuf = StrBuf + Ch2;
+                                Add 1 to Pos;
+                            Done.
+                        Done.
+                    Done.
+                    Append "STRING" to TokenKinds;
+                    Append TokStartPos to TokenStarts;
+                    Append StrBuf to TokenValues;
+                Else;
+                    If Ch is digit;
+                        NumBuf = "";
+                        IsDecimal = 0;
+                        NumScanning = 1;
+                        While NumScanning is equal to 1 and Pos is less than SourceLen;
+                            Get Source Pos;
+                            Ch2 = @_;
+                            If Ch2 is digit;
+                                NumBuf = NumBuf + Ch2;
+                                Add 1 to Pos;
+                            Else;
+                                If Ch2 is equal to DotCh and IsDecimal is equal to 0;
+                                    DotNextPos = Pos + 1;
+                                    DotNextCh = EqCh;
+                                    If DotNextPos is less than SourceLen;
+                                        Get Source DotNextPos;
+                                        DotNextCh = @_;
+                                    Done.
+                                    If DotNextCh is digit;
+                                        NumBuf = NumBuf + Ch2;
+                                        IsDecimal = 1;
+                                        Add 1 to Pos;
+                                    Else;
+                                        NumScanning = 0;
+                                    Done.
+                                Else;
+                                    NumScanning = 0;
+                                Done.
+                            Done.
+                        Done.
+                        If IsDecimal is equal to 1;
+                            Append "DECIMAL" to TokenKinds;
+                            Append TokStartPos to TokenStarts;
+                        Else;
+                            Append "INTEGER" to TokenKinds;
+                            Append TokStartPos to TokenStarts;
+                        Done.
+                        Append NumBuf to TokenValues;
+                    Else;
+                        If Ch is alpha or Ch is equal to Underscore;
+                            IdBuf = "";
+                            IdScanning = 1;
+                            While IdScanning is equal to 1 and Pos is less than SourceLen;
+                                Get Source Pos;
+                                Ch2 = @_;
+                                If Ch2 is alnum or Ch2 is equal to Underscore;
+                                    IdBuf = IdBuf + Ch2;
+                                    Add 1 to Pos;
+                                Else;
+                                    IdScanning = 0;
+                                Done.
+                            Done.
+                            Append "IDENT" to TokenKinds;
+                            Append TokStartPos to TokenStarts;
+                            Append IdBuf to TokenValues;
+                        Else;
+                            If Ch is equal to EqCh;
+                                Append "EQUAL" to TokenKinds;
+                                Append TokStartPos to TokenStarts;
+                                Append Ch to TokenValues;
+                                Add 1 to Pos;
+                            Else;
+                                If Ch is equal to CommaCh;
+                                    Append "COMMA" to TokenKinds;
+                                    Append TokStartPos to TokenStarts;
+                                    Append Ch to TokenValues;
+                                    Add 1 to Pos;
+                                Else;
+                                    If Ch is equal to SemiCh;
+                                        Append "SEMI" to TokenKinds;
+                                        Append TokStartPos to TokenStarts;
+                                        Append Ch to TokenValues;
+                                        Add 1 to Pos;
+                                    Else;
+                                        If Ch is equal to DotCh;
+                                            Append "DOT" to TokenKinds;
+                                            Append TokStartPos to TokenStarts;
+                                            Append Ch to TokenValues;
+                                            Add 1 to Pos;
+                                        Else;
+                                            If Ch is equal to LParenCh;
+                                                Append "LPAREN" to TokenKinds;
+                                                Append TokStartPos to TokenStarts;
+                                                Append Ch to TokenValues;
+                                                Add 1 to Pos;
+                                            Else;
+                                                If Ch is equal to RParenCh;
+                                                    Append "RPAREN" to TokenKinds;
+                                                    Append TokStartPos to TokenStarts;
+                                                    Append Ch to TokenValues;
+                                                    Add 1 to Pos;
+                                                Else;
+                                                    If Ch is equal to AtCh;
+                                                        Append "AT" to TokenKinds;
+                                                        Append TokStartPos to TokenStarts;
+                                                        Append Ch to TokenValues;
+                                                        Add 1 to Pos;
+                                                    Else;
+                                                        If Ch is equal to PlusCh;
+                                                            Append "PLUS" to TokenKinds;
+                                                            Append TokStartPos to TokenStarts;
+                                                            Append Ch to TokenValues;
+                                                            Add 1 to Pos;
+                                                        Else;
+                                                            If Ch is equal to MinusCh;
+                                                                Append "MINUS" to TokenKinds;
+                                                                Append TokStartPos to TokenStarts;
+                                                                Append Ch to TokenValues;
+                                                                Add 1 to Pos;
+                                                            Else;
+                                                                If Ch is equal to StarCh;
+                                                                    Append "STAR" to TokenKinds;
+                                                                    Append TokStartPos to TokenStarts;
+                                                                    Append Ch to TokenValues;
+                                                                    Add 1 to Pos;
+                                                                Else;
+                                                                    If Ch is equal to Slash;
+                                                                        Append "SLASH" to TokenKinds;
+                                                                        Append TokStartPos to TokenStarts;
+                                                                        Append Ch to TokenValues;
+                                                                        Add 1 to Pos;
+                                                                    Else;
+                                                                        If Ch is equal to ColonCh;
+                                                                            Append "COLON" to TokenKinds;
+                                                                            Append TokStartPos to TokenStarts;
+                                                                            Append Ch to TokenValues;
+                                                                            Add 1 to Pos;
+                                                                        Else;
+                                                                            Add 1 to Pos;
+                                                                        Done.
+                                                                    Done.
+                                                                Done.
+                                                            Done.
+                                                        Done.
+                                                    Done.
+                                                Done.
+                                            Done.
+                                        Done.
+                                    Done.
+                                Done.
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+Done.
+
+# Stage 6 self-hosting milestone (spec sections 5/61, ADR-0010): a
+# recursive-descent Kuro parser written in Kuro, executed by compiler/'s
+# Stage 1-4 interpreter, producing a flat canonical AST encoding
+# (compiler/ast_canon.py is the single source of truth for that encoding)
+# that tests/self_host/test_parser_cross.py compares against
+# compiler/parser.py's real AST for the same source.
+#
+# This file assumes TokenKinds/TokenValues (two parallel lists) already
+# exist when it runs — normally populated by self_host/lexer.kuro. The
+# small block below marked BEGIN/END_STANDALONE_TOKENS supplies a tiny
+# default so `kuro run self_host/parser.kuro` also works on its own; the
+# differential-test harness strips that block and concatenates this file
+# after self_host/lexer.kuro instead (see ADR-0010's "Decision 1" for why
+# this is a build-time convenience, not a real Kuro import system).
+#
+# Grammar coverage: complete for the currently-supported Kuro grammar
+# (see docs/spec/grammar-coverage.md and ADR-0011 for the Stage 6
+# completion audit that verified this against compiler/parser.py
+# statement-by-statement). Covers: literals, variable refs, arithmetic
+# (+ - * / with precedence, parens, unary minus), comparisons (including
+# "or equal to"/"at least"/"at most"), and/or, is digit/alpha/space/
+# alnum/quote, Decl, Assign (typed/untyped, multi-value), Take, Add,
+# Update, Get (direct and indexed), Length, Set, Append (the statement),
+# Compare (the statement), Print, Return, Call (paren-less and
+# legacy-parenthesized), Action (paren-less/legacy, typed/untyped
+# params), If/Else, Repeat, While, and the legacy
+# `Entered ... then ... otherwise ...;` one-liner (desugars to the same
+# canonical IF encoding a real If/Else would produce).
+#
+# NAMING DISCIPLINE, AND WHY EVERY REPEATED-CONSTRUCT LOOP IS RECURSIVE,
+# NOT while+flag (both load-bearing, not style — found while differential-
+# testing this file, not designed in up front):
+#
+# Kuro Actions have no true local variables — only *parameters* get
+# frame-based read priority (compiler/interpreter.py); every other name an
+# Action assigns is a write to the single global environment
+# (docs/architecture/current-state.md section 7). A first version of this
+# file reused generic names like `Looping`/`K`/`V` across many Actions and
+# broke immediately under differential testing: e.g. ParseBlock sets its
+# own `Looping = 1`, calls (transitively, through ParseStatement ->
+# ParseValueList -> ParseExpr) ParseTerm, which *also* uses a global
+# named `Looping` for its own +/- loop — and when ParseTerm's loop ends by
+# setting `Looping = 0`, it silently clobbers ParseBlock's still-in-use
+# flag, ending the whole block one statement early.
+#
+# Prefixing every local by its Action's name (done throughout this file)
+# fixes collisions *between different* Actions, but not a second, deeper
+# case: an Action that is reentrant with itself — directly or, like
+# ParseBlock, indirectly (the top-level program's ParseBlock call parses a
+# statement that is itself an `Action ... Done.`, whose body is parsed by
+# *another* ParseBlock call, sharing the exact same global
+# `ParseBlock_Looping`). The inner call's loop ending (`Looping = 0`) still
+# clobbers the outer call's copy of the *same* global, because no amount of
+# per-Action prefixing gives two different *calls* to the same Action their
+# own copy of anything — only Action *parameters* get that (a real call
+# frame). So every construct that repeats zero-or-more times (`a * b * c`,
+# `a and b and c`, a parameter/argument list, a block's statement list) is
+# written as tail recursion here instead of a while-loop-plus-flag: each
+# repetition is one more (frame-isolated) `Call`, and there is no
+# loop-control variable left to survive — and therefore be clobbered by —
+# a nested call at all. Every one of this file's repeated constructs is
+# reentrant in principle (expressions nest via parentheses, blocks nest
+# via If/Action/Repeat/While bodies), so this file does not keep any
+# while+flag loops around a call that could recurse back through it —
+# `While` (ADR-0009) remains available in the language and is exercised
+# by the *grammar* this parser recognizes (it can parse a Kuro `While`
+# statement fine), it is just not how this parser implements its own
+# repetition.
+#
+# Every non-parameter
+# variable in this file is therefore named `<ActionName>_<purpose>`, which
+# is sufficient (not automatic) safety: Action names are unique, so a
+# prefixed name can never collide with another Action's own locals.
+#
+# Error behavior (updated by ADR-0011's Stage 6 completion work): does not
+# crash or hang on malformed input, and now produces real structured
+# diagnostics (DiagCodes/DiagLines/DiagCols/DiagMessages, reusing
+# compiler/diagnostics.py's existing E2xxx codes — see the "diagnostics"
+# section below and ADR-0011's "Diagnostic compatibility" policy for what
+# is and isn't required to match compiler/parser.py). ParseFailed remains
+# the circuit breaker: once anything fails to match, RecordDiag sets it
+# and block parsing stops cleanly instead of looping or corrupting AstOut
+# further. Recovery is still minimal by design (no token-level
+# synchronization/resume, unlike compiler/parser.py's _synchronize) — a
+# single malformed construct can produce a short cascade of a few
+# diagnostics, not exactly one.
+
+
+TokPos = 0;
+Length TokenKinds;
+TokCount = @_;
+AstOut is Text;
+ParseFailed = 0;
+ParseExprDepth = 0;
+
+# Stage 6 completion diagnostics (ADR-0011). Four parallel lists, mirroring
+# TokenKinds/TokenValues' shape: DiagCodes[i]/DiagLines[i]/DiagCols[i]/
+# DiagMessages[i] together describe one diagnostic. Declared with no
+# initial value (Decl only), same reason as AstOut - the first Append
+# starts a fresh list cleanly. Line/column are plain Integers (never
+# rendered to text by this file), computed on demand from a token's
+# recorded character offset (self_host/lexer.kuro's TokenStarts) by
+# scanning Source for newlines - see ComputeLineCol below.
+DiagCodes is Text;
+DiagLines is Text;
+DiagCols is Text;
+DiagMessages is Text;
+
+# --- diagnostics ---------------------------------------------------------
+# Diagnostic codes are the *same* E2xxx codes compiler/diagnostics.py's
+# registry already assigns to the analogous Python-parser situation
+# (E2001 unexpected token/expected identifier, E2002 expected a specific
+# token or keyword, E2003 expected a value expression, E2004 expected a
+# comparison operator) - this file does not invent a second taxonomy.
+# Messages are NOT required to match the Python parser's wording
+# byte-for-byte - see docs/engineering/ADR-0011-stage6-completion.md's
+# "Diagnostic compatibility" section for why, and what IS compared
+# (category/code and source location) in
+# tests/self_host/test_parser_diagnostics.py.
+
+Action ComputeLineCol TargetPos;
+    ComputeLineCol_I = 0;
+    ComputeLineCol_Line = 1;
+    ComputeLineCol_Col = 1;
+    While ComputeLineCol_I is less than TargetPos;
+        Get Source ComputeLineCol_I;
+        ComputeLineCol_Ch = @_;
+        If ComputeLineCol_Ch is equal to "\n";
+            ComputeLineCol_Line = ComputeLineCol_Line + 1;
+            ComputeLineCol_Col = 1;
+        Else;
+            ComputeLineCol_Col = ComputeLineCol_Col + 1;
+        Done.
+        Add 1 to ComputeLineCol_I;
+    Done.
+    DiagCurLine = ComputeLineCol_Line;
+    DiagCurCol = ComputeLineCol_Col;
+Done.
+
+# The character offset to report a diagnostic at: the current token's
+# recorded start position, or the end of the source (a reasonable,
+# conventional place to point at) once TokPos has run past the end.
+Action CurDiagPos;
+    Compare CurDiagPos_InBounds TokPos less than TokCount;
+    If CurDiagPos_InBounds is equal to 1;
+        Get TokenStarts TokPos;
+        Return @_;
+    Else;
+        Length Source;
+        Return @_;
+    Done.
+Done.
+
+Action RecordDiag Code, Message;
+    Call CurDiagPos;
+    RecordDiag_Pos = @_;
+    Call ComputeLineCol RecordDiag_Pos;
+    Append Code to DiagCodes;
+    Append DiagCurLine to DiagLines;
+    Append DiagCurCol to DiagCols;
+    Append Message to DiagMessages;
+    ParseFailed = 1;
+Done.
+
+# --- token access helpers ---------------------------------------------
+
+Action PeekKind Offset;
+    PeekKind_P = TokPos + Offset;
+    Compare PeekKind_InBounds PeekKind_P less than TokCount;
+    If PeekKind_InBounds is equal to 1;
+        Get TokenKinds PeekKind_P;
+        Return @_;
+    Else;
+        Return "EOF";
+    Done.
+Done.
+
+Action PeekValue Offset;
+    PeekValue_P = TokPos + Offset;
+    Compare PeekValue_InBounds PeekValue_P less than TokCount;
+    If PeekValue_InBounds is equal to 1;
+        Get TokenValues PeekValue_P;
+        Return @_;
+    Else;
+        Return "";
+    Done.
+Done.
+
+Action CurKind;
+    Call PeekKind 0;
+    Return @_;
+Done.
+
+Action CurValue;
+    Call PeekValue 0;
+    Return @_;
+Done.
+
+Action IsWord ExpectedWord;
+    Call CurKind;
+    IsWord_K = @_;
+    If IsWord_K is equal to "IDENT";
+        Call CurValue;
+        IsWord_V = @_;
+        If IsWord_V is equal to ExpectedWord;
+            Return 1;
+        Else;
+            Return 0;
+        Done.
+    Else;
+        Return 0;
+    Done.
+Done.
+
+Action ExpectKind ExpectedKind;
+    Call CurKind;
+    ExpectKind_K = @_;
+    If ExpectKind_K is equal to ExpectedKind;
+        Add 1 to TokPos;
+        Return 1;
+    Else;
+        ExpectKind_Msg = "expected " + ExpectedKind;
+        Call RecordDiag "E2002", ExpectKind_Msg;
+        Return 0;
+    Done.
+Done.
+
+Action ExpectWord ExpectedWord;
+    Call IsWord ExpectedWord;
+    ExpectWord_Ok = @_;
+    If ExpectWord_Ok is equal to 1;
+        Add 1 to TokPos;
+        Return 1;
+    Else;
+        ExpectWord_Msg = "expected '" + ExpectedWord;
+        Call RecordDiag "E2002", ExpectWord_Msg;
+        Return 0;
+    Done.
+Done.
+
+# Consumes and returns an identifier's text, or fails cleanly (ParseFailed
+# = 1, no token consumed, "" returned) if the current token isn't one.
+# Every place that expects a name (a variable/target/action/type name)
+# uses this instead of blindly reading CurValue, after a real bug was
+# found by malformed-input testing: reading CurValue unconditionally
+# accepts *any* token's text as a name, so `Action Add A, ,;` silently
+# treated the second comma as a valid (empty-ish) parameter instead of
+# failing, unlike compiler/parser.py's `ident()`, which checks the token
+# kind first. See tests/self_host/test_parser_cross.py's malformed26 case.
+Action ExpectIdent;
+    Call CurKind;
+    ExpectIdent_K = @_;
+    If ExpectIdent_K is equal to "IDENT";
+        Call CurValue;
+        ExpectIdent_V = @_;
+        Add 1 to TokPos;
+        Return ExpectIdent_V;
+    Else;
+        Call RecordDiag "E2001", "expected an identifier";
+        Return "";
+    Done.
+Done.
+
+# --- expression parsing (precedence: term > factor > atom, matching
+# compiler/parser.py's expr/_term/_factor/_atom exactly) -----------------
+
+Action ParseAtom;
+    Call CurKind;
+    ParseAtom_K = @_;
+
+    If ParseAtom_K is equal to "LPAREN";
+        Add 1 to TokPos;
+        Call ParseExpr;
+        Call ExpectKind "RPAREN";
+        Return 1;
+    Done.
+
+    If ParseAtom_K is equal to "STRING";
+        Call CurValue;
+        ParseAtom_V = @_;
+        Add 1 to TokPos;
+        Append "LIT_STR" to AstOut;
+        Append ParseAtom_V to AstOut;
+        Return 1;
+    Done.
+
+    If ParseAtom_K is equal to "INTEGER";
+        Call CurValue;
+        ParseAtom_V = @_;
+        Add 1 to TokPos;
+        Append "LIT_INT" to AstOut;
+        Append ParseAtom_V to AstOut;
+        Return 1;
+    Done.
+
+    If ParseAtom_K is equal to "DECIMAL";
+        Call CurValue;
+        ParseAtom_V = @_;
+        Add 1 to TokPos;
+        Append "LIT_DEC" to AstOut;
+        Append ParseAtom_V to AstOut;
+        Return 1;
+    Done.
+
+    If ParseAtom_K is equal to "AT";
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseAtom_V = @_;
+        Append "VAR" to AstOut;
+        Append "1" to AstOut;
+        Append ParseAtom_V to AstOut;
+        Return 1;
+    Done.
+
+    If ParseAtom_K is equal to "MINUS";
+        Add 1 to TokPos;
+        Append "LIT_INT" to AstOut;
+        Append "0" to AstOut;
+        Call ParseAtom;
+        Append "BIN" to AstOut;
+        Append "-" to AstOut;
+        Return 1;
+    Done.
+
+    If ParseAtom_K is equal to "IDENT";
+        Call CurValue;
+        ParseAtom_V = @_;
+        Add 1 to TokPos;
+        Append "VAR" to AstOut;
+        Append "0" to AstOut;
+        Append ParseAtom_V to AstOut;
+        Return 1;
+    Done.
+
+    Call RecordDiag "E2003", "expected a value";
+    Return 0;
+Done.
+
+Action ParseFactor;
+    Call ParseAtom;
+    Call ParseFactorTail;
+Done.
+
+Action ParseFactorTail;
+    Call CurKind;
+    ParseFactorTail_K = @_;
+    If ParseFactorTail_K is equal to "STAR" or ParseFactorTail_K is equal to "SLASH";
+        ParseFactorTail_Op = "*";
+        If ParseFactorTail_K is equal to "SLASH";
+            ParseFactorTail_Op = "/";
+        Done.
+        Add 1 to TokPos;
+        Call ParseAtom;
+        Append "BIN" to AstOut;
+        Append ParseFactorTail_Op to AstOut;
+        If ParseFailed is equal to 0;
+            Call ParseFactorTail;
+        Done.
+    Done.
+Done.
+
+Action ParseTerm;
+    Call ParseFactor;
+    Call ParseTermTail;
+Done.
+
+Action ParseTermTail;
+    Call CurKind;
+    ParseTermTail_K = @_;
+    If ParseTermTail_K is equal to "PLUS" or ParseTermTail_K is equal to "MINUS";
+        ParseTermTail_Op = "+";
+        If ParseTermTail_K is equal to "MINUS";
+            ParseTermTail_Op = "-";
+        Done.
+        Add 1 to TokPos;
+        Call ParseFactor;
+        Append "BIN" to AstOut;
+        Append ParseTermTail_Op to AstOut;
+        If ParseFailed is equal to 0;
+            Call ParseTermTail;
+        Done.
+    Done.
+Done.
+
+Action ParseExpr;
+    Add 1 to ParseExprDepth;
+    Call ParseTerm;
+    Add -1 to ParseExprDepth;
+    If ParseExprDepth is equal to 0;
+        Append "END_EXPR" to AstOut;
+    Done.
+Done.
+
+# --- condition parsing (comparisons, and/or, is-class) -------------------
+
+Action ParseComparisonOp;
+    Call IsWord "greater";
+    ParseComparisonOp_W1 = @_;
+    If ParseComparisonOp_W1 is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectWord "than";
+        Call IsWord "or";
+        ParseComparisonOp_W1b = @_;
+        If ParseComparisonOp_W1b is equal to 1;
+            Add 1 to TokPos;
+            Call ExpectWord "equal";
+            Call IsWord "to";
+            ParseComparisonOp_W1c = @_;
+            If ParseComparisonOp_W1c is equal to 1;
+                Add 1 to TokPos;
+            Done.
+            Return "ge";
+        Else;
+            Return "gt";
+        Done.
+    Done.
+
+    Call IsWord "less";
+    ParseComparisonOp_W2 = @_;
+    If ParseComparisonOp_W2 is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectWord "than";
+        Call IsWord "or";
+        ParseComparisonOp_W2b = @_;
+        If ParseComparisonOp_W2b is equal to 1;
+            Add 1 to TokPos;
+            Call ExpectWord "equal";
+            Call IsWord "to";
+            ParseComparisonOp_W2c = @_;
+            If ParseComparisonOp_W2c is equal to 1;
+                Add 1 to TokPos;
+            Done.
+            Return "le";
+        Else;
+            Return "lt";
+        Done.
+    Done.
+
+    Call IsWord "equal";
+    ParseComparisonOp_W3 = @_;
+    If ParseComparisonOp_W3 is equal to 1;
+        Add 1 to TokPos;
+        Call IsWord "to";
+        ParseComparisonOp_W3b = @_;
+        If ParseComparisonOp_W3b is equal to 1;
+            Add 1 to TokPos;
+        Done.
+        Return "eq";
+    Done.
+
+    Call IsWord "equals";
+    ParseComparisonOp_W4 = @_;
+    If ParseComparisonOp_W4 is equal to 1;
+        Add 1 to TokPos;
+        Call IsWord "to";
+        ParseComparisonOp_W4b = @_;
+        If ParseComparisonOp_W4b is equal to 1;
+            Add 1 to TokPos;
+        Done.
+        Return "eq";
+    Done.
+
+    Call IsWord "not";
+    ParseComparisonOp_W5 = @_;
+    If ParseComparisonOp_W5 is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectWord "equal";
+        Call IsWord "to";
+        ParseComparisonOp_W5b = @_;
+        If ParseComparisonOp_W5b is equal to 1;
+            Add 1 to TokPos;
+        Done.
+        Return "ne";
+    Done.
+
+    Call IsWord "at";
+    ParseComparisonOp_W6 = @_;
+    If ParseComparisonOp_W6 is equal to 1;
+        Add 1 to TokPos;
+        Call IsWord "least";
+        ParseComparisonOp_W6a = @_;
+        If ParseComparisonOp_W6a is equal to 1;
+            Add 1 to TokPos;
+            Return "ge";
+        Done.
+        Call IsWord "most";
+        ParseComparisonOp_W6b = @_;
+        If ParseComparisonOp_W6b is equal to 1;
+            Add 1 to TokPos;
+            Return "le";
+        Done.
+    Done.
+
+    Call RecordDiag "E2004", "expected a comparison operator";
+    Return "";
+Done.
+
+Action ParseComparison;
+    Call ParseExpr;
+    Call IsWord "is";
+    ParseComparison_HasIs = @_;
+    If ParseComparison_HasIs is equal to 1;
+        Add 1 to TokPos;
+    Done.
+
+    Call CurKind;
+    ParseComparison_K = @_;
+    Call CurValue;
+    ParseComparison_V = @_;
+    ParseComparison_IsClassWord = 0;
+    If ParseComparison_K is equal to "IDENT";
+        If ParseComparison_V is equal to "digit";
+            ParseComparison_IsClassWord = 1;
+        Done.
+        If ParseComparison_V is equal to "alpha";
+            ParseComparison_IsClassWord = 1;
+        Done.
+        If ParseComparison_V is equal to "space";
+            ParseComparison_IsClassWord = 1;
+        Done.
+        If ParseComparison_V is equal to "alnum";
+            ParseComparison_IsClassWord = 1;
+        Done.
+        If ParseComparison_V is equal to "quote";
+            ParseComparison_IsClassWord = 1;
+        Done.
+    Done.
+
+    If ParseComparison_IsClassWord is equal to 1;
+        Add 1 to TokPos;
+        Append "ISCLASS" to AstOut;
+        Append ParseComparison_V to AstOut;
+    Else;
+        Call ParseComparisonOp;
+        ParseComparison_Op = @_;
+        Call ParseExpr;
+        Append "CMP" to AstOut;
+        Append ParseComparison_Op to AstOut;
+    Done.
+Done.
+
+Action ParseAndCondition;
+    Call ParseComparison;
+    Call ParseAndConditionTail;
+Done.
+
+Action ParseAndConditionTail;
+    Call IsWord "and";
+    ParseAndConditionTail_IsAnd = @_;
+    If ParseAndConditionTail_IsAnd is equal to 1;
+        Add 1 to TokPos;
+        Call ParseComparison;
+        Append "AND" to AstOut;
+        If ParseFailed is equal to 0;
+            Call ParseAndConditionTail;
+        Done.
+    Done.
+Done.
+
+Action ParseCondition;
+    Call ParseAndCondition;
+    Call ParseConditionTail;
+Done.
+
+Action ParseConditionTail;
+    Call IsWord "or";
+    ParseConditionTail_IsOr = @_;
+    If ParseConditionTail_IsOr is equal to 1;
+        Add 1 to TokPos;
+        Call ParseAndCondition;
+        Append "OR" to AstOut;
+        If ParseFailed is equal to 0;
+            Call ParseConditionTail;
+        Done.
+    Done.
+Done.
+
+# --- parameter lists (Action) and argument lists (Call): both accept the
+# canonical paren-less form and the legacy parenthesized form, matching
+# compiler/parser.py::_param_list / _arg_list (ADR-0002). --------------
+
+Action ParseOneParam;
+    Call ExpectIdent;
+    ParseOneParam_Name = @_;
+    ParseOneParam_Typ = "NONE";
+    Call CurKind;
+    ParseOneParam_K = @_;
+    If ParseOneParam_K is equal to "COLON";
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseOneParam_Typ = @_;
+    Done.
+    Append ParseOneParam_Name to AstOut;
+    Append ParseOneParam_Typ to AstOut;
+Done.
+
+Action ParseParamsTail;
+    Call CurKind;
+    ParseParamsTail_K = @_;
+    If ParseParamsTail_K is equal to "COMMA";
+        Add 1 to TokPos;
+        Call ParseOneParam;
+        If ParseFailed is equal to 0;
+            Call ParseParamsTail;
+        Done.
+    Done.
+Done.
+
+Action ParseParams;
+    Call CurKind;
+    ParseParams_K = @_;
+    If ParseParams_K is equal to "LPAREN";
+        Add 1 to TokPos;
+        Call CurKind;
+        ParseParams_K2 = @_;
+        If ParseParams_K2 is equal to "RPAREN";
+            Add 1 to TokPos;
+        Else;
+            Call ParseOneParam;
+            Call ParseParamsTail;
+            Call ExpectKind "RPAREN";
+        Done.
+    Else;
+        Call CurKind;
+        ParseParams_K4 = @_;
+        If ParseParams_K4 is equal to "SEMI";
+            ParseParams_NoOp = 0;
+        Else;
+            Call ParseOneParam;
+            Call ParseParamsTail;
+        Done.
+    Done.
+    Append "END_PARAMS" to AstOut;
+Done.
+
+Action ParseArgsTail;
+    Call CurKind;
+    ParseArgsTail_K = @_;
+    If ParseArgsTail_K is equal to "COMMA";
+        Add 1 to TokPos;
+        Call ParseExpr;
+        If ParseFailed is equal to 0;
+            Call ParseArgsTail;
+        Done.
+    Done.
+Done.
+
+Action ParseArgs;
+    Call CurKind;
+    ParseArgs_K = @_;
+    If ParseArgs_K is equal to "LPAREN";
+        Add 1 to TokPos;
+        Call CurKind;
+        ParseArgs_K2 = @_;
+        If ParseArgs_K2 is equal to "RPAREN";
+            Add 1 to TokPos;
+        Else;
+            Call ParseExpr;
+            Call ParseArgsTail;
+            Call ExpectKind "RPAREN";
+        Done.
+    Else;
+        Call CurKind;
+        ParseArgs_K4 = @_;
+        If ParseArgs_K4 is equal to "SEMI";
+            ParseArgs_NoOp = 0;
+        Else;
+            Call ParseExpr;
+            Call ParseArgsTail;
+        Done.
+    Done.
+    Append "END_ARGS" to AstOut;
+Done.
+
+# --- statements -----------------------------------------------------------
+
+Action IsDeclAhead;
+    Call PeekKind 1;
+    IsDeclAhead_K1 = @_;
+    Call PeekValue 1;
+    IsDeclAhead_V1 = @_;
+    If IsDeclAhead_K1 is equal to "IDENT" and IsDeclAhead_V1 is equal to "is";
+        Call PeekValue 2;
+        IsDeclAhead_V2 = @_;
+        IsDeclAhead_IsCompareWord = 0;
+        If IsDeclAhead_V2 is equal to "greater";
+            IsDeclAhead_IsCompareWord = 1;
+        Done.
+        If IsDeclAhead_V2 is equal to "less";
+            IsDeclAhead_IsCompareWord = 1;
+        Done.
+        If IsDeclAhead_V2 is equal to "equal";
+            IsDeclAhead_IsCompareWord = 1;
+        Done.
+        If IsDeclAhead_V2 is equal to "equals";
+            IsDeclAhead_IsCompareWord = 1;
+        Done.
+        If IsDeclAhead_V2 is equal to "not";
+            IsDeclAhead_IsCompareWord = 1;
+        Done.
+        If IsDeclAhead_IsCompareWord is equal to 1;
+            Return 0;
+        Else;
+            Return 1;
+        Done.
+    Else;
+        Return 0;
+    Done.
+Done.
+
+Action ParseTakeNamesTail;
+    Call IsWord "and";
+    ParseTakeNamesTail_IsAnd = @_;
+    If ParseTakeNamesTail_IsAnd is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseTakeNamesTail_Name = @_;
+        Append ParseTakeNamesTail_Name to AstOut;
+        If ParseFailed is equal to 0;
+            Call ParseTakeNamesTail;
+        Done.
+    Done.
+Done.
+
+Action ParseValueListTail;
+    Call CurKind;
+    ParseValueListTail_K = @_;
+    If ParseValueListTail_K is equal to "COMMA";
+        Add 1 to TokPos;
+        Call ParseExpr;
+        If ParseFailed is equal to 0;
+            Call ParseValueListTail;
+        Done.
+    Done.
+Done.
+
+Action ParseValueList;
+    Call ParseExpr;
+    Call ParseValueListTail;
+    Append "END_VALUES" to AstOut;
+Done.
+
+Action ParseStatement;
+    Call CurKind;
+    ParseStatement_K = @_;
+    Call CurValue;
+    ParseStatement_V = @_;
+
+    If ParseStatement_K is equal to "IDENT";
+        Call IsDeclAhead;
+        ParseStatement_IsDecl = @_;
+        If ParseStatement_IsDecl is equal to 1;
+            Add 1 to TokPos;
+            Add 1 to TokPos;
+            Call ExpectIdent;
+            ParseStatement_Typ = @_;
+            Call ExpectKind "SEMI";
+            Append "DECL" to AstOut;
+            Append ParseStatement_V to AstOut;
+            Append ParseStatement_Typ to AstOut;
+            Return 1;
+        Done.
+
+        Call PeekKind 1;
+        ParseStatement_NextK = @_;
+
+        If ParseStatement_NextK is equal to "COLON";
+            Add 1 to TokPos;
+            Add 1 to TokPos;
+            Call ExpectIdent;
+            ParseStatement_Typ2 = @_;
+            Call ExpectKind "EQUAL";
+            Append "ASSIGN" to AstOut;
+            Append ParseStatement_V to AstOut;
+            Append ParseStatement_Typ2 to AstOut;
+            Call ParseValueList;
+            Call ExpectKind "SEMI";
+            Return 1;
+        Done.
+
+        If ParseStatement_NextK is equal to "EQUAL";
+            Add 1 to TokPos;
+            Add 1 to TokPos;
+            Append "ASSIGN" to AstOut;
+            Append ParseStatement_V to AstOut;
+            Append "NONE" to AstOut;
+            Call ParseValueList;
+            Call ExpectKind "SEMI";
+            Return 1;
+        Done.
+    Done.
+
+    Call IsWord "Print";
+    ParseStatement_IsPrint = @_;
+    If ParseStatement_IsPrint is equal to 1;
+        Add 1 to TokPos;
+        Append "PRINT" to AstOut;
+        Call ParseExpr;
+        Call ExpectKind "DOT";
+        Return 1;
+    Done.
+
+    Call IsWord "Add";
+    ParseStatement_IsAdd = @_;
+    If ParseStatement_IsAdd is equal to 1;
+        Add 1 to TokPos;
+        Append "ADD" to AstOut;
+        Call ParseExpr;
+        Call ExpectWord "to";
+        Call ExpectIdent;
+        ParseStatement_Tgt = @_;
+        Append ParseStatement_Tgt to AstOut;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Update";
+    ParseStatement_IsUpdate = @_;
+    If ParseStatement_IsUpdate is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_UName = @_;
+        Call ExpectWord "to";
+        Append "UPDATE" to AstOut;
+        Append ParseStatement_UName to AstOut;
+        Call ParseExpr;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Take";
+    ParseStatement_IsTake = @_;
+    If ParseStatement_IsTake is equal to 1;
+        Add 1 to TokPos;
+        Call IsWord "user";
+        ParseStatement_HasUser = @_;
+        If ParseStatement_HasUser is equal to 1;
+            Add 1 to TokPos;
+        Done.
+        Call ExpectIdent;
+        ParseStatement_TakeName1 = @_;
+        Append "INPUT" to AstOut;
+        Append ParseStatement_TakeName1 to AstOut;
+        Call ParseTakeNamesTail;
+        Append "END_NAMES" to AstOut;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Get";
+    ParseStatement_IsGet = @_;
+    If ParseStatement_IsGet is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_GetTarget = @_;
+        Append "GET" to AstOut;
+        Append ParseStatement_GetTarget to AstOut;
+        Call CurKind;
+        ParseStatement_GetK = @_;
+        If ParseStatement_GetK is equal to "SEMI";
+            Append "0" to AstOut;
+        Else;
+            Append "1" to AstOut;
+            Call ParseExpr;
+        Done.
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Length";
+    ParseStatement_IsLength = @_;
+    If ParseStatement_IsLength is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_LengthTarget = @_;
+        Append "LENGTH" to AstOut;
+        Append ParseStatement_LengthTarget to AstOut;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Set";
+    ParseStatement_IsSet = @_;
+    If ParseStatement_IsSet is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_SetTarget = @_;
+        Append "SET" to AstOut;
+        Append ParseStatement_SetTarget to AstOut;
+        Call ParseExpr;
+        Call ExpectWord "to";
+        Call ParseExpr;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Append";
+    ParseStatement_IsAppend = @_;
+    If ParseStatement_IsAppend is equal to 1;
+        Add 1 to TokPos;
+        Append "APPEND" to AstOut;
+        Call ParseExpr;
+        Call ExpectWord "to";
+        Call ExpectIdent;
+        ParseStatement_AppendTarget = @_;
+        Append ParseStatement_AppendTarget to AstOut;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Compare";
+    ParseStatement_IsCompare = @_;
+    If ParseStatement_IsCompare is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_CompareName = @_;
+        Append "COMPARE" to AstOut;
+        Append ParseStatement_CompareName to AstOut;
+        Call ParseCondition;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Entered";
+    ParseStatement_IsEntered = @_;
+    If ParseStatement_IsEntered is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_EnteredName = @_;
+        Call ExpectWord "is";
+        Call ParseComparisonOp;
+        ParseStatement_EnteredOp = @_;
+        Append "IF" to AstOut;
+        Append "VAR" to AstOut;
+        Append "0" to AstOut;
+        Append ParseStatement_EnteredName to AstOut;
+        Append "END_EXPR" to AstOut;
+        Call ParseExpr;
+        Append "CMP" to AstOut;
+        Append ParseStatement_EnteredOp to AstOut;
+        Call ExpectWord "then";
+        Call ExpectWord "Print";
+        Append "PRINT" to AstOut;
+        Call ParseExpr;
+        Append "END_BLOCK" to AstOut;
+        Call ExpectWord "otherwise";
+        Call ExpectWord "Print";
+        Append "PRINT" to AstOut;
+        Call ParseExpr;
+        Append "END_BLOCK" to AstOut;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Return";
+    ParseStatement_IsReturn = @_;
+    If ParseStatement_IsReturn is equal to 1;
+        Add 1 to TokPos;
+        Append "RETURN" to AstOut;
+        Call ParseExpr;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Call";
+    ParseStatement_IsCall = @_;
+    If ParseStatement_IsCall is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_CName = @_;
+        Append "CALL" to AstOut;
+        Append ParseStatement_CName to AstOut;
+        Call ParseArgs;
+        Call ExpectKind "SEMI";
+        Return 1;
+    Done.
+
+    Call IsWord "Action";
+    ParseStatement_IsAction = @_;
+    If ParseStatement_IsAction is equal to 1;
+        Add 1 to TokPos;
+        Call ExpectIdent;
+        ParseStatement_AName = @_;
+        Append "ACTION" to AstOut;
+        Append ParseStatement_AName to AstOut;
+        Call ParseParams;
+        Call ExpectKind "SEMI";
+        Call ParseBlock "Done", "";
+        Call ExpectWord "Done";
+        Call ExpectKind "DOT";
+        Return 1;
+    Done.
+
+    Call IsWord "If";
+    ParseStatement_IsIf = @_;
+    If ParseStatement_IsIf is equal to 1;
+        Add 1 to TokPos;
+        Append "IF" to AstOut;
+        Call ParseCondition;
+        Call ExpectKind "SEMI";
+        Call ParseBlock "Else", "Done";
+        Call IsWord "Else";
+        ParseStatement_HasElse = @_;
+        If ParseStatement_HasElse is equal to 1;
+            Add 1 to TokPos;
+            Call ExpectKind "SEMI";
+            Call ParseBlock "Done", "";
+        Else;
+            Append "END_BLOCK" to AstOut;
+        Done.
+        Call ExpectWord "Done";
+        Call ExpectKind "DOT";
+        Return 1;
+    Done.
+
+    Call IsWord "Repeat";
+    ParseStatement_IsRepeat = @_;
+    If ParseStatement_IsRepeat is equal to 1;
+        Add 1 to TokPos;
+        Append "REPEAT" to AstOut;
+        Call ParseExpr;
+        Call ExpectKind "SEMI";
+        Call ParseBlock "Done", "";
+        Call ExpectWord "Done";
+        Call ExpectKind "DOT";
+        Return 1;
+    Done.
+
+    Call IsWord "While";
+    ParseStatement_IsWhile = @_;
+    If ParseStatement_IsWhile is equal to 1;
+        Add 1 to TokPos;
+        Append "WHILE" to AstOut;
+        Call ParseCondition;
+        Call ExpectKind "SEMI";
+        Call ParseBlock "Done", "";
+        Call ExpectWord "Done";
+        Call ExpectKind "DOT";
+        Return 1;
+    Done.
+
+    Call CurValue;
+    ParseStatement_BadV = @_;
+    ParseStatement_Msg = "unknown statement starting with " + ParseStatement_BadV;
+    Call RecordDiag "E2001", ParseStatement_Msg;
+    Add 1 to TokPos;
+    Return 0;
+Done.
+
+Action ParseBlockLoop Stop1, Stop2;
+    Call CurKind;
+    ParseBlockLoop_K = @_;
+    If ParseBlockLoop_K is equal to "EOF";
+        ParseBlockLoop_NoOp = 0;
+    Else;
+        Call CurValue;
+        ParseBlockLoop_V = @_;
+        ParseBlockLoop_IsStop = 0;
+        If ParseBlockLoop_K is equal to "IDENT";
+            If ParseBlockLoop_V is equal to Stop1;
+                ParseBlockLoop_IsStop = 1;
+            Done.
+            If ParseBlockLoop_V is equal to Stop2;
+                ParseBlockLoop_IsStop = 1;
+            Done.
+        Done.
+        If ParseBlockLoop_IsStop is equal to 1;
+            ParseBlockLoop_NoOp2 = 0;
+        Else;
+            Call ParseStatement;
+            If ParseFailed is equal to 0;
+                Call ParseBlockLoop Stop1, Stop2;
+            Done.
+        Done.
+    Done.
+Done.
+
+Action ParseBlock Stop1, Stop2;
+    Call ParseBlockLoop Stop1, Stop2;
+    Append "END_BLOCK" to AstOut;
+Done.
+
+Action ParseProgram;
+    Append "PROGRAM" to AstOut;
+    Call ParseBlock "", "";
+Done.
+
+Call ParseProgram;
+
+# Stage 8 foundation: the first Kuro-authored lowering pass.
+#
+# This pass consumes the flat AstOut contract produced by self_host/parser.kuro
+# and emits a small, stack-oriented IR token stream in IROut. It intentionally
+# starts with a complete basic-data path (literal/variable values, assignment,
+# and Print),
+# because the important milestone here is that lowering logic itself now
+# exists in Kuro rather than being invented only by compiler/lower.py.
+#
+# The standalone fixture is removed by the differential test harness, just as
+# self_host/parser.kuro's standalone token fixture is.
+
+IROut is Text;
+LowerPos = 1;
+LowerFailed = 0;
+
+Action LowerAtom;
+    Get AstOut LowerPos;
+    LowerAtom_Tag = @_;
+
+    If LowerAtom_Tag is equal to "LIT_STR" or LowerAtom_Tag is equal to "LIT_INT" or LowerAtom_Tag is equal to "LIT_DEC";
+        LowerAtom_VPos = LowerPos + 1;
+        Get AstOut LowerAtom_VPos;
+        Append "CONST" to IROut;
+        Append @_ to IROut;
+        LowerPos = LowerPos + 2;
+    Else;
+        If LowerAtom_Tag is equal to "VAR";
+            LowerAtom_NamePos = LowerPos + 2;
+            Get AstOut LowerAtom_NamePos;
+            Append "LOADVAR" to IROut;
+            Append @_ to IROut;
+            LowerPos = LowerPos + 3;
+        Else;
+            LowerFailed = 1;
+        Done.
+    Done.
+Done.
+
+Action LowerValue;
+    Call LowerAtom;
+    If LowerFailed is equal to 0;
+        Call LowerValueTail;
+    Done.
+Done.
+
+# AstOut expressions use postfix form. Once the first atom is lowered, every
+# following expression token is either another atom or BIN <operator>. A
+# statement/list terminator is not an expression token, so it naturally stops
+# this recursive walk while leaving LowerPos at that terminator for the caller.
+Action LowerValueTail;
+    Get AstOut LowerPos;
+    LowerValueTail_Tag = @_;
+    If LowerValueTail_Tag is equal to "LIT_STR" or LowerValueTail_Tag is equal to "LIT_INT" or LowerValueTail_Tag is equal to "LIT_DEC";
+        LowerValueTail_VPos = LowerPos + 1;
+        Get AstOut LowerValueTail_VPos;
+        Append "CONST" to IROut;
+        Append @_ to IROut;
+        LowerPos = LowerPos + 2;
+        Call LowerValueTail;
+    Else;
+        If LowerValueTail_Tag is equal to "VAR";
+            LowerValueTail_NamePos = LowerPos + 2;
+            Get AstOut LowerValueTail_NamePos;
+            Append "LOADVAR" to IROut;
+            Append @_ to IROut;
+            LowerPos = LowerPos + 3;
+            Call LowerValueTail;
+        Else;
+            If LowerValueTail_Tag is equal to "BIN";
+                LowerValueTail_OpPos = LowerPos + 1;
+                Get AstOut LowerValueTail_OpPos;
+                Append "BINOP" to IROut;
+                Append @_ to IROut;
+                LowerPos = LowerPos + 2;
+                Call LowerValueTail;
+            Done.
+        Done.
+    Done.
+Done.
+
+# Conditions are postfix too. LowerValue consumes the complete operand
+# sequence up to CMP; this action emits the comparison and then recursively
+# handles any following condition plus AND/OR operator.
+Action LowerCondition;
+    Call LowerValue;
+    Add 1 to LowerPos;
+    Get AstOut LowerPos;
+    LowerCondition_Tag = @_;
+    If LowerCondition_Tag is equal to "CMP";
+        LowerCondition_OpPos = LowerPos + 1;
+        Get AstOut LowerCondition_OpPos;
+        Append "CMP" to IROut;
+        Append @_ to IROut;
+            LowerPos = LowerPos + 2;
+            Call LowerConditionTail;
+    Else;
+        If LowerCondition_Tag is equal to "ISCLASS";
+            LowerCondition_ClassPos = LowerPos + 1;
+            Get AstOut LowerCondition_ClassPos;
+            Append "ISCLASS" to IROut;
+            Append @_ to IROut;
+            LowerPos = LowerPos + 2;
+            Call LowerConditionTail;
+        Else;
+            # A comparison has a second, independently-bounded expression
+            # before its CMP marker.
+            Call LowerValue;
+            Add 1 to LowerPos;
+            Get AstOut LowerPos;
+            LowerCondition_SecondTag = @_;
+            If LowerCondition_SecondTag is equal to "CMP";
+                LowerCondition_OpPos = LowerPos + 1;
+                Get AstOut LowerCondition_OpPos;
+                Append "CMP" to IROut;
+                Append @_ to IROut;
+                LowerPos = LowerPos + 2;
+                Call LowerConditionTail;
+            Else;
+                LowerFailed = 1;
+            Done.
+        Done.
+    Done.
+Done.
+
+Action LowerConditionTail;
+    Get AstOut LowerPos;
+    LowerConditionTail_Tag = @_;
+    If LowerConditionTail_Tag is equal to "LIT_STR" or LowerConditionTail_Tag is equal to "LIT_INT" or LowerConditionTail_Tag is equal to "LIT_DEC" or LowerConditionTail_Tag is equal to "VAR";
+        Call LowerCondition;
+        If LowerFailed is equal to 0;
+            Get AstOut LowerPos;
+            LowerConditionTail_Op = @_;
+            If LowerConditionTail_Op is equal to "AND" or LowerConditionTail_Op is equal to "OR";
+                Append "BOOL" to IROut;
+                Append LowerConditionTail_Op to IROut;
+                LowerPos = LowerPos + 1;
+                Call LowerConditionTail;
+            Done.
+        Done.
+    Done.
+Done.
+
+Action LowerPrintExpr;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Append "PRINT" to IROut;
+    Done.
+Done.
+
+Action LowerAssign;
+    LowerAssign_NamePos = LowerPos + 1;
+    Get AstOut LowerAssign_NamePos;
+    LowerAssign_Name = @_;
+    LowerPos = LowerPos + 3;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Call LowerAssignTail;
+    Done.
+    If LowerFailed is equal to 0;
+        Append "STORE_LIST" to IROut;
+        Append LowerAssign_Name to IROut;
+    Done.
+Done.
+
+Action LowerAssignTail;
+    Get AstOut LowerPos;
+    LowerAssignTail_Tag = @_;
+    If LowerAssignTail_Tag is equal to "END_VALUES";
+        Add 1 to LowerPos;
+    Else;
+        Call LowerValue;
+        If LowerFailed is equal to 0;
+            Add 1 to LowerPos;
+            Call LowerAssignTail;
+        Done.
+    Done.
+Done.
+
+Action LowerUpdate;
+    LowerUpdate_NamePos = LowerPos + 1;
+    Get AstOut LowerUpdate_NamePos;
+    LowerUpdate_Name = @_;
+    LowerPos = LowerPos + 2;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Append "UPDATE" to IROut;
+        Append LowerUpdate_Name to IROut;
+    Done.
+Done.
+
+Action LowerAdd;
+    Add 1 to LowerPos;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Get AstOut LowerPos;
+        LowerAdd_Name = @_;
+        Append "ADD" to IROut;
+        Append LowerAdd_Name to IROut;
+        Add 1 to LowerPos;
+    Done.
+Done.
+
+Action LowerAppend;
+    Add 1 to LowerPos;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Get AstOut LowerPos;
+        LowerAppend_Name = @_;
+        Append "APPEND" to IROut;
+        Append LowerAppend_Name to IROut;
+        Add 1 to LowerPos;
+    Done.
+Done.
+
+Action LowerInputFrom Pos;
+    Get AstOut Pos;
+    LowerInput_Name = @_;
+    If LowerInput_Name is equal to "END_NAMES";
+        Return Pos + 1;
+    Else;
+        Append "INPUT" to IROut;
+        Append LowerInput_Name to IROut;
+        LowerInput_Next = Pos + 1;
+        Call LowerInputFrom LowerInput_Next;
+        Return @_;
+    Done.
+Done.
+
+Action LowerGet;
+    LowerGet_TargetPos = LowerPos + 1;
+    Get AstOut LowerGet_TargetPos;
+    LowerGet_Target = @_;
+    LowerGet_FlagPos = LowerPos + 2;
+    Get AstOut LowerGet_FlagPos;
+    LowerGet_Flag = @_;
+    LowerPos = LowerPos + 3;
+    If LowerGet_Flag is equal to "1";
+        Call LowerValue;
+        Add 1 to LowerPos;
+        Append "GET" to IROut;
+        Append LowerGet_Target to IROut;
+        Append "1" to IROut;
+    Else;
+        Append "GET" to IROut;
+        Append LowerGet_Target to IROut;
+        Append "0" to IROut;
+    Done.
+Done.
+
+Action LowerLength;
+    LowerLength_TargetPos = LowerPos + 1;
+    Get AstOut LowerLength_TargetPos;
+    Append "LENGTH" to IROut;
+    Append @_ to IROut;
+    LowerPos = LowerPos + 2;
+Done.
+
+Action LowerDecl;
+    LowerDecl_NamePos = LowerPos + 1;
+    Get AstOut LowerDecl_NamePos;
+    LowerDecl_Name = @_;
+    LowerDecl_TypePos = LowerPos + 2;
+    Get AstOut LowerDecl_TypePos;
+    Append "DECLTYPE" to IROut;
+    Append LowerDecl_Name to IROut;
+    Append @_ to IROut;
+    LowerPos = LowerPos + 3;
+Done.
+
+Action LowerSet;
+    LowerSet_TargetPos = LowerPos + 1;
+    Get AstOut LowerSet_TargetPos;
+    LowerSet_Target = @_;
+    LowerPos = LowerPos + 2;
+    Call LowerValue;
+    Add 1 to LowerPos;
+    Call LowerValue;
+    Add 1 to LowerPos;
+    Append "SET" to IROut;
+    Append LowerSet_Target to IROut;
+Done.
+
+Action LowerCompare;
+    LowerCompare_NamePos = LowerPos + 1;
+    Get AstOut LowerCompare_NamePos;
+    LowerCompare_Name = @_;
+    LowerPos = LowerPos + 2;
+    Call LowerCondition;
+    Append "STORE_LIST" to IROut;
+    Append LowerCompare_Name to IROut;
+Done.
+
+Action LowerCallArgs;
+    Get AstOut LowerPos;
+    LowerCallArgs_Tag = @_;
+    If LowerCallArgs_Tag is equal to "END_ARGS";
+        Add 1 to LowerPos;
+    Else;
+        Call LowerValue;
+        Add 1 to LowerPos;
+        If LowerFailed is equal to 0;
+            Call LowerCallArgs;
+        Done.
+    Done.
+Done.
+
+Action LowerReturn;
+    Add 1 to LowerPos;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Append "RETURN" to IROut;
+    Done.
+Done.
+
+Action LowerCall;
+    LowerCall_NamePos = LowerPos + 1;
+    Get AstOut LowerCall_NamePos;
+    LowerCall_Name = @_;
+    LowerPos = LowerPos + 2;
+    Append "CALL_BEGIN" to IROut;
+    Append LowerCall_Name to IROut;
+    Call LowerCallArgs;
+    Append "CALL_END" to IROut;
+Done.
+
+Action LowerParams;
+    Get AstOut LowerPos;
+    LowerParams_Tag = @_;
+    If LowerParams_Tag is equal to "END_PARAMS";
+        Add 1 to LowerPos;
+    Else;
+        LowerParams_TypPos = LowerPos + 1;
+        Get AstOut LowerParams_TypPos;
+        LowerParams_Typ = @_;
+        Append "PARAM" to IROut;
+        Get AstOut LowerPos;
+        Append @_ to IROut;
+        Append LowerParams_Typ to IROut;
+        LowerPos = LowerPos + 2;
+        Call LowerParams;
+    Done.
+Done.
+
+Action LowerAction;
+    LowerAction_NamePos = LowerPos + 1;
+    Get AstOut LowerAction_NamePos;
+    LowerAction_Name = @_;
+    LowerPos = LowerPos + 2;
+    Append "FUNC_BEGIN" to IROut;
+    Append LowerAction_Name to IROut;
+    Call LowerParams;
+    Call LowerBlock;
+    Add 1 to LowerPos;
+    Append "FUNC_END" to IROut;
+Done.
+
+Action LowerIf;
+    Add 1 to LowerPos;
+    Call LowerCondition;
+    If LowerFailed is equal to 0;
+        Append "IF_BEGIN" to IROut;
+        Call LowerBlock;
+        Add 1 to LowerPos;
+        Append "ELSE_BEGIN" to IROut;
+        Call LowerBlock;
+        Add 1 to LowerPos;
+        Append "IF_END" to IROut;
+    Done.
+Done.
+
+Action LowerRepeat;
+    Add 1 to LowerPos;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Append "REPEAT_BEGIN" to IROut;
+        Call LowerBlock;
+        Add 1 to LowerPos;
+        Append "REPEAT_END" to IROut;
+    Done.
+Done.
+
+Action LowerWhile;
+    Add 1 to LowerPos;
+    Append "WHILE_BEGIN" to IROut;
+    Call LowerCondition;
+    If LowerFailed is equal to 0;
+        Append "WHILE_TEST" to IROut;
+        Call LowerBlock;
+        Add 1 to LowerPos;
+        Append "WHILE_END" to IROut;
+    Done.
+Done.
+
+Action LowerBlock;
+    Get AstOut LowerPos;
+    LowerBlock_Tag = @_;
+    If LowerBlock_Tag is equal to "END_BLOCK";
+        Return 1;
+    Else;
+        If LowerBlock_Tag is equal to "DECL";
+            Call LowerDecl;
+        Else;
+        If LowerBlock_Tag is equal to "PRINT";
+            Add 1 to LowerPos;
+            Call LowerPrintExpr;
+        Else;
+            If LowerBlock_Tag is equal to "ASSIGN";
+                Call LowerAssign;
+            Else;
+                If LowerBlock_Tag is equal to "UPDATE";
+                    Call LowerUpdate;
+                Else;
+                    If LowerBlock_Tag is equal to "ADD";
+                        Call LowerAdd;
+                    Else;
+                        If LowerBlock_Tag is equal to "APPEND";
+                            Call LowerAppend;
+                        Else;
+                            If LowerBlock_Tag is equal to "IF";
+                                Call LowerIf;
+                            Else;
+                                If LowerBlock_Tag is equal to "REPEAT";
+                                    Call LowerRepeat;
+                                Else;
+                                    If LowerBlock_Tag is equal to "WHILE";
+                                        Call LowerWhile;
+                                    Else;
+                                        If LowerBlock_Tag is equal to "RETURN";
+                                            Call LowerReturn;
+                                        Else;
+                                            If LowerBlock_Tag is equal to "CALL";
+                                                Call LowerCall;
+                                            Else;
+                                        If LowerBlock_Tag is equal to "ACTION";
+                                                    Call LowerAction;
+                                                Else;
+                                                    If LowerBlock_Tag is equal to "INPUT";
+                                                        Add 1 to LowerPos;
+                                                        Call LowerInputFrom LowerPos;
+                                                        LowerPos = @_;
+                                                    Else;
+                                                        If LowerBlock_Tag is equal to "GET";
+                                                            Call LowerGet;
+                                                        Else;
+                                                            If LowerBlock_Tag is equal to "LENGTH";
+                                                                Call LowerLength;
+                                                            Else;
+                                                                If LowerBlock_Tag is equal to "SET";
+                                                                    Call LowerSet;
+                                                                Else;
+                                                                    If LowerBlock_Tag is equal to "COMPARE";
+                                                                        Call LowerCompare;
+                                                                    Else;
+                                                                        LowerFailed = 1;
+                                                                    Done.
+                                                                Done.
+                                                            Done.
+                                                        Done.
+                                                    Done.
+                                                Done.
+                                            Done.
+                                        Done.
+                                    Done.
+                                Done.
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+        Done.
+        If LowerFailed is equal to 0;
+            Call LowerBlock;
+        Done.
+    Done.
+Done.
+
+Call LowerBlock;
+
+# Stage 8 bytecode encoder, written in Kuro.
+# Consumes IROut from self_host/lower.kuro and emits BytecodeOut using the
+# opcode contract in docs/architecture/bytecode.md.
+
+
+BytecodeOut is Text;
+BytecodePos = 0;
+BytecodeFailed = 0;
+
+Action BytecodeConsume OperandCount;
+    If OperandCount is greater than 0;
+        Get IROut BytecodePos;
+        Append @_ to BytecodeOut;
+        Add 1 to BytecodePos;
+        BytecodeConsume_Next = OperandCount - 1;
+        Call BytecodeConsume BytecodeConsume_Next;
+    Done.
+Done.
+
+Action BytecodeStep;
+    Length IROut;
+    BytecodeLen = @_;
+    While BytecodePos is less than BytecodeLen and BytecodeFailed is equal to 0;
+        Get IROut BytecodePos;
+        BytecodeStep_Op = @_;
+        Append "BC_" + BytecodeStep_Op to BytecodeOut;
+        Add 1 to BytecodePos;
+
+        If BytecodeStep_Op is equal to "CONST" or BytecodeStep_Op is equal to "LOADVAR" or BytecodeStep_Op is equal to "STORE_LIST" or BytecodeStep_Op is equal to "UPDATE" or BytecodeStep_Op is equal to "ADD" or BytecodeStep_Op is equal to "APPEND" or BytecodeStep_Op is equal to "FUNC_BEGIN" or BytecodeStep_Op is equal to "CALL_BEGIN" or BytecodeStep_Op is equal to "BINOP" or BytecodeStep_Op is equal to "CMP" or BytecodeStep_Op is equal to "BOOL" or BytecodeStep_Op is equal to "ISCLASS" or BytecodeStep_Op is equal to "LENGTH" or BytecodeStep_Op is equal to "SET" or BytecodeStep_Op is equal to "INPUT";
+            Call BytecodeConsume 1;
+        Else;
+            If BytecodeStep_Op is equal to "GET";
+                Call BytecodeConsume 2;
+            Else;
+            If BytecodeStep_Op is equal to "PARAM" or BytecodeStep_Op is equal to "DECLTYPE";
+                Call BytecodeConsume 2;
+            Else;
+            If BytecodeStep_Op is equal to "PRINT" or BytecodeStep_Op is equal to "RETURN" or BytecodeStep_Op is equal to "IF_BEGIN" or BytecodeStep_Op is equal to "ELSE_BEGIN" or BytecodeStep_Op is equal to "IF_END" or BytecodeStep_Op is equal to "REPEAT_BEGIN" or BytecodeStep_Op is equal to "REPEAT_END" or BytecodeStep_Op is equal to "WHILE_BEGIN" or BytecodeStep_Op is equal to "WHILE_TEST" or BytecodeStep_Op is equal to "WHILE_END" or BytecodeStep_Op is equal to "FUNC_END" or BytecodeStep_Op is equal to "CALL_END";
+                Else;
+                    BytecodeFailed = 1;
+                Done.
+            Done.
+        Done.
+        Done.
+    Done.
+Done.
+
+Call BytecodeStep;
+
+# Stage 8 Kuro compiler driver.
+#
+# The driver is intentionally small because each compiler stage is already
+# executable Kuro. A build composition places lexer.kuro, parser.kuro,
+# lower.kuro, bytecode.kuro, and this file in that order. This file owns the
+# pipeline gate and publishes one final artifact for the host or a future
+# Kuro build command to consume.
+
+CompilerFailed = 0;
+CompilerOutput is Text;
+CompilerInstructionCount = 0;
+
+Action CompilerRun;
+    If ParseFailed is not equal to 0;
+        CompilerFailed = 1;
+    Done.
+    If LowerFailed is not equal to 0;
+        CompilerFailed = 1;
+    Done.
+    If BytecodeFailed is not equal to 0;
+        CompilerFailed = 1;
+    Done.
+    If CompilerFailed is equal to 0;
+        Length BytecodeOut;
+        CompilerInstructionCount = @_;
+        CompilerOutput = BytecodeOut;
+    Done.
+Done.
+
+Call CompilerRun;
+
+# Native compiler artifact publisher, authored in Kuro.
+# Escapes empty values, control characters, and backslashes in the line stream.
+
+NativeEscape = "\\";
+NativeOutputCount = 0;
+
+If CompilerFailed is equal to 0;
+    Length BytecodeOut;
+    NativeOutputCount = @_;
+    If NativeOutputCount is greater than 65536;
+        CompilerFailed = 1;
+    Done.
+Done.
+
+RuntimeExitCode = CompilerFailed;
+If CompilerFailed is equal to 0;
+    Print "kuro.bytecode/1".
+    NativeOutputIndex = 0;
+    While NativeOutputIndex is less than NativeOutputCount;
+        Get BytecodeOut NativeOutputIndex;
+        NativeTokenText = @_;
+        Length NativeTokenText;
+        NativeTokenLength = @_;
+        NativeEncodedToken = "";
+        If NativeTokenLength is equal to 0;
+            NativeEncodedToken = NativeEscape + "e";
+        Else;
+            If NativeTokenText is equal to "kuro.input/1";
+                NativeEncodedToken = NativeEscape + "i";
+                NativeCharacterIndex = NativeTokenLength;
+            Done.
+        Done.
+        NativeCharacterIndex = 0;
+        While NativeCharacterIndex is less than NativeTokenLength;
+            Get NativeTokenText NativeCharacterIndex;
+            NativeCharacterText = @_;
+            If NativeCharacterText is equal to NativeEscape;
+                NativeEncodedToken = NativeEncodedToken + NativeEscape + NativeEscape;
+            Else;
+                If NativeCharacterText is equal to "\n";
+                    NativeEncodedToken = NativeEncodedToken + NativeEscape + "n";
+                Else;
+                    If NativeCharacterText is equal to "\r";
+                        NativeEncodedToken = NativeEncodedToken + NativeEscape + "r";
+                    Else;
+                        If NativeCharacterText is equal to "\t";
+                            NativeEncodedToken = NativeEncodedToken + NativeEscape + "t";
+                        Else;
+                            NativeEncodedToken = NativeEncodedToken + NativeCharacterText;
+                        Done.
+                    Done.
+                Done.
+            Done.
+            Add 1 to NativeCharacterIndex;
+        Done.
+        Print NativeEncodedToken.
+        Add 1 to NativeOutputIndex;
+    Done.
+Else;
+    Print "kuro.compile-error/1".
+Done.

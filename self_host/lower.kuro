@@ -1,0 +1,489 @@
+# Stage 8 foundation: the first Kuro-authored lowering pass.
+#
+# This pass consumes the flat AstOut contract produced by self_host/parser.kuro
+# and emits a small, stack-oriented IR token stream in IROut. It intentionally
+# starts with a complete basic-data path (literal/variable values, assignment,
+# and Print),
+# because the important milestone here is that lowering logic itself now
+# exists in Kuro rather than being invented only by compiler/lower.py.
+#
+# The standalone fixture is removed by the differential test harness, just as
+# self_host/parser.kuro's standalone token fixture is.
+# --- BEGIN_STANDALONE_AST (stripped by the Stage 8 harness) ---
+AstOut = "PROGRAM", "PRINT", "LIT_STR", "hello", "END_BLOCK";
+# --- END_STANDALONE_AST ---
+
+IROut is Text;
+LowerPos = 1;
+LowerFailed = 0;
+
+Action LowerAtom;
+    Get AstOut LowerPos;
+    LowerAtom_Tag = @_;
+
+    If LowerAtom_Tag is equal to "LIT_STR" or LowerAtom_Tag is equal to "LIT_INT" or LowerAtom_Tag is equal to "LIT_DEC";
+        LowerAtom_VPos = LowerPos + 1;
+        Get AstOut LowerAtom_VPos;
+        Append "CONST" to IROut;
+        Append @_ to IROut;
+        LowerPos = LowerPos + 2;
+    Else;
+        If LowerAtom_Tag is equal to "VAR";
+            LowerAtom_NamePos = LowerPos + 2;
+            Get AstOut LowerAtom_NamePos;
+            Append "LOADVAR" to IROut;
+            Append @_ to IROut;
+            LowerPos = LowerPos + 3;
+        Else;
+            LowerFailed = 1;
+        Done.
+    Done.
+Done.
+
+Action LowerValue;
+    Call LowerAtom;
+    If LowerFailed is equal to 0;
+        Call LowerValueTail;
+    Done.
+Done.
+
+# AstOut expressions use postfix form. Once the first atom is lowered, every
+# following expression token is either another atom or BIN <operator>. A
+# statement/list terminator is not an expression token, so it naturally stops
+# this recursive walk while leaving LowerPos at that terminator for the caller.
+Action LowerValueTail;
+    Get AstOut LowerPos;
+    LowerValueTail_Tag = @_;
+    If LowerValueTail_Tag is equal to "LIT_STR" or LowerValueTail_Tag is equal to "LIT_INT" or LowerValueTail_Tag is equal to "LIT_DEC";
+        LowerValueTail_VPos = LowerPos + 1;
+        Get AstOut LowerValueTail_VPos;
+        Append "CONST" to IROut;
+        Append @_ to IROut;
+        LowerPos = LowerPos + 2;
+        Call LowerValueTail;
+    Else;
+        If LowerValueTail_Tag is equal to "VAR";
+            LowerValueTail_NamePos = LowerPos + 2;
+            Get AstOut LowerValueTail_NamePos;
+            Append "LOADVAR" to IROut;
+            Append @_ to IROut;
+            LowerPos = LowerPos + 3;
+            Call LowerValueTail;
+        Else;
+            If LowerValueTail_Tag is equal to "BIN";
+                LowerValueTail_OpPos = LowerPos + 1;
+                Get AstOut LowerValueTail_OpPos;
+                Append "BINOP" to IROut;
+                Append @_ to IROut;
+                LowerPos = LowerPos + 2;
+                Call LowerValueTail;
+            Done.
+        Done.
+    Done.
+Done.
+
+# Conditions are postfix too. LowerValue consumes the complete operand
+# sequence up to CMP; this action emits the comparison and then recursively
+# handles any following condition plus AND/OR operator.
+Action LowerCondition;
+    Call LowerValue;
+    Add 1 to LowerPos;
+    Get AstOut LowerPos;
+    LowerCondition_Tag = @_;
+    If LowerCondition_Tag is equal to "CMP";
+        LowerCondition_OpPos = LowerPos + 1;
+        Get AstOut LowerCondition_OpPos;
+        Append "CMP" to IROut;
+        Append @_ to IROut;
+            LowerPos = LowerPos + 2;
+            Call LowerConditionTail;
+    Else;
+        If LowerCondition_Tag is equal to "ISCLASS";
+            LowerCondition_ClassPos = LowerPos + 1;
+            Get AstOut LowerCondition_ClassPos;
+            Append "ISCLASS" to IROut;
+            Append @_ to IROut;
+            LowerPos = LowerPos + 2;
+            Call LowerConditionTail;
+        Else;
+            # A comparison has a second, independently-bounded expression
+            # before its CMP marker.
+            Call LowerValue;
+            Add 1 to LowerPos;
+            Get AstOut LowerPos;
+            LowerCondition_SecondTag = @_;
+            If LowerCondition_SecondTag is equal to "CMP";
+                LowerCondition_OpPos = LowerPos + 1;
+                Get AstOut LowerCondition_OpPos;
+                Append "CMP" to IROut;
+                Append @_ to IROut;
+                LowerPos = LowerPos + 2;
+                Call LowerConditionTail;
+            Else;
+                LowerFailed = 1;
+            Done.
+        Done.
+    Done.
+Done.
+
+Action LowerConditionTail;
+    Get AstOut LowerPos;
+    LowerConditionTail_Tag = @_;
+    If LowerConditionTail_Tag is equal to "LIT_STR" or LowerConditionTail_Tag is equal to "LIT_INT" or LowerConditionTail_Tag is equal to "LIT_DEC" or LowerConditionTail_Tag is equal to "VAR";
+        Call LowerCondition;
+        If LowerFailed is equal to 0;
+            Get AstOut LowerPos;
+            LowerConditionTail_Op = @_;
+            If LowerConditionTail_Op is equal to "AND" or LowerConditionTail_Op is equal to "OR";
+                Append "BOOL" to IROut;
+                Append LowerConditionTail_Op to IROut;
+                LowerPos = LowerPos + 1;
+                Call LowerConditionTail;
+            Done.
+        Done.
+    Done.
+Done.
+
+Action LowerPrintExpr;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Append "PRINT" to IROut;
+    Done.
+Done.
+
+Action LowerAssign;
+    LowerAssign_NamePos = LowerPos + 1;
+    Get AstOut LowerAssign_NamePos;
+    LowerAssign_Name = @_;
+    LowerPos = LowerPos + 3;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Call LowerAssignTail;
+    Done.
+    If LowerFailed is equal to 0;
+        Append "STORE_LIST" to IROut;
+        Append LowerAssign_Name to IROut;
+    Done.
+Done.
+
+Action LowerAssignTail;
+    Get AstOut LowerPos;
+    LowerAssignTail_Tag = @_;
+    If LowerAssignTail_Tag is equal to "END_VALUES";
+        Add 1 to LowerPos;
+    Else;
+        Call LowerValue;
+        If LowerFailed is equal to 0;
+            Add 1 to LowerPos;
+            Call LowerAssignTail;
+        Done.
+    Done.
+Done.
+
+Action LowerUpdate;
+    LowerUpdate_NamePos = LowerPos + 1;
+    Get AstOut LowerUpdate_NamePos;
+    LowerUpdate_Name = @_;
+    LowerPos = LowerPos + 2;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Append "UPDATE" to IROut;
+        Append LowerUpdate_Name to IROut;
+    Done.
+Done.
+
+Action LowerAdd;
+    Add 1 to LowerPos;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Get AstOut LowerPos;
+        LowerAdd_Name = @_;
+        Append "ADD" to IROut;
+        Append LowerAdd_Name to IROut;
+        Add 1 to LowerPos;
+    Done.
+Done.
+
+Action LowerAppend;
+    Add 1 to LowerPos;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Get AstOut LowerPos;
+        LowerAppend_Name = @_;
+        Append "APPEND" to IROut;
+        Append LowerAppend_Name to IROut;
+        Add 1 to LowerPos;
+    Done.
+Done.
+
+Action LowerInputFrom Pos;
+    Get AstOut Pos;
+    LowerInput_Name = @_;
+    If LowerInput_Name is equal to "END_NAMES";
+        Return Pos + 1;
+    Else;
+        Append "INPUT" to IROut;
+        Append LowerInput_Name to IROut;
+        LowerInput_Next = Pos + 1;
+        Call LowerInputFrom LowerInput_Next;
+        Return @_;
+    Done.
+Done.
+
+Action LowerGet;
+    LowerGet_TargetPos = LowerPos + 1;
+    Get AstOut LowerGet_TargetPos;
+    LowerGet_Target = @_;
+    LowerGet_FlagPos = LowerPos + 2;
+    Get AstOut LowerGet_FlagPos;
+    LowerGet_Flag = @_;
+    LowerPos = LowerPos + 3;
+    If LowerGet_Flag is equal to "1";
+        Call LowerValue;
+        Add 1 to LowerPos;
+        Append "GET" to IROut;
+        Append LowerGet_Target to IROut;
+        Append "1" to IROut;
+    Else;
+        Append "GET" to IROut;
+        Append LowerGet_Target to IROut;
+        Append "0" to IROut;
+    Done.
+Done.
+
+Action LowerLength;
+    LowerLength_TargetPos = LowerPos + 1;
+    Get AstOut LowerLength_TargetPos;
+    Append "LENGTH" to IROut;
+    Append @_ to IROut;
+    LowerPos = LowerPos + 2;
+Done.
+
+Action LowerDecl;
+    LowerDecl_NamePos = LowerPos + 1;
+    Get AstOut LowerDecl_NamePos;
+    LowerDecl_Name = @_;
+    LowerDecl_TypePos = LowerPos + 2;
+    Get AstOut LowerDecl_TypePos;
+    Append "DECLTYPE" to IROut;
+    Append LowerDecl_Name to IROut;
+    Append @_ to IROut;
+    LowerPos = LowerPos + 3;
+Done.
+
+Action LowerSet;
+    LowerSet_TargetPos = LowerPos + 1;
+    Get AstOut LowerSet_TargetPos;
+    LowerSet_Target = @_;
+    LowerPos = LowerPos + 2;
+    Call LowerValue;
+    Add 1 to LowerPos;
+    Call LowerValue;
+    Add 1 to LowerPos;
+    Append "SET" to IROut;
+    Append LowerSet_Target to IROut;
+Done.
+
+Action LowerCompare;
+    LowerCompare_NamePos = LowerPos + 1;
+    Get AstOut LowerCompare_NamePos;
+    LowerCompare_Name = @_;
+    LowerPos = LowerPos + 2;
+    Call LowerCondition;
+    Append "STORE_LIST" to IROut;
+    Append LowerCompare_Name to IROut;
+Done.
+
+Action LowerCallArgs;
+    Get AstOut LowerPos;
+    LowerCallArgs_Tag = @_;
+    If LowerCallArgs_Tag is equal to "END_ARGS";
+        Add 1 to LowerPos;
+    Else;
+        Call LowerValue;
+        Add 1 to LowerPos;
+        If LowerFailed is equal to 0;
+            Call LowerCallArgs;
+        Done.
+    Done.
+Done.
+
+Action LowerReturn;
+    Add 1 to LowerPos;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Append "RETURN" to IROut;
+    Done.
+Done.
+
+Action LowerCall;
+    LowerCall_NamePos = LowerPos + 1;
+    Get AstOut LowerCall_NamePos;
+    LowerCall_Name = @_;
+    LowerPos = LowerPos + 2;
+    Append "CALL_BEGIN" to IROut;
+    Append LowerCall_Name to IROut;
+    Call LowerCallArgs;
+    Append "CALL_END" to IROut;
+Done.
+
+Action LowerParams;
+    Get AstOut LowerPos;
+    LowerParams_Tag = @_;
+    If LowerParams_Tag is equal to "END_PARAMS";
+        Add 1 to LowerPos;
+    Else;
+        LowerParams_TypPos = LowerPos + 1;
+        Get AstOut LowerParams_TypPos;
+        LowerParams_Typ = @_;
+        Append "PARAM" to IROut;
+        Get AstOut LowerPos;
+        Append @_ to IROut;
+        Append LowerParams_Typ to IROut;
+        LowerPos = LowerPos + 2;
+        Call LowerParams;
+    Done.
+Done.
+
+Action LowerAction;
+    LowerAction_NamePos = LowerPos + 1;
+    Get AstOut LowerAction_NamePos;
+    LowerAction_Name = @_;
+    LowerPos = LowerPos + 2;
+    Append "FUNC_BEGIN" to IROut;
+    Append LowerAction_Name to IROut;
+    Call LowerParams;
+    Call LowerBlock;
+    Add 1 to LowerPos;
+    Append "FUNC_END" to IROut;
+Done.
+
+Action LowerIf;
+    Add 1 to LowerPos;
+    Call LowerCondition;
+    If LowerFailed is equal to 0;
+        Append "IF_BEGIN" to IROut;
+        Call LowerBlock;
+        Add 1 to LowerPos;
+        Append "ELSE_BEGIN" to IROut;
+        Call LowerBlock;
+        Add 1 to LowerPos;
+        Append "IF_END" to IROut;
+    Done.
+Done.
+
+Action LowerRepeat;
+    Add 1 to LowerPos;
+    Call LowerValue;
+    If LowerFailed is equal to 0;
+        Add 1 to LowerPos;
+        Append "REPEAT_BEGIN" to IROut;
+        Call LowerBlock;
+        Add 1 to LowerPos;
+        Append "REPEAT_END" to IROut;
+    Done.
+Done.
+
+Action LowerWhile;
+    Add 1 to LowerPos;
+    Append "WHILE_BEGIN" to IROut;
+    Call LowerCondition;
+    If LowerFailed is equal to 0;
+        Append "WHILE_TEST" to IROut;
+        Call LowerBlock;
+        Add 1 to LowerPos;
+        Append "WHILE_END" to IROut;
+    Done.
+Done.
+
+Action LowerBlock;
+    Get AstOut LowerPos;
+    LowerBlock_Tag = @_;
+    If LowerBlock_Tag is equal to "END_BLOCK";
+        Return 1;
+    Else;
+        If LowerBlock_Tag is equal to "DECL";
+            Call LowerDecl;
+        Else;
+        If LowerBlock_Tag is equal to "PRINT";
+            Add 1 to LowerPos;
+            Call LowerPrintExpr;
+        Else;
+            If LowerBlock_Tag is equal to "ASSIGN";
+                Call LowerAssign;
+            Else;
+                If LowerBlock_Tag is equal to "UPDATE";
+                    Call LowerUpdate;
+                Else;
+                    If LowerBlock_Tag is equal to "ADD";
+                        Call LowerAdd;
+                    Else;
+                        If LowerBlock_Tag is equal to "APPEND";
+                            Call LowerAppend;
+                        Else;
+                            If LowerBlock_Tag is equal to "IF";
+                                Call LowerIf;
+                            Else;
+                                If LowerBlock_Tag is equal to "REPEAT";
+                                    Call LowerRepeat;
+                                Else;
+                                    If LowerBlock_Tag is equal to "WHILE";
+                                        Call LowerWhile;
+                                    Else;
+                                        If LowerBlock_Tag is equal to "RETURN";
+                                            Call LowerReturn;
+                                        Else;
+                                            If LowerBlock_Tag is equal to "CALL";
+                                                Call LowerCall;
+                                            Else;
+                                        If LowerBlock_Tag is equal to "ACTION";
+                                                    Call LowerAction;
+                                                Else;
+                                                    If LowerBlock_Tag is equal to "INPUT";
+                                                        Add 1 to LowerPos;
+                                                        Call LowerInputFrom LowerPos;
+                                                        LowerPos = @_;
+                                                    Else;
+                                                        If LowerBlock_Tag is equal to "GET";
+                                                            Call LowerGet;
+                                                        Else;
+                                                            If LowerBlock_Tag is equal to "LENGTH";
+                                                                Call LowerLength;
+                                                            Else;
+                                                                If LowerBlock_Tag is equal to "SET";
+                                                                    Call LowerSet;
+                                                                Else;
+                                                                    If LowerBlock_Tag is equal to "COMPARE";
+                                                                        Call LowerCompare;
+                                                                    Else;
+                                                                        LowerFailed = 1;
+                                                                    Done.
+                                                                Done.
+                                                            Done.
+                                                        Done.
+                                                    Done.
+                                                Done.
+                                            Done.
+                                        Done.
+                                    Done.
+                                Done.
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+        Done.
+        If LowerFailed is equal to 0;
+            Call LowerBlock;
+        Done.
+    Done.
+Done.
+
+Call LowerBlock;

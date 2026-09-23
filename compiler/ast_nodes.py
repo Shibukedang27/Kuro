@@ -112,6 +112,20 @@ class Decl(Stmt):
 
 
 @dataclass
+class RecordDecl(Stmt):
+    name: str
+    fields: list[Param]
+    span: Span
+
+
+@dataclass
+class EnumDecl(Stmt):
+    name: str
+    variants: list[str]
+    span: Span
+
+
+@dataclass
 class Assign(Stmt):
     name: str
     values: list[Expr]
@@ -224,6 +238,7 @@ class ActionDecl(Stmt):
     body: list[Stmt]
     return_type: str | None
     span: Span
+    generic_params: list[str] = field(default_factory=list)
 
 
 @dataclass

@@ -28,6 +28,9 @@ import sys
 
 from .diagnostics import Span
 from .ir import IRFunction, IRProgram
+from .values import ClosureValue, builtin_call
+from .concurrency import Scheduler
+from .values import TaskValue
 
 _MAX_CALL_DEPTH = 200
 _DEFAULT_MAX_WHILE_ITERATIONS = 10_000_000
@@ -62,6 +65,7 @@ class Interpreter:
         input_fn=input,
         output=None,
         max_while_iterations: int = _DEFAULT_MAX_WHILE_ITERATIONS,
+        trace=None,
     ):
         self.ir = ir
         self.env: dict[str, object] = {}
@@ -69,6 +73,11 @@ class Interpreter:
         self._input_fn = input_fn
         self._out = output if output is not None else sys.stdout
         self._max_while_iterations = max_while_iterations
+        self.scheduler = Scheduler()
+        self._trace = trace
+        self.instruction_count = 0
+        self.call_count = 0
+        self.max_call_depth = 0
 
     # --- variable access --------------------------------------------
     def _read(self, name: str, span: Span | None):
@@ -87,7 +96,56 @@ class Interpreter:
     def run(self):
         self._execute(self.ir.main)
 
+    def runtime_stats(self) -> dict[str, object]:
+        states: dict[str, int] = {}
+        for task in self.scheduler.tasks.values():
+            states[task.state] = states.get(task.state, 0) + 1
+        return {
+            "instruction_count": self.instruction_count,
+            "action_call_count": self.call_count,
+            "max_call_depth": self.max_call_depth,
+            "task_count": len(self.scheduler.tasks),
+            "task_states": states,
+        }
+
     def call(self, name: str, args: list):
+        self.call_count += 1
+        if name == "Spawn" and len(args) >= 1 and isinstance(args[0], ClosureValue):
+            return TaskValue(self.scheduler.spawn(args[0], args[1:]))
+        if name == "Await" and len(args) == 1 and isinstance(args[0], TaskValue):
+            try:
+                return self.scheduler.await_task(args[0].task, lambda closure, values: self.call("Invoke", [closure, *values]))
+            except KuroRuntimeException:
+                raise
+            except BaseException as error:
+                raise KuroRuntimeException("E6007", f"task failed: {error}", None) from error
+        if name == "MakeClosure" and len(args) == 1 and isinstance(args[0], str):
+            if args[0] not in self.ir.functions:
+                raise KuroRuntimeException("E4003", f"unknown action {args[0]!r}", None)
+            captured = dict(self.env)
+            for frame in self.frames:
+                captured.update(frame)
+            return ClosureValue(args[0], captured)
+        if name == "Invoke" and len(args) >= 1 and isinstance(args[0], ClosureValue):
+            fn = self.ir.functions.get(args[0].action)
+            if fn is None or len(args) - 1 != len(fn.params):
+                raise KuroRuntimeException("E4004", "closure invocation has the wrong arity", None)
+            frame = dict(args[0].captured)
+            frame.update(zip(fn.params, args[1:]))
+            self.frames.append(frame)
+            self.max_call_depth = max(self.max_call_depth, len(self.frames))
+            try:
+                self._execute(fn.body)
+            except _Return as returned:
+                return returned.value
+            finally:
+                self.frames.pop()
+            return None
+        if name in {"Some", "None", "Ok", "Err", "IsSome", "IsNone", "IsOk", "IsErr", "Unwrap", "UnwrapErr", "MakeRecord", "RecordSet", "RecordGet", "MakeEnum", "EnumIs", "MakeMap", "MapSet", "MapGet", "MapHas", "ReadFile", "WriteFile", "FileExists", "ListDirectory", "Now", "MakeChannel", "Send", "Receive", "ChannelHas"}:
+            try:
+                return builtin_call(name, args)
+            except ValueError as error:
+                raise KuroRuntimeException("E3001", str(error), None) from error
         fn = self.ir.functions.get(name)
         if fn is None:
             raise KuroRuntimeException("E4003", f"unknown action {name!r}", None)
@@ -95,6 +153,7 @@ class Interpreter:
             raise KuroRuntimeException("E6005", "maximum recursion depth exceeded", None)
         frame = dict(zip(fn.params, args))
         self.frames.append(frame)
+        self.max_call_depth = max(self.max_call_depth, len(self.frames))
         try:
             self._execute(fn.body)
             return None
@@ -112,6 +171,9 @@ class Interpreter:
         n = len(instrs)
         while pc < n:
             instr = instrs[pc]
+            self.instruction_count += 1
+            if self._trace is not None:
+                self._trace(instr, dict(self.env), len(self.frames), pc)
             op = instr.op
             span = instr.span
 
@@ -164,7 +226,7 @@ class Interpreter:
                 self._write(name, temps[tmp])
             elif op == "APPEND":
                 name, tmp = instr.args
-                current = self.env.get(name)
+                current = self._read(name, span) if (name in self.env or (self.frames and name in self.frames[-1])) else None
                 if current is None:
                     self._write(name, [temps[tmp]])
                 elif isinstance(current, list):
@@ -198,7 +260,7 @@ class Interpreter:
                     raise KuroRuntimeException("E3005", f"{name!r} has no length", span)
             elif op == "SET":
                 name, idx_tmp, val_tmp = instr.args
-                target = self.env.get(name)
+                target = self._read(name, span)
                 idx = int(temps[idx_tmp])
                 val = temps[val_tmp]
                 if isinstance(target, str):
@@ -279,10 +341,19 @@ class Interpreter:
         raise AssertionError(f"unhandled binop {op!r}")
 
     def _cmp(self, op: str, a, b) -> bool:
-        return {
-            "gt": a > b, "lt": a < b, "eq": a == b, "ne": a != b,
-            "ge": a >= b, "le": a <= b,
-        }[op]
+        if op == "eq":
+            return a == b
+        if op == "ne":
+            return a != b
+        if op == "gt":
+            return a > b
+        if op == "lt":
+            return a < b
+        if op == "ge":
+            return a >= b
+        if op == "le":
+            return a <= b
+        raise AssertionError(f"unhandled comparison {op!r}")
 
     def _isclass(self, value, cls: str) -> bool:
         if not isinstance(value, str) or len(value) != 1:

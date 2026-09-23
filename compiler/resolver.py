@@ -23,9 +23,23 @@ from .ast_nodes import (
     ActionDecl, AddStmt, Assign, BinaryExpr, BoolAnd, BoolOr, CallStmt,
     Comparison, CompareStmt, Condition, Decl, Expr, GetStmt, IfStmt, Input,
     IsClass, Literal, LengthStmt, AppendStmt, PrintStmt, Program, RepeatStmt,
-    ReturnStmt, SetStmt, Stmt, UpdateStmt, VarRef, WhileStmt,
+    ReturnStmt, SetStmt, Stmt, UpdateStmt, VarRef, WhileStmt, RecordDecl,
+    EnumDecl,
 )
 from .diagnostics import DiagnosticEngine
+
+BUILTIN_ACTIONS = {
+    "Some": 1, "None": 0, "Ok": 1, "Err": 1,
+    "IsSome": 1, "IsNone": 1, "IsOk": 1, "IsErr": 1,
+    "Unwrap": 1, "UnwrapErr": 1,
+    "MakeClosure": 1, "Invoke": 2,
+    "Spawn": 2, "Await": 1,
+    "MakeRecord": 1, "RecordSet": 3, "RecordGet": 2,
+    "MakeEnum": 2, "EnumIs": 2,
+    "MakeMap": 0, "MapSet": 3, "MapGet": 2, "MapHas": 2,
+    "ReadFile": 1, "WriteFile": 2, "FileExists": 1, "ListDirectory": 1, "Now": 0,
+    "MakeChannel": 0, "Send": 2, "Receive": 1, "ChannelHas": 1,
+}
 
 
 @dataclass
@@ -62,6 +76,8 @@ class SymbolTable:
     def __init__(self):
         self.types: dict[str, str] = {}       # inferred/declared type per global name
         self.actions: dict[str, ActionSig] = {}
+        self.records: dict[str, dict[str, str | None]] = {}
+        self.enums: dict[str, set[str]] = {}
 
 
 class Resolver:
@@ -81,10 +97,21 @@ class Resolver:
     # --- pass 1: top-level declarations & action signatures ---------
     def _collect_globals(self):
         for st in self.program.statements:
+            if isinstance(st, (RecordDecl, EnumDecl)):
+                if st.name in self.symbols.types:
+                    self.diags.error("E4002", f"duplicate declaration {st.name!r}", st.span)
+                else:
+                    self.symbols.types[st.name] = st.name
+                    if isinstance(st, RecordDecl):
+                        self.symbols.records[st.name] = {field.name: field.typ for field in st.fields}
+                    else:
+                        self.symbols.enums[st.name] = set(st.variants)
+                continue
             if isinstance(st, Decl):
                 from .typecheck import BASE_TYPES  # local import: avoid cycle
 
-                if st.typ not in BASE_TYPES:
+                from .typecheck import is_type_name
+                if not is_type_name(st.typ) and st.typ not in self.symbols.types:
                     self.diags.error("E3003", f"unknown type {st.typ!r}", st.span)
                     continue
                 if st.name in self.symbols.types:
@@ -129,6 +156,8 @@ class Resolver:
             self._resolve_stmt(st, scope, in_action)
 
     def _resolve_stmt(self, st: Stmt, scope: Scope, in_action: bool):
+        if isinstance(st, (RecordDecl, EnumDecl)):
+            return
         if isinstance(st, Decl):
             return
         if isinstance(st, Assign):
@@ -213,6 +242,11 @@ class Resolver:
             self._resolve_block(st.body, scope, in_action)
             return
         if isinstance(st, ActionDecl):
+            # Nested actions are lifted by lowering and become callable from
+            # the surrounding program. Register them when their declaration
+            # is reached so the existing top-level pass remains compatible
+            # with the Kuro-authored resolver's pass-1 contract.
+            self.symbols.actions.setdefault(st.name, ActionSig(st))
             # Same fix, and same reason, as RepeatStmt's Index handling
             # above: only the parameters are genuinely scoped to this
             # Action (each call gets a fresh frame — compiler/
@@ -247,7 +281,11 @@ class Resolver:
         if isinstance(st, CallStmt):
             sig = self.symbols.actions.get(st.name)
             if sig is None:
-                self.diags.error("E4003", f"unknown action {st.name!r}", st.span)
+                expected = BUILTIN_ACTIONS.get(st.name)
+                if expected is None:
+                    self.diags.error("E4003", f"unknown action {st.name!r}", st.span)
+                elif len(st.args) != expected:
+                    self.diags.error("E4004", f"builtin {st.name!r} expects {expected} argument(s), got {len(st.args)}", st.span)
             elif len(st.args) != sig.arity:
                 self.diags.error(
                     "E4004",
@@ -291,3 +329,13 @@ class Resolver:
 
 def resolve(program: Program, diags: DiagnosticEngine) -> SymbolTable:
     return Resolver(program, diags).run()
+
+
+def _walk_statements(statements: list[Stmt]):
+    """Yield declarations at every nesting level for lifted closures."""
+    for st in statements:
+        yield st
+        for attr in ("then_body", "else_body", "body"):
+            child = getattr(st, attr, None)
+            if isinstance(child, list):
+                yield from _walk_statements(child)

@@ -1,0 +1,30 @@
+# Kuro I/O library. Input remains explicit: callers declare the destination.
+
+Action KuroReadText Value;
+    Return Value;
+Done.
+
+Action KuroReadFile Path;
+    Call ReadFile Path;
+    Return @_;
+Done.
+
+Action KuroWriteFile Path, Content;
+    Call WriteFile Path, Content;
+    Return @_;
+Done.
+
+Action KuroFileExists Path;
+    Call FileExists Path;
+    Return @_;
+Done.
+
+Action KuroListDirectory Path;
+    Call ListDirectory Path;
+    Return @_;
+Done.
+
+Action KuroNow;
+    Call Now;
+    Return @_;
+Done.

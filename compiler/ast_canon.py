@@ -77,6 +77,12 @@ def _lit_text(value) -> str:
 
 
 def canon_expr(e: Expr, out: list[str]) -> None:
+    """Append one complete expression and an explicit boundary marker."""
+    _canon_expr(e, out)
+    out.append("END_EXPR")
+
+
+def _canon_expr(e: Expr, out: list[str]) -> None:
     if isinstance(e, Literal):
         if isinstance(e.value, str):
             out.append("LIT_STR")
@@ -92,8 +98,8 @@ def canon_expr(e: Expr, out: list[str]) -> None:
         out.append(e.name)
         return
     if isinstance(e, BinaryExpr):
-        canon_expr(e.left, out)
-        canon_expr(e.right, out)
+        _canon_expr(e.left, out)
+        _canon_expr(e.right, out)
         out.append("BIN")
         out.append(e.op)
         return

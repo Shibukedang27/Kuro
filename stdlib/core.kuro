@@ -1,0 +1,21 @@
+# Kuro core library. All routines here are ordinary Kuro Actions.
+
+Action KuroIdentity Value;
+    Return Value;
+Done.
+
+Action KuroMax Left, Right;
+    If Left is greater than Right;
+        Return Left;
+    Else;
+        Return Right;
+    Done.
+Done.
+
+Action KuroMin Left, Right;
+    If Left is less than Right;
+        Return Left;
+    Else;
+        Return Right;
+    Done.
+Done.

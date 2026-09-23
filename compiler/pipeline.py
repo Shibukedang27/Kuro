@@ -14,6 +14,7 @@ from .interpreter import Interpreter, KuroRuntimeException
 from .ir import IRProgram
 from .lexer import tokenize
 from .lower import lower
+from .modules import load_modules
 from .parser import parse
 from .resolver import SymbolTable, resolve
 from .typecheck import typecheck
@@ -32,7 +33,12 @@ class CompileResult:
 
 
 def compile_source(source: str, filename: str = "<source>") -> CompileResult:
-    tokens, diags = tokenize(source, filename)
+    diags = DiagnosticEngine(filename, source)
+    source = load_modules(source, filename, diags)
+    if diags.has_errors():
+        return CompileResult(diags)
+    tokens, lex_diags = tokenize(source, filename)
+    diags.diagnostics.extend(lex_diags.diagnostics)
     if diags.has_errors():
         return CompileResult(diags)
 

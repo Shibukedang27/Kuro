@@ -1,0 +1,61 @@
+# Native compiler artifact publisher, authored in Kuro.
+# Escapes empty values, control characters, and backslashes in the line stream.
+
+NativeEscape = "\\";
+NativeOutputCount = 0;
+
+If CompilerFailed is equal to 0;
+    Length BytecodeOut;
+    NativeOutputCount = @_;
+    If NativeOutputCount is greater than 65536;
+        CompilerFailed = 1;
+    Done.
+Done.
+
+RuntimeExitCode = CompilerFailed;
+If CompilerFailed is equal to 0;
+    Print "kuro.bytecode/1".
+    NativeOutputIndex = 0;
+    While NativeOutputIndex is less than NativeOutputCount;
+        Get BytecodeOut NativeOutputIndex;
+        NativeTokenText = @_;
+        Length NativeTokenText;
+        NativeTokenLength = @_;
+        NativeEncodedToken = "";
+        If NativeTokenLength is equal to 0;
+            NativeEncodedToken = NativeEscape + "e";
+        Else;
+            If NativeTokenText is equal to "kuro.input/1";
+                NativeEncodedToken = NativeEscape + "i";
+                NativeCharacterIndex = NativeTokenLength;
+            Done.
+        Done.
+        NativeCharacterIndex = 0;
+        While NativeCharacterIndex is less than NativeTokenLength;
+            Get NativeTokenText NativeCharacterIndex;
+            NativeCharacterText = @_;
+            If NativeCharacterText is equal to NativeEscape;
+                NativeEncodedToken = NativeEncodedToken + NativeEscape + NativeEscape;
+            Else;
+                If NativeCharacterText is equal to "\n";
+                    NativeEncodedToken = NativeEncodedToken + NativeEscape + "n";
+                Else;
+                    If NativeCharacterText is equal to "\r";
+                        NativeEncodedToken = NativeEncodedToken + NativeEscape + "r";
+                    Else;
+                        If NativeCharacterText is equal to "\t";
+                            NativeEncodedToken = NativeEncodedToken + NativeEscape + "t";
+                        Else;
+                            NativeEncodedToken = NativeEncodedToken + NativeCharacterText;
+                        Done.
+                    Done.
+                Done.
+            Done.
+            Add 1 to NativeCharacterIndex;
+        Done.
+        Print NativeEncodedToken.
+        Add 1 to NativeOutputIndex;
+    Done.
+Else;
+    Print "kuro.compile-error/1".
+Done.

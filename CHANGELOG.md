@@ -3,6 +3,23 @@
 All notable changes to Kuro are recorded here. Format loosely follows
 Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 
+## [Unreleased] — In-house implementation policy and Stage 8 foundation
+
+### Added
+- `docs/architecture/in-house-implementation.md`: binding policy that Kuro's
+  production compiler, runtime, standard library, package format, and tools
+  must ultimately be authored in Kuro. The Python compiler is explicitly a
+  temporary bootstrap oracle with a documented exit gate.
+- `self_host/lower.kuro`: the first Kuro-authored lowering pass, consuming the
+  self-hosted parser's canonical AST stream and emitting stack-oriented IR for
+  literals, variable reads, assignments, arithmetic, updates, `Add`,
+  `Append`, and `Print`.
+- Differential tests for the Stage 8 lowering contract.
+
+### Verification
+- 416 tests pass, including lexer/parser/semantic differential tests and the
+  new self-hosted lowering tests.
+
 ## [0.8.0-dev] — Stage 7: self-hosted resolver + typechecker
 
 ### Added

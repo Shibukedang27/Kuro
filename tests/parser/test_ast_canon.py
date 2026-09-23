@@ -24,8 +24,8 @@ def test_empty_program():
 def test_simple_assign_and_print():
     assert canon('Name = "Kuro";\nPrint Name.') == [
         "PROGRAM",
-        "ASSIGN", "Name", "NONE", "LIT_STR", "Kuro", "END_VALUES",
-        "PRINT", "VAR", "0", "Name",
+        "ASSIGN", "Name", "NONE", "LIT_STR", "Kuro", "END_EXPR", "END_VALUES",
+        "PRINT", "VAR", "0", "Name", "END_EXPR",
         "END_BLOCK",
     ]
 
@@ -33,7 +33,7 @@ def test_simple_assign_and_print():
 def test_typed_assign():
     assert canon("Age : Integers = 25;") == [
         "PROGRAM",
-        "ASSIGN", "Age", "Integers", "LIT_INT", "25", "END_VALUES",
+        "ASSIGN", "Age", "Integers", "LIT_INT", "25", "END_EXPR", "END_VALUES",
         "END_BLOCK",
     ]
 
@@ -42,7 +42,7 @@ def test_multi_value_assign_uses_end_marker_not_count():
     assert canon('Names = "A", "B", "C";') == [
         "PROGRAM",
         "ASSIGN", "Names", "NONE",
-        "LIT_STR", "A", "LIT_STR", "B", "LIT_STR", "C", "END_VALUES",
+        "LIT_STR", "A", "END_EXPR", "LIT_STR", "B", "END_EXPR", "LIT_STR", "C", "END_EXPR", "END_VALUES",
         "END_BLOCK",
     ]
 
@@ -53,7 +53,7 @@ def test_arithmetic_precedence_shape():
     assert c == [
         "PROGRAM",
         "ASSIGN", "N", "NONE",
-        "LIT_INT", "2", "LIT_INT", "3", "LIT_INT", "4", "BIN", "*", "BIN", "+",
+        "LIT_INT", "2", "LIT_INT", "3", "LIT_INT", "4", "BIN", "*", "BIN", "+", "END_EXPR",
         "END_VALUES", "END_BLOCK",
     ]
 
@@ -64,7 +64,7 @@ def test_grouping_changes_shape():
     assert c == [
         "PROGRAM",
         "ASSIGN", "N", "NONE",
-        "LIT_INT", "2", "LIT_INT", "3", "BIN", "+", "LIT_INT", "4", "BIN", "*",
+        "LIT_INT", "2", "LIT_INT", "3", "BIN", "+", "LIT_INT", "4", "BIN", "*", "END_EXPR",
         "END_VALUES", "END_BLOCK",
     ]
 
@@ -72,21 +72,21 @@ def test_grouping_changes_shape():
 def test_add_encodes_value_before_target():
     # Add v to N; parses v before N is even read (target comes after "to"),
     # so the encoding must put the value first too - see ast_canon.py.
-    assert canon("Score is Integers;\nScore = 0;\nAdd 1 to Score;")[-5:] == [
-        "ADD", "LIT_INT", "1", "Score", "END_BLOCK",
+    assert canon("Score is Integers;\nScore = 0;\nAdd 1 to Score;")[-6:] == [
+        "ADD", "LIT_INT", "1", "END_EXPR", "Score", "END_BLOCK",
     ]
 
 
 def test_update_encodes_target_before_value():
     # Update reads its target name before "to v", so target-then-value
     # matches parse order and stays a prefix encoding (unlike Add).
-    assert canon("Score is Integers;\nUpdate Score to 5;")[-5:] == [
-        "UPDATE", "Score", "LIT_INT", "5", "END_BLOCK",
+    assert canon("Score is Integers;\nUpdate Score to 5;")[-6:] == [
+        "UPDATE", "Score", "LIT_INT", "5", "END_EXPR", "END_BLOCK",
     ]
 
 
 def test_at_var_vs_bare_var_distinguished():
-    assert canon("Print @_.") == ["PROGRAM", "PRINT", "VAR", "1", "_", "END_BLOCK"]
+    assert canon("Print @_.") == ["PROGRAM", "PRINT", "VAR", "1", "_", "END_EXPR", "END_BLOCK"]
 
 
 def test_if_else_and_or():
@@ -146,14 +146,14 @@ def test_take_encoding():
 def test_get_direct_vs_indexed():
     assert canon('Name = "Kuro";\nGet Name;') == [
         "PROGRAM",
-        "ASSIGN", "Name", "NONE", "LIT_STR", "Kuro", "END_VALUES",
+        "ASSIGN", "Name", "NONE", "LIT_STR", "Kuro", "END_EXPR", "END_VALUES",
         "GET", "Name", "0",
         "END_BLOCK",
     ]
     assert canon('Name = "Kuro";\nGet Name 0;') == [
         "PROGRAM",
-        "ASSIGN", "Name", "NONE", "LIT_STR", "Kuro", "END_VALUES",
-        "GET", "Name", "1", "LIT_INT", "0",
+        "ASSIGN", "Name", "NONE", "LIT_STR", "Kuro", "END_EXPR", "END_VALUES",
+        "GET", "Name", "1", "LIT_INT", "0", "END_EXPR",
         "END_BLOCK",
     ]
 
@@ -168,8 +168,8 @@ def test_set_encoding_explicit():
     # a prefix encoding, unlike Add/Append.
     assert canon('Name = "Kuro";\nSet Name 0 to "k";') == [
         "PROGRAM",
-        "ASSIGN", "Name", "NONE", "LIT_STR", "Kuro", "END_VALUES",
-        "SET", "Name", "LIT_INT", "0", "LIT_STR", "k",
+        "ASSIGN", "Name", "NONE", "LIT_STR", "Kuro", "END_EXPR", "END_VALUES",
+        "SET", "Name", "LIT_INT", "0", "END_EXPR", "LIT_STR", "k", "END_EXPR",
         "END_BLOCK",
     ]
 

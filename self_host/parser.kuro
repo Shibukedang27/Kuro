@@ -97,6 +97,7 @@ Length TokenKinds;
 TokCount = @_;
 AstOut is Text;
 ParseFailed = 0;
+ParseExprDepth = 0;
 
 # Stage 6 completion diagnostics (ADR-0011). Four parallel lists, mirroring
 # TokenKinds/TokenValues' shape: DiagCodes[i]/DiagLines[i]/DiagCols[i]/
@@ -388,7 +389,12 @@ Action ParseTermTail;
 Done.
 
 Action ParseExpr;
+    Add 1 to ParseExprDepth;
     Call ParseTerm;
+    Add -1 to ParseExprDepth;
+    If ParseExprDepth is equal to 0;
+        Append "END_EXPR" to AstOut;
+    Done.
 Done.
 
 # --- condition parsing (comparisons, and/or, is-class) -------------------
@@ -934,6 +940,7 @@ Action ParseStatement;
         Append "VAR" to AstOut;
         Append "0" to AstOut;
         Append ParseStatement_EnteredName to AstOut;
+        Append "END_EXPR" to AstOut;
         Call ParseExpr;
         Append "CMP" to AstOut;
         Append ParseStatement_EnteredOp to AstOut;

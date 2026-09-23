@@ -1,0 +1,62 @@
+# Kuro text library.
+
+Action KuroTextLength Value;
+    Length Value;
+    Return @_;
+Done.
+
+Action KuroTextAt Value, Position;
+    Get Value Position;
+    Return @_;
+Done.
+
+Action KuroTextReplace Value, Position, Replacement;
+    Set Value Position to Replacement;
+    Return Value;
+Done.
+
+Action KuroTextStartsWith Value, Prefix;
+    KuroStartsIndex = 0;
+    KuroStartsFound = 1;
+    Length Prefix;
+    KuroStartsPrefixLength = @_;
+    Length Value;
+    KuroStartsValueLength = @_;
+    If KuroStartsPrefixLength is greater than KuroStartsValueLength;
+        Return 0;
+    Done.
+    While KuroStartsIndex is less than KuroStartsPrefixLength;
+        Get Value KuroStartsIndex;
+        KuroStartsValue = @_;
+        Get Prefix KuroStartsIndex;
+        If KuroStartsValue is not equal to @_;
+            KuroStartsFound = 0;
+        Done.
+        KuroStartsIndex = KuroStartsIndex + 1;
+    Done.
+    Return KuroStartsFound;
+Done.
+
+Action KuroTextEndsWith Value, Suffix;
+    Length Value;
+    KuroEndsValueLength = @_;
+    Length Suffix;
+    KuroEndsSuffixLength = @_;
+    If KuroEndsSuffixLength is greater than KuroEndsValueLength;
+        Return 0;
+    Done.
+    KuroEndsIndex = 0;
+    KuroEndsFound = 1;
+    KuroEndsOffset = KuroEndsValueLength - KuroEndsSuffixLength;
+    While KuroEndsIndex is less than KuroEndsSuffixLength;
+        KuroEndsValueIndex = KuroEndsOffset + KuroEndsIndex;
+        Get Value KuroEndsValueIndex;
+        KuroEndsValue = @_;
+        Get Suffix KuroEndsIndex;
+        If KuroEndsValue is not equal to @_;
+            KuroEndsFound = 0;
+        Done.
+        KuroEndsIndex = KuroEndsIndex + 1;
+    Done.
+    Return KuroEndsFound;
+Done.

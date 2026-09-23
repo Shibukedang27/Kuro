@@ -13,6 +13,7 @@ from .ast_nodes import (
     Comparison, CompareStmt, Condition, Decl, Expr, GetStmt, IfStmt, Input,
     IsClass, Literal, LengthStmt, AppendStmt, Param, PrintStmt, Program,
     RepeatStmt, ReturnStmt, SetStmt, Stmt, UpdateStmt, VarRef, WhileStmt,
+    RecordDecl, EnumDecl,
 )
 
 CLASSIFY_WORDS = {"digit", "alpha", "space", "alnum", "quote"}
@@ -23,6 +24,7 @@ _STMT_START_WORDS = {
     "Take", "Print", "Add", "Update", "Get", "Length", "Set", "Append",
     "Compare", "If", "Else", "Repeat", "While", "Action", "Return", "Call",
     "Done", "Entered",
+    "Record", "Enum",
 }
 
 # "Done"/"Else" are block *terminators*, not statement starts — they're
@@ -278,6 +280,28 @@ class Parser:
     def stmt(self) -> Stmt:
         t = self.c()
 
+        if self.isw("Record"):
+            self.adv()
+            name = self.ident()
+            fields: list[Param] = []
+            if self.c().kind is not TokKind.SEMI:
+                fields.append(self._param())
+                while self.c().kind is TokKind.COMMA:
+                    self.adv()
+                    fields.append(self._param())
+            self.expect_kind(TokKind.SEMI, "';'")
+            return RecordDecl(name, fields, self.span(t))
+
+        if self.isw("Enum"):
+            self.adv()
+            name = self.ident()
+            variants = [self.ident()]
+            while self.c().kind is TokKind.COMMA:
+                self.adv()
+                variants.append(self.ident())
+            self.expect_kind(TokKind.SEMI, "';'")
+            return EnumDecl(name, variants, self.span(t))
+
         if (
             t.kind is TokKind.IDENT
             and self.peek().is_word("is")
@@ -285,14 +309,14 @@ class Parser:
         ):
             name = self.ident()
             self.expect_word("is")
-            typ = self.ident()
+            typ = self._type_name()
             self.expect_kind(TokKind.SEMI, "';'")
             return Decl(name, typ, self.span(t))
 
         if t.kind is TokKind.IDENT and self.peek().kind is TokKind.COLON:
             name = self.ident()
             self.adv()  # ':'
-            typ = self.ident()
+            typ = self._type_name()
             self.expect_kind(TokKind.EQUAL, "'='")
             vals = self.expr_list()
             self.expect_kind(TokKind.SEMI, "';'")
@@ -403,12 +427,13 @@ class Parser:
         if self.isw("Action"):
             self.adv()
             name = self.ident()
+            generic_params = self._generic_params()
             params = self._param_list()
             self.expect_kind(TokKind.SEMI, "';'")
             body = self.block({"Done"})
             self.expect_word("Done")
             self.expect_kind(TokKind.DOT, "'.'")
-            return ActionDecl(name, params, body, None, self.span(t))
+            return ActionDecl(name, params, body, None, self.span(t), generic_params)
 
         if self.isw("Return"):
             self.adv()
@@ -477,8 +502,33 @@ class Parser:
         typ = None
         if self.c().kind is TokKind.COLON:
             self.adv()
-            typ = self.ident()
+            typ = self._type_name()
         return Param(name, typ, self.span(tok))
+
+    def _generic_params(self) -> list[str]:
+        if self.c().kind is not TokKind.LT:
+            return []
+        self.adv()
+        params = [self.ident()]
+        while self.c().kind is TokKind.COMMA:
+            self.adv()
+            params.append(self.ident())
+        self.expect_kind(TokKind.GT, "'>'")
+        if len(set(params)) != len(params):
+            self.fail("E2005", "duplicate generic parameter")
+        return params
+
+    def _type_name(self) -> str:
+        name = self.ident()
+        if self.c().kind is not TokKind.LT:
+            return name
+        self.adv()
+        args = [self._type_name()]
+        while self.c().kind is TokKind.COMMA:
+            self.adv()
+            args.append(self._type_name())
+        self.expect_kind(TokKind.GT, "'>'")
+        return name + "<" + ",".join(args) + ">"
 
     def _check_duplicate_params(self, params: list[Param]):
         seen: set[str] = set()

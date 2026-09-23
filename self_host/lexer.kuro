@@ -92,19 +92,13 @@ Repeat SourceLen;
 
             If Ch is equal to Hash or Ch is equal to Slash and NextCh is equal to Slash;
                 CommentScanning = 1;
-                Repeat SourceLen;
-                    If CommentScanning is equal to 1;
-                        If Pos is less than SourceLen;
-                            Get Source Pos;
-                            Ch2 = @_;
-                            If Ch2 is equal to NL;
-                                CommentScanning = 0;
-                            Else;
-                                Add 1 to Pos;
-                            Done.
-                        Else;
-                            CommentScanning = 0;
-                        Done.
+                While CommentScanning is equal to 1 and Pos is less than SourceLen;
+                    Get Source Pos;
+                    Ch2 = @_;
+                    If Ch2 is equal to NL;
+                        CommentScanning = 0;
+                    Else;
+                        Add 1 to Pos;
                     Done.
                 Done.
             Else;
@@ -112,43 +106,37 @@ Repeat SourceLen;
                     Add 1 to Pos;
                     StrBuf = "";
                     StrScanning = 1;
-                    Repeat SourceLen;
-                        If StrScanning is equal to 1;
-                            If Pos is less than SourceLen;
-                                Get Source Pos;
-                                Ch2 = @_;
-                                If Ch2 is equal to Quote;
-                                    Add 1 to Pos;
-                                    StrScanning = 0;
+                    While StrScanning is equal to 1 and Pos is less than SourceLen;
+                        Get Source Pos;
+                        Ch2 = @_;
+                        If Ch2 is equal to Quote;
+                            Add 1 to Pos;
+                            StrScanning = 0;
+                        Else;
+                            If Ch2 is equal to Backslash;
+                                EscNextPos = Pos + 1;
+                                EscNextCh = Backslash;
+                                If EscNextPos is less than SourceLen;
+                                    Get Source EscNextPos;
+                                    EscNextCh = @_;
+                                Done.
+                                If EscNextCh is equal to NChar;
+                                    StrBuf = StrBuf + NL;
                                 Else;
-                                    If Ch2 is equal to Backslash;
-                                        EscNextPos = Pos + 1;
-                                        EscNextCh = Backslash;
-                                        If EscNextPos is less than SourceLen;
-                                            Get Source EscNextPos;
-                                            EscNextCh = @_;
-                                        Done.
-                                        If EscNextCh is equal to NChar;
-                                            StrBuf = StrBuf + NL;
-                                        Else;
-                                            If EscNextCh is equal to TChar;
-                                                StrBuf = StrBuf + Tab;
-                                            Else;
-                                                If EscNextCh is equal to RChar;
-                                                    StrBuf = StrBuf + CR;
-                                                Else;
-                                                    StrBuf = StrBuf + EscNextCh;
-                                                Done.
-                                            Done.
-                                        Done.
-                                        Add 2 to Pos;
+                                    If EscNextCh is equal to TChar;
+                                        StrBuf = StrBuf + Tab;
                                     Else;
-                                        StrBuf = StrBuf + Ch2;
-                                        Add 1 to Pos;
+                                        If EscNextCh is equal to RChar;
+                                            StrBuf = StrBuf + CR;
+                                        Else;
+                                            StrBuf = StrBuf + EscNextCh;
+                                        Done.
                                     Done.
                                 Done.
+                                Add 2 to Pos;
                             Else;
-                                StrScanning = 0;
+                                StrBuf = StrBuf + Ch2;
+                                Add 1 to Pos;
                             Done.
                         Done.
                     Done.
@@ -162,32 +150,26 @@ Repeat SourceLen;
                         NumBuf = "";
                         IsDecimal = 0;
                         NumScanning = 1;
-                        Repeat SourceLen;
-                            If NumScanning is equal to 1;
-                                If Pos is less than SourceLen;
-                                    Get Source Pos;
-                                    Ch2 = @_;
-                                    If Ch2 is digit;
+                        While NumScanning is equal to 1 and Pos is less than SourceLen;
+                            Get Source Pos;
+                            Ch2 = @_;
+                            If Ch2 is digit;
+                                NumBuf = NumBuf + Ch2;
+                                Add 1 to Pos;
+                            Else;
+                                If Ch2 is equal to DotCh and IsDecimal is equal to 0;
+                                    DotNextPos = Pos + 1;
+                                    DotNextCh = EqCh;
+                                    If DotNextPos is less than SourceLen;
+                                        Get Source DotNextPos;
+                                        DotNextCh = @_;
+                                    Done.
+                                    If DotNextCh is digit;
                                         NumBuf = NumBuf + Ch2;
+                                        IsDecimal = 1;
                                         Add 1 to Pos;
                                     Else;
-                                        If Ch2 is equal to DotCh and IsDecimal is equal to 0;
-                                            DotNextPos = Pos + 1;
-                                            DotNextCh = EqCh;
-                                            If DotNextPos is less than SourceLen;
-                                                Get Source DotNextPos;
-                                                DotNextCh = @_;
-                                            Done.
-                                            If DotNextCh is digit;
-                                                NumBuf = NumBuf + Ch2;
-                                                IsDecimal = 1;
-                                                Add 1 to Pos;
-                                            Else;
-                                                NumScanning = 0;
-                                            Done.
-                                        Else;
-                                            NumScanning = 0;
-                                        Done.
+                                        NumScanning = 0;
                                     Done.
                                 Else;
                                     NumScanning = 0;
@@ -209,20 +191,14 @@ Repeat SourceLen;
                         If Ch is alpha or Ch is equal to Underscore;
                             IdBuf = "";
                             IdScanning = 1;
-                            Repeat SourceLen;
-                                If IdScanning is equal to 1;
-                                    If Pos is less than SourceLen;
-                                        Get Source Pos;
-                                        Ch2 = @_;
-                                        If Ch2 is alnum or Ch2 is equal to Underscore;
-                                            IdBuf = IdBuf + Ch2;
-                                            Add 1 to Pos;
-                                        Else;
-                                            IdScanning = 0;
-                                        Done.
-                                    Else;
-                                        IdScanning = 0;
-                                    Done.
+                            While IdScanning is equal to 1 and Pos is less than SourceLen;
+                                Get Source Pos;
+                                Ch2 = @_;
+                                If Ch2 is alnum or Ch2 is equal to Underscore;
+                                    IdBuf = IdBuf + Ch2;
+                                    Add 1 to Pos;
+                                Else;
+                                    IdScanning = 0;
                                 Done.
                             Done.
                             Print "IDENT".

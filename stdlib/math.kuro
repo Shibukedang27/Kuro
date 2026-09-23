@@ -1,0 +1,57 @@
+# Kuro numeric library.
+
+Action KuroAdd Left, Right;
+    Return Left + Right;
+Done.
+
+Action KuroSubtract Left, Right;
+    Return Left - Right;
+Done.
+
+Action KuroMultiply Left, Right;
+    Return Left * Right;
+Done.
+
+Action KuroDivide Left, Right;
+    Return Left / Right;
+Done.
+
+Action KuroAbs Value;
+    If Value is less than 0;
+        Return 0 - Value;
+    Else;
+        Return Value;
+    Done.
+Done.
+
+Action KuroClamp Value, Low, High;
+    If Value is less than Low;
+        Return Low;
+    Else;
+        If Value is greater than High;
+            Return High;
+        Else;
+            Return Value;
+        Done.
+    Done.
+Done.
+
+Action KuroPower Base, Exponent;
+    KuroPowerResult = 1;
+    KuroPowerRemaining = Exponent;
+    While KuroPowerRemaining is greater than 0;
+        KuroPowerResult = KuroPowerResult * Base;
+        KuroPowerRemaining = KuroPowerRemaining - 1;
+    Done.
+    Return KuroPowerResult;
+Done.
+
+Action KuroFactorial Value;
+    KuroFactorialResult = 1;
+    KuroFactorialRemaining = Value;
+    While KuroFactorialRemaining is greater than 1;
+        KuroFactorialResult = KuroFactorialResult * KuroFactorialRemaining;
+        KuroFactorialRemaining = KuroFactorialRemaining - 1;
+    Done.
+    Return KuroFactorialResult;
+Done.

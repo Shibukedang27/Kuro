@@ -67,6 +67,56 @@ class IRProgram:
         return "\n\n".join(parts)
 
 
+def ir_to_data(program: IRProgram) -> dict:
+    """Return the stable, host-independent representation used by artifacts."""
+    def instruction_data(instr: Instr) -> dict:
+        return {"op": instr.op, "args": list(instr.args), "dest": instr.dest}
+
+    return {
+        "main": [instruction_data(instr) for instr in program.main],
+        "functions": {
+            name: {
+                "params": list(function.params),
+                "body": [instruction_data(instr) for instr in function.body],
+            }
+            for name, function in program.functions.items()
+        },
+    }
+
+
+def ir_from_data(data: dict) -> IRProgram:
+    """Load only the versioned JSON shape emitted by Kuro artifacts."""
+    if not isinstance(data, dict) or not isinstance(data.get("main"), list):
+        raise ValueError("artifact does not contain a valid Kuro IR program")
+
+    def instruction(value: object) -> Instr:
+        if not isinstance(value, dict) or not isinstance(value.get("op"), str):
+            raise ValueError("artifact contains an invalid instruction")
+        args = value.get("args", [])
+        if not isinstance(args, list):
+            raise ValueError("artifact instruction arguments must be a list")
+        dest = value.get("dest")
+        if dest is not None and not isinstance(dest, str):
+            raise ValueError("artifact instruction destination must be text or null")
+        return Instr(value["op"], tuple(args), dest)
+
+    functions: dict[str, IRFunction] = {}
+    raw_functions = data.get("functions", {})
+    if not isinstance(raw_functions, dict):
+        raise ValueError("artifact functions must be an object")
+    for name, value in raw_functions.items():
+        if not isinstance(name, str) or not isinstance(value, dict):
+            raise ValueError("artifact contains an invalid function")
+        params = value.get("params", [])
+        body = value.get("body", [])
+        if not isinstance(params, list) or not all(isinstance(param, str) for param in params):
+            raise ValueError("artifact function parameters must be text")
+        if not isinstance(body, list):
+            raise ValueError("artifact function body must be a list")
+        functions[name] = IRFunction(name, params, [instruction(item) for item in body])
+    return IRProgram([instruction(item) for item in data["main"]], functions)
+
+
 class IRBuilder:
     """Accumulates instructions for one function (or the module's `main`)."""
 

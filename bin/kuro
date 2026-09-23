@@ -1,0 +1,6 @@
+#!/bin/sh
+# Python-free production Kuro entrypoint.
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec "$ROOT/bin/kuro-native" "$@"

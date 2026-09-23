@@ -1,0 +1,30 @@
+# Stage 8 Kuro compiler driver.
+#
+# The driver is intentionally small because each compiler stage is already
+# executable Kuro. A build composition places lexer.kuro, parser.kuro,
+# lower.kuro, bytecode.kuro, and this file in that order. This file owns the
+# pipeline gate and publishes one final artifact for the host or a future
+# Kuro build command to consume.
+
+CompilerFailed = 0;
+CompilerOutput is Text;
+CompilerInstructionCount = 0;
+
+Action CompilerRun;
+    If ParseFailed is not equal to 0;
+        CompilerFailed = 1;
+    Done.
+    If LowerFailed is not equal to 0;
+        CompilerFailed = 1;
+    Done.
+    If BytecodeFailed is not equal to 0;
+        CompilerFailed = 1;
+    Done.
+    If CompilerFailed is equal to 0;
+        Length BytecodeOut;
+        CompilerInstructionCount = @_;
+        CompilerOutput = BytecodeOut;
+    Done.
+Done.
+
+Call CompilerRun;
