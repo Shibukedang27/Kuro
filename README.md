@@ -25,6 +25,8 @@ non-obvious design decision. Nothing in this repository claims to be more
 finished than it is (see `CONTRIBUTING`/spec section 55, "no fake features").
 Kuro's in-house implementation policy is documented in
 [`docs/architecture/in-house-implementation.md`](docs/architecture/in-house-implementation.md).
+The current target support and release-evidence requirements are summarized in
+[`docs/release-matrix.md`](docs/release-matrix.md).
 
 - `bootstrap/python/` — the original 425-line reference interpreter this
   project started from, frozen and unmodified as the compatibility oracle.
@@ -47,7 +49,10 @@ Kuro's in-house implementation policy is documented in
   `kuro build <file>` (validated portable IR artifact) / `kuro bundle <file>`
   (portable `.kuro.app` bundle) / `kuro exec` / `kuro self-host` / `kuro repl` /
   `kuro debug` / `kuro profile`.
-- `tests/` — lexer, parser, semantic, IR, runtime, and regression suites.
+- `tests/` — lexer, parser, semantic, IR, runtime, regression, and
+  cross-runtime conformance suites. The hosted and Kuro-authored runtime
+  conformance corpus lives in
+  [`tests/regression/test_execution_conformance.py`](tests/regression/test_execution_conformance.py).
 
 ## Running a program
 
@@ -147,3 +152,14 @@ missing modules are reported as compiler diagnostics.
 python3 -m venv .venv && .venv/bin/pip install pytest
 .venv/bin/python -m pytest tests/ -q
 ```
+
+Run the cross-runtime conformance gate directly:
+
+```bash
+.venv/bin/python -m pytest tests/regression/test_execution_conformance.py -q
+```
+
+Before a release, run `make release-check` on the relevant target and check
+the exact commit's GitHub Actions results. See
+[`docs/release-matrix.md`](docs/release-matrix.md) for the evidence required
+before claiming a platform is release-supported.
