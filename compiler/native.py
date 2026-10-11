@@ -1295,11 +1295,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     floating point, and unsupported call forms remain explicit capability errors below.
     """
     items = ir.main
-    # Captured closure objects reserve a 16-byte header and up to 30 integer
-    # captures. The bounded pool is process-local and fails closed on exhaustion.
+    # Captured closure objects reserve a 16-byte header and up to 30 numeric
+    # captures. Linux brk grows their process-local heap one page at a time.
     closure_object_bytes = 256
-    closure_heap_capacity = 128
-    closure_heap_bytes = closure_object_bytes * closure_heap_capacity
+    closure_heap_page_bytes = 4096
     max_closure_captures = (closure_object_bytes - 16) // 8
     def action_returns_text(name: str) -> bool:
         lowered = name.lower()
@@ -2564,17 +2563,14 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     raise NativeBackendError("x86_64-linux Invoke targets must have the same return kind")
                 registers = ("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9")
                 load(arguments[0], "%r11")
-                # Captured closures point into the BSS pool; no-capture closures
-                # keep using their action's raw code pointer.
+                # Captured closure object pointers carry a low-bit tag; raw
+                # no-capture function pointers are 16-byte aligned.
                 raw_closure_label = f".Lkuro_invoke_raw_{instruction_index}"
                 invoke_ready_label = f".Lkuro_invoke_ready_{instruction_index}"
                 lines.extend([
-                    "    lea .Lkuro_closure_heap(%rip), %r10",
-                    "    cmp %r10, %r11",
-                    f"    jb {raw_closure_label}",
-                    "    lea .Lkuro_closure_heap_end(%rip), %r10",
-                    "    cmp %r10, %r11",
-                    f"    jae {raw_closure_label}",
+                    "    test $1, %r11",
+                    f"    jz {raw_closure_label}",
+                    "    and $-2, %r11",
                     "    mov 0(%r11), %rax",
                     "    mov 8(%r11), %r10",
                     "    mov %rax, %r11",
@@ -2909,7 +2905,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             for name in collection_buffers
         }
         lines.extend([
-            f".Lkuro_fn_{function.name}:", "    push %rbp", "    mov %rsp, %rbp",
+            "    .p2align 4", f".Lkuro_fn_{function.name}:", "    push %rbp", "    mov %rsp, %rbp",
             f"    sub ${fn_frame}, %rsp", f"    mov %r10, {fn_env_slot}(%rbp)",
         ])
 
@@ -3314,13 +3310,8 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                             )
                     if capture_slots:
                         lines.extend([
-                            "    mov .Lkuro_closure_heap_cursor(%rip), %r8",
-                            f"    cmp ${closure_heap_bytes}, %r8",
-                            "    jae .Lkuro_overflow",
-                            "    lea .Lkuro_closure_heap(%rip), %r9",
-                            "    add %r8, %r9",
-                            f"    add ${closure_object_bytes}, %r8",
-                            "    mov %r8, .Lkuro_closure_heap_cursor(%rip)",
+                            "    call _kuro_alloc_closure",
+                            "    mov %rax, %r9",
                             f"    lea .Lkuro_fn_{target}(%rip), %rax",
                             "    mov %rax, 0(%r9)",
                             "    lea 16(%r9), %rax",
@@ -3333,7 +3324,8 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                                 )
                             fn_load(capture_name, "%rax")
                             lines.append(f"    mov %rax, {16 + capture_index * 8}(%r9)")
-                        fn_store(item.dest, "%r9")
+                        lines.extend(["    lea 1(%r9), %rax"])
+                        fn_store(item.dest)
                     else:
                         lines.append(f"    lea .Lkuro_fn_{target}(%rip), %rax")
                         fn_store(item.dest)
@@ -3453,6 +3445,36 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         ".Lkuro_print_float_write:", "    mov $1, %rax", "    mov $1, %rdi", "    mov %rcx, %rdx", "    syscall",
         "    leave", "    ret",
     ])
+    lines.extend([
+        "_kuro_alloc_closure:",
+        "    mov .Lkuro_closure_heap_cursor(%rip), %rax",
+        "    mov %rax, %r8",
+        "    mov .Lkuro_closure_heap_end(%rip), %rcx",
+        f"    lea {closure_object_bytes}(%rax), %rdx",
+        "    cmp %rcx, %rdx",
+        "    jbe .Lkuro_alloc_closure_existing",
+        "    xor %edi, %edi",
+        "    mov $12, %eax",
+        "    syscall",
+        "    add $4095, %rax",
+        "    and $-4096, %rax",
+        "    mov %rax, %r8",
+        f"    lea {closure_heap_page_bytes}(%r8), %r9",
+        "    mov %r9, %rdi",
+        "    mov $12, %eax",
+        "    syscall",
+        "    cmp %r9, %rax",
+        "    jne .Lkuro_overflow",
+        "    mov %r9, .Lkuro_closure_heap_end(%rip)",
+        f"    lea {closure_object_bytes}(%r8), %rax",
+        "    mov %rax, .Lkuro_closure_heap_cursor(%rip)",
+        "    mov %r8, %rax",
+        "    ret",
+        ".Lkuro_alloc_closure_existing:",
+        "    mov %rdx, .Lkuro_closure_heap_cursor(%rip)",
+        "    mov %r8, %rax",
+        "    ret",
+    ])
     lines.extend([".section .bss", ".Lkuro_bss_begin:"])
     for label in collection_buffers.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero {NATIVE_COLLECTION_BYTES}"])
@@ -3479,11 +3501,9 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     for label in global_labels.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 8"])
     lines.extend([
-        "    .p2align 4",
-        f".Lkuro_closure_heap: .zero {closure_heap_bytes}",
-        ".Lkuro_closure_heap_end:",
         "    .p2align 3",
         ".Lkuro_closure_heap_cursor: .zero 8",
+        ".Lkuro_closure_heap_end: .zero 8",
     ])
     for label in map_dest_labels.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 8192"])
