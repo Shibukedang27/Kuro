@@ -288,6 +288,24 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path):
     ("tokens", "expected"),
     [
         (["BC_CONST", "6", "BC_CONST", "7", "BC_BINOP", "*", "BC_PRINT"], "42\n"),
+        (["BC_CONST", "2", "BC_CONST", "3", "BC_BINOP", "-", "BC_PRINT"], "-1\n"),
+        (["BC_CONST", "8", "BC_CONST", "2", "BC_BINOP", "/", "BC_PRINT"], "4\n"),
+        (
+            [
+                "BC_CONST", "2", "BC_CONST", "3", "BC_CMP", "lt", "BC_IF_BEGIN",
+                "BC_CONST", "1", "BC_PRINT", "BC_ELSE_BEGIN", "BC_CONST", "0",
+                "BC_PRINT", "BC_IF_END",
+            ],
+            "1\n",
+        ),
+        (
+            [
+                "BC_CONST", "3", "BC_REPEAT_BEGIN", "BC_CONST", "7", "BC_PRINT",
+                "BC_REPEAT_END",
+            ],
+            "7\n7\n7\n",
+        ),
+        (["BC_CONST", "Kuro Linux", "BC_PRINT"], "Kuro Linux"),
         (
             [
                 "BC_CONST", "0", "BC_STORE_LIST", "N", "BC_WHILE_BEGIN",
