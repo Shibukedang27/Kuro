@@ -233,3 +233,13 @@ def test_kuro_vm_preserves_decimal_display_in_collection_items():
         assert env["VMFailed"] in (None, 0), source
         assert env["VMOutput"] == values, source
         assert env["VMOutputDisplay"] == displays, source
+
+
+def test_kuro_vm_clears_stale_decimal_display_after_integer_overwrite():
+    env = run_kuro_vm_environment("Amount = 3.25; Amount = 4; Print Amount.")
+    assert env["VMOutput"] == [4]
+    assert env["VMOutputDisplay"] == [""]
+
+    env = run_kuro_vm_environment("Amounts = 1.25, 2.5; Set Amounts 0 to 7; Print Amounts.")
+    assert env["VMOutput"] == [7, 2.5]
+    assert env["VMOutputDisplay"] == ["", "2.5"]
