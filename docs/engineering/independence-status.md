@@ -15,11 +15,11 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 
 ## Current state
 
-- **All PRs #2–#34 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
-- **GitHub CI:** PRs #2–#34 have 8/8 successful checks.
-- **Local Linux x86-64 full suite on the current stacked branch:** 656 passed, 19 skipped, 0 failed.
-- Linux CI now builds native production images with Python, then blocks Python and host compiler tools from `PATH` while testing `doctor`, source run/compile, bytecode execution, and codegen. This proves the built images' use path only; clean-checkout image bootstrap remains Python-hosted, and native image construction still invokes the system assembler/linker.
-- Linux x86-64 native support remains experimental and incomplete. Closures dispatch at runtime among compile-time-known targets; action-created closures carry per-instance environments allocated from a syscall-grown `brk` heap in 4 KiB pages, with no fixed 128-object cap. Integer, float, NUL-terminated text, record-reference, and map captures are supported; closure values and other captures remain unsupported. Closure actions can read and update record fields using literal names when the field kind was established earlier; text-field writes remain rejected because variable display lengths are not tracked. Map actions support `MapHas`, `MapGet`, and same-kind `MapSet` with literal keys whose kinds are known; text-value writes remain rejected because variable display lengths are not tracked. Arbitrary runtime field names and map keys remain unsupported inside closure actions. Action returns may merge statically known closure targets across branches when every return path is known; mixed closure/scalar paths are rejected. Allocated pages remain live until process exit; reclamation, broader control-flow cases, and dynamically created targets remain open. Main-program record fields support runtime selection among statically known literal names when selected values have one known kind. Tasks remain statically bounded and are not a parallel scheduler.
+- **All PRs #2–#38 are open and unmerged.** `main` is unchanged; the stack is submitted for inspection and review, not silently integrated.
+- **GitHub CI:** PRs #2–#36 have 8/8 successful checks. PR #37 has 7/8 successful with one check pending; PR #38 is running its matrix with no failures observed so far.
+- **Full-suite checkpoint:** 656 passed, 19 skipped, 0 failed on the earlier PR #34 stack. Subsequent closure-focused, compiler-driver, and restricted-PATH smoke tests have passed; a full suite has not yet been rerun on the latest stack.
+- Linux CI builds static native production images, then blocks Python and host toolchains from `PATH` while testing `doctor`, source run/compile, bytecode execution, codegen, and (in PR #38) a stage-1 compiler bootstrap probe. This verifies use of prebuilt images; clean-checkout image bootstrap remains Python-hosted, and native image construction still invokes the system assembler/linker.
+- Linux x86-64 native support remains experimental and incomplete. Closures dispatch at runtime among compile-time-known targets; action-created closures carry per-instance environments allocated from a syscall-grown `brk` heap in 4 KiB pages, with no fixed 128-object cap. Integer, float, NUL-terminated text, record-reference, map-reference, and collection-reference captures are supported; indexed captured-collection reads and same-kind writes are covered, while closure values and other capture kinds remain unsupported. Closure actions can read and update record fields using literal names when the field kind was established earlier; text-field writes remain rejected because variable display lengths are not tracked. Map actions support `MapHas`, `MapGet`, and same-kind `MapSet` with literal keys whose kinds are known; text-value writes remain rejected because variable display lengths are not tracked. Arbitrary runtime field names and map keys remain unsupported inside closure actions. Action returns may merge statically known closure targets across branches when every return path is known; mixed closure/scalar paths are rejected. Allocated pages remain live until process exit; reclamation, broader control-flow cases, and dynamically created targets remain open. Main-program record fields support runtime selection among statically known literal names when selected values have one known kind. Tasks remain statically bounded and are not a parallel scheduler.
 
 ## Published work
 
@@ -58,6 +58,10 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 | [#32](https://github.com/Shibukedang27/Kuro/pull/32) | Capture NUL-terminated text in Linux native closures | Open; 8/8 checks passing |
 | [#33](https://github.com/Shibukedang27/Kuro/pull/33) | Capture record references and access typed fields in Linux closures | Open; 8/8 checks passing |
 | [#34](https://github.com/Shibukedang27/Kuro/pull/34) | Capture maps and access typed literal keys in Linux closures | Open; 8/8 checks passing |
+| [#35](https://github.com/Shibukedang27/Kuro/pull/35) | Capture collections in Linux native closures | Open; 8/8 checks passing |
+| [#36](https://github.com/Shibukedang27/Kuro/pull/36) | Compose native compiler source without Python | Open; 8/8 checks passing |
+| [#37](https://github.com/Shibukedang27/Kuro/pull/37) | Link Linux native images without a dynamic loader | Open; 7/8 checks successful, 1 pending |
+| [#38](https://github.com/Shibukedang27/Kuro/pull/38) | Verify Python-free stage-one compiler bootstrap | Open; CI running |
 
 The PR descriptions contain the detailed intent, implementation, test outcomes, and explicit limits for each batch. The dependency chain is deliberate: review and merge in dependency order if accepting the changes.
 
@@ -75,8 +79,9 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 ### 2. Remove Python from the required build and use path
 
 - Inventory every Python dependency in bootstrap, compiler, packaging, tests, release scripts, and developer commands.
-- Establish a clean-checkout bootstrap sequence that starts from checked-in Kuro source and reproducible seed artifacts, then builds the compiler/runtime using Kuro itself.
-- Extend the Python-blocked runtime gate from prebuilt-image use to a clean-checkout bootstrap that does not invoke Python at all.
+- PR #36 adds a POSIX shell/awk compiler-source composer. PR #38 extends the Python-blocked smoke gate: the native stage-0 compiler compiles the full self-host compiler source to bytecode, then that stage-1 compiler compiles a small probe whose bytecode must match stage 0 exactly. This is a verified bootstrap rung, not yet a full stage-2 self-rebuild or clean-checkout bootstrap; the seed images are still constructed with Python and host tools.
+- Before proving full stage-2 self-compilation on the compiler's >70 KiB source, replace the artifact loader's byte-by-byte immutable text concatenation with a one-pass scalar-text suffix operation. A collection-backed experiment was rejected because it changed `BC_INPUT`'s established Text semantics and is not part of the submitted change.
+- Establish a clean-checkout bootstrap sequence that starts from checked-in Kuro source and reproducible seed artifacts, then builds the compiler/runtime using Kuro itself. Extend the Python-blocked gate from prebuilt-image use to seed construction that does not invoke Python.
 - Keep the frozen reference interpreter as an optional oracle if desired; it must not be a required build dependency.
 
 ### 3. Decide and implement the native toolchain boundary
@@ -99,4 +104,4 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 
 ## Next concrete step
 
-Continue closure parity with collection and other non-scalar captures, loop/nested-action returns, and heap reclamation/resource accounting; extend closure record/map access beyond literal names and pre-established value kinds. Establish a clean-checkout bootstrap that does not require Python; scientific notation/extreme binary64 formatting and the strict assembler/linker-independence decision also remain open. The current PR stack is not completion of the independence goal.
+Next, implement a one-pass scalar Text suffix for framed bytecode input and verify that stage 1 can recompile the full compiler source, not only a probe. Then move seed-image construction out of Python and remove the remaining host assembler/linker dependency. In parallel, continue closure parity for loop/nested-action returns, reclamation/accounting, closure-valued captures, and non-literal record/map access; scientific notation and extreme binary64 formatting also remain open. The current PR stack is not completion of the independence goal.
