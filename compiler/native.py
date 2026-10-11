@@ -1414,8 +1414,18 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             if instruction.op == "CALL" and instruction.args and instruction.args[0] == "MakeMap" and instruction.dest
         )
     }
+    record_dest_labels = {
+        instruction.dest: f".Lkuro_record_{index}"
+        for index, instruction in enumerate(
+            instruction for instruction in items
+            if instruction.op == "CALL" and instruction.args and instruction.args[0] == "MakeRecord" and instruction.dest
+        )
+    }
     map_alias: dict[str, str] = {}
     map_key_slots: dict[str, int] = {}
+    record_field_slots: dict[str, int] = {}
+    record_field_kinds: dict[str, str] = {}
+    record_field_lengths: dict[str, int] = {}
     known_text: dict[str, str] = {}
     map_value_kinds: dict[str, str] = {}
     map_value_lengths: dict[str, int] = {}
@@ -1857,7 +1867,44 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 collection_kinds.setdefault(name, "text")
         elif op == "CALL":
             call_name, *arguments = instruction.args
-            if call_name == "MakeEnum":
+            if call_name == "MakeRecord":
+                if len(arguments) != 1 or arguments[0] not in known_text:
+                    raise NativeBackendError("x86_64-linux MakeRecord requires a known type name")
+                label = record_dest_labels.get(instruction.dest)
+                if label is None:
+                    raise NativeBackendError("x86_64-linux MakeRecord requires a destination")
+                lines.append(f"    lea {label}(%rip), %rax")
+                store(instruction.dest)
+                kinds[instruction.dest] = "record"
+            elif call_name in {"RecordSet", "RecordGet"}:
+                if len(arguments) < 2 or arguments[0] not in slots or arguments[1] not in known_text:
+                    raise NativeBackendError(f"x86_64-linux {call_name} requires a record and known field name")
+                field = known_text[arguments[1]]
+                slot = record_field_slots.setdefault(field, len(record_field_slots))
+                if slot >= 63:
+                    raise NativeBackendError("x86_64-linux record exceeds fixed capacity of 63 fields")
+                load(arguments[0], "%rax")
+                if call_name == "RecordSet":
+                    if len(arguments) != 3:
+                        raise NativeBackendError("x86_64-linux RecordSet requires record, field, and value")
+                    load(arguments[2], "%rdx")
+                    lines.append(f"    mov %rdx, {8 + slot * 8}(%rax)")
+                    store(instruction.dest)
+                    kinds[instruction.dest] = "record"
+                    record_field_kinds[field] = kinds.get(arguments[2], "unknown")
+                    if arguments[2] in text_lengths:
+                        record_field_lengths[field] = text_lengths[arguments[2]]
+                    elif field in record_field_lengths:
+                        del record_field_lengths[field]
+                else:
+                    if len(arguments) != 2:
+                        raise NativeBackendError("x86_64-linux RecordGet requires record and field")
+                    lines.append(f"    mov {8 + slot * 8}(%rax), %rax")
+                    store(instruction.dest)
+                    kinds[instruction.dest] = record_field_kinds.get(field, "unknown")
+                    if kinds[instruction.dest] == "text" and field in record_field_lengths:
+                        text_lengths[instruction.dest] = record_field_lengths[field]
+            elif call_name == "MakeEnum":
                 if len(arguments) != 2 or any(argument not in known_text for argument in arguments):
                     raise NativeBackendError("x86_64-linux MakeEnum requires known type and variant names")
                 enum_text = f"{known_text[arguments[0]]}.{known_text[arguments[1]]}"
@@ -2574,6 +2621,8 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         lines.extend([f"    .p2align 3", f"{label}: .zero 8"])
     for label in map_dest_labels.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 8192"])
+    for label in record_dest_labels.values():
+        lines.extend([f"    .p2align 3", f"{label}: .zero 512"])
     for label in tagged_dest_labels.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 16"])
     lines.extend([".Lkuro_bss_end:", ".section .rodata", ".Lkuro_rodata_begin:"])
