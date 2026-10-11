@@ -545,7 +545,7 @@ def test_native_backend_captures_one_escaping_numeric_value(tmp_path):
 
 
 @requires_linux_x86_64
-def test_native_backend_rejects_second_captured_closure_instance(tmp_path):
+def test_native_backend_supports_independent_captured_closure_instances(tmp_path):
     result = compile_source(
         'First = 0; Second = 0;\n'
         'Action MakeAdder Base;\n'
@@ -554,9 +554,30 @@ def test_native_backend_rejects_second_captured_closure_instance(tmp_path):
         'Call MakeAdder 10; Update First to @_;\n'
         'Call MakeAdder 20; Update Second to @_;\n'
         'Call Invoke First, 7; Print @_.\n'
+        'Call Invoke Second, 7; Print @_.\n'
     )
     assert result.ok
     executable = tmp_path / "second-captured-closure"
+    build_native(result.ir, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "17\n27\n"
+
+
+@requires_linux_x86_64
+def test_native_backend_exits_when_closure_heap_is_exhausted(tmp_path):
+    source = (
+        'Current = 0;\n'
+        'Action MakeAdder Base;\n'
+        'Action AddBase Value;\nReturn Base + Value;\nDone.\n'
+        'Call MakeClosure "AddBase";\nReturn @_;\nDone.\n'
+        + "".join(
+            f"Call MakeAdder {value}; Update Current to @_;\n"
+            for value in range(129)
+        )
+    )
+    result = compile_source(source)
+    assert result.ok
+    executable = tmp_path / "closure-heap-exhausted"
     build_native(result.ir, executable)
     run = subprocess.run([str(executable)], capture_output=True, text=True)
     assert run.returncode == 1

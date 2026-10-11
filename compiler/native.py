@@ -1292,9 +1292,15 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     Values live in a real stack frame and branches target emitted labels. No
     constant evaluation or foreign runtime is involved; text output and
     integer formatting use Linux syscalls directly. Complex heap values,
-    floating point, and calls remain explicit capability errors below.
+    floating point, and unsupported call forms remain explicit capability errors below.
     """
     items = ir.main
+    # Captured closure objects reserve a 16-byte header and up to 30 integer
+    # captures. The bounded pool is process-local and fails closed on exhaustion.
+    closure_object_bytes = 256
+    closure_heap_capacity = 128
+    closure_heap_bytes = closure_object_bytes * closure_heap_capacity
+    max_closure_captures = (closure_object_bytes - 16) // 8
     def action_returns_text(name: str) -> bool:
         lowered = name.lower()
         return lowered in {
@@ -1498,18 +1504,15 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         name: tuple(sorted(supplied_captures.get(name, set())))
         for name in ir.functions
     }
-    function_capture_labels: dict[str, dict[str, str]] = {}
-    next_capture_index = 0
-    for function in ir.functions.values():
-        function_capture_labels[function.name] = {}
-        for name in function_capture_names[function.name]:
-            function_capture_labels[function.name][name] = f".Lkuro_capture_{next_capture_index}"
-            next_capture_index += 1
-    capture_seen_labels = {
-        name: f".Lkuro_capture_seen_{index}"
-        for index, (name, captures) in enumerate(function_capture_labels.items())
-        if captures
+    function_capture_slots: dict[str, dict[str, int]] = {
+        name: {capture_name: index for index, capture_name in enumerate(captures)}
+        for name, captures in function_capture_names.items()
     }
+    for function_name, captures in function_capture_names.items():
+        if len(captures) > max_closure_captures:
+            raise NativeBackendError(
+                f"x86_64-linux closure {function_name!r} exceeds the fixed capture capacity"
+            )
     global_labels = {name: f".Lkuro_global_{index}" for index, name in enumerate(sorted(global_names))}
     char_buffers = {
         instruction.dest: f".Lkuro_char_{index}"
@@ -2418,6 +2421,25 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     raise NativeBackendError("x86_64-linux Invoke targets must have the same return kind")
                 registers = ("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9")
                 load(arguments[0], "%r11")
+                # Captured closures point into the BSS pool; no-capture closures
+                # keep using their action's raw code pointer.
+                raw_closure_label = f".Lkuro_invoke_raw_{instruction_index}"
+                invoke_ready_label = f".Lkuro_invoke_ready_{instruction_index}"
+                lines.extend([
+                    "    lea .Lkuro_closure_heap(%rip), %r10",
+                    "    cmp %r10, %r11",
+                    f"    jb {raw_closure_label}",
+                    "    lea .Lkuro_closure_heap_end(%rip), %r10",
+                    "    cmp %r10, %r11",
+                    f"    jae {raw_closure_label}",
+                    "    mov 0(%r11), %rax",
+                    "    mov 8(%r11), %r10",
+                    "    mov %rax, %r11",
+                    f"    jmp {invoke_ready_label}",
+                    f"{raw_closure_label}:",
+                    "    xor %r10d, %r10d",
+                    f"{invoke_ready_label}:",
+                ])
                 for index, argument in enumerate(action_arguments):
                     load(argument, registers[index])
                 lines.append("    call *%r11")
@@ -2447,6 +2469,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 action = task_actions[arguments[0]]
                 label = task_argument_refs[arguments[0]]
                 lines.append(f"    mov {label}(%rip), %rdi")
+                lines.append("    xor %r10d, %r10d")
                 lines.append(f"    call .Lkuro_fn_{action}")
                 store(instruction.dest)
                 kinds[instruction.dest] = action_return_kind(action, (task_argument_values[arguments[0]],))
@@ -2549,6 +2572,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 remember_action_argument_kinds(call_name, tuple(arguments))
                 for index, argument in enumerate(arguments):
                     load(argument, f"%{('rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9')[index]}")
+                lines.append("    xor %r10d, %r10d")
                 lines.append(f"    call .Lkuro_fn_{call_name}")
                 store(instruction.dest)
                 kinds[instruction.dest] = action_return_kind(call_name, tuple(arguments))
@@ -2679,7 +2703,8 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     if argument not in global_names and argument not in collection_buffers and argument not in input_buffers:
                         fn_names.add(argument)
         fn_slots = {name: -(index + 1) * 8 for index, name in enumerate(sorted(fn_names))}
-        fn_frame = ((len(fn_slots) * 8 + 15) // 16) * 16 or 16
+        fn_env_slot = -(len(fn_slots) + 1) * 8
+        fn_frame = (((len(fn_slots) + 1) * 8 + 15) // 16) * 16 or 16
         fn_labels = {item.dest: f".Lkuro_fn_{function.name}_{item.dest}" for item in function.body if item.op == "LABEL"}
         parameter_hints = function_parameter_kinds.get(function.name, {})
         fn_kinds: dict[str, str] = {
@@ -2739,12 +2764,16 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             name: ("number" if any(word in name.lower() for word in ("count", "pos", "start", "end", "index", "depth", "len")) else "text")
             for name in collection_buffers
         }
-        lines.extend([f".Lkuro_fn_{function.name}:", "    push %rbp", "    mov %rsp, %rbp", f"    sub ${fn_frame}, %rsp"])
+        lines.extend([
+            f".Lkuro_fn_{function.name}:", "    push %rbp", "    mov %rsp, %rbp",
+            f"    sub ${fn_frame}, %rsp", f"    mov %r10, {fn_env_slot}(%rbp)",
+        ])
 
         def fn_load(name: str, register: str = "%rax") -> None:
-            capture_label = function_capture_labels.get(function.name, {}).get(name)
-            if capture_label is not None:
-                lines.append(f"    mov {capture_label}(%rip), {register}")
+            capture_index = function_capture_slots.get(function.name, {}).get(name)
+            if capture_index is not None:
+                lines.append(f"    mov {fn_env_slot}(%rbp), %r11")
+                lines.append(f"    mov {capture_index * 8}(%r11), {register}")
                 return
             if name in fn_slots:
                 lines.append(f"    mov {fn_slots[name]}(%rbp), {register}")
@@ -2761,9 +2790,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             raise NativeBackendError(f"x86_64-linux action {function.name!r} cannot load {name!r}")
 
         def fn_store(name: str, register: str = "%rax") -> None:
-            capture_label = function_capture_labels.get(function.name, {}).get(name)
-            if capture_label is not None:
-                lines.append(f"    mov {register}, {capture_label}(%rip)")
+            capture_index = function_capture_slots.get(function.name, {}).get(name)
+            if capture_index is not None:
+                lines.append(f"    mov {fn_env_slot}(%rbp), %r11")
+                lines.append(f"    mov {register}, {capture_index * 8}(%r11)")
                 return
             if name in fn_slots:
                 lines.append(f"    mov {register}, {fn_slots[name]}(%rbp)")
@@ -3124,23 +3154,37 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                         raise NativeBackendError(
                             f"x86_64-linux action {function.name!r} MakeClosure requires a statically known action"
                         )
-                    seen_label = capture_seen_labels.get(target)
-                    if seen_label is not None:
-                        lines.extend([
-                            f"    cmpq $0, {seen_label}(%rip)",
-                            "    jne .Lkuro_closure_capture_error",
-                            f"    movq $1, {seen_label}(%rip)",
-                        ])
-                    for capture_name, capture_label in function_capture_labels.get(target, {}).items():
-                        capture_kind = fn_kinds.get(capture_name, "unknown")
-                        if capture_kind != "number":
+                    capture_slots = function_capture_slots.get(target, {})
+                    for capture_name in capture_slots:
+                        if fn_kinds.get(capture_name, "unknown") != "number":
                             raise NativeBackendError(
                                 "x86_64-linux action-created closures currently support integer captures only"
                             )
-                        fn_load(capture_name, "%rax")
-                        lines.append(f"    mov %rax, {capture_label}(%rip)")
-                    lines.append(f"    lea .Lkuro_fn_{target}(%rip), %rax")
-                    fn_store(item.dest)
+                    if capture_slots:
+                        lines.extend([
+                            "    mov .Lkuro_closure_heap_cursor(%rip), %r8",
+                            f"    cmp ${closure_heap_bytes}, %r8",
+                            "    jae .Lkuro_overflow",
+                            "    lea .Lkuro_closure_heap(%rip), %r9",
+                            "    add %r8, %r9",
+                            f"    add ${closure_object_bytes}, %r8",
+                            "    mov %r8, .Lkuro_closure_heap_cursor(%rip)",
+                            f"    lea .Lkuro_fn_{target}(%rip), %rax",
+                            "    mov %rax, 0(%r9)",
+                            "    lea 16(%r9), %rax",
+                            "    mov %rax, 8(%r9)",
+                        ])
+                        for capture_name, capture_index in capture_slots.items():
+                            if 16 + capture_index * 8 >= closure_object_bytes:
+                                raise NativeBackendError(
+                                    f"x86_64-linux closure {target!r} exceeds the fixed capture capacity"
+                                )
+                            fn_load(capture_name, "%rax")
+                            lines.append(f"    mov %rax, {16 + capture_index * 8}(%r9)")
+                        fn_store(item.dest, "%r9")
+                    else:
+                        lines.append(f"    lea .Lkuro_fn_{target}(%rip), %rax")
+                        fn_store(item.dest)
                     fn_kinds[item.dest] = "closure"
                     continue
                 if name in ir.functions and function_capture_names.get(name):
@@ -3151,7 +3195,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     raise NativeBackendError(f"x86_64-linux action {function.name!r} cannot call {name!r}")
                 registers = ("rdi", "rsi", "rdx", "rcx", "r8", "r9")
                 for index, argument in enumerate(arguments): fn_load(argument, f"%{registers[index]}")
-                lines.append(f"    call .Lkuro_fn_{name}"); fn_store(item.dest); fn_kinds[item.dest] = "text" if action_returns_text(name) else "number"
+                lines.append("    xor %r10d, %r10d")
+                lines.append(f"    call .Lkuro_fn_{name}")
+                fn_store(item.dest)
+                fn_kinds[item.dest] = "text" if action_returns_text(name) else "number"
             elif fn_op == "PRINT":
                 name = item.args[0]
                 if fn_kinds.get(name) == "text":
@@ -3202,7 +3249,6 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         ".Lkuro_bounds:", "    mov $60, %eax", "    mov $1, %edi", "    syscall", "    ud2",
         ".Lkuro_overflow:", "    mov $60, %eax", "    mov $1, %edi", "    syscall", "    ud2",
         ".Lkuro_runtime_error:", "    mov $1, %eax", "    leave", "    ret",
-        ".Lkuro_closure_capture_error:", "    mov $60, %eax", "    mov $1, %edi", "    syscall", "    ud2",
     ])
     lines.extend([
         "_kuro_print_int:", "    push %rbp", "    mov %rsp, %rbp", "    sub $32, %rsp",
@@ -3280,11 +3326,13 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         lines.extend([f"    .p2align 3", f"{label}: .zero 8"])
     for label in global_labels.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 8"])
-    for capture_labels in function_capture_labels.values():
-        for label in capture_labels.values():
-            lines.extend(["    .p2align 3", f"{label}: .zero 8"])
-    for label in capture_seen_labels.values():
-        lines.extend(["    .p2align 3", f"{label}: .zero 8"])
+    lines.extend([
+        "    .p2align 4",
+        f".Lkuro_closure_heap: .zero {closure_heap_bytes}",
+        ".Lkuro_closure_heap_end:",
+        "    .p2align 3",
+        ".Lkuro_closure_heap_cursor: .zero 8",
+    ])
     for label in map_dest_labels.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 8192"])
     for label in record_dest_labels.values():
