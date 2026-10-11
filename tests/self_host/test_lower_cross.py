@@ -70,7 +70,8 @@ def test_kuro_lowering_handles_multi_value_assignment():
     ir, failed = lower_source('Names = "A", "B", "C";')
     assert failed in (None, 0)
     assert ir == [
-        "CONST", "A", "CONST", "B", "CONST", "C", "STORE_LIST", "Names"
+        "MULTI_BEGIN", "CONST", "A", "CONST", "B", "CONST", "C",
+        "STORE_MULTI", "Names",
     ]
 
 

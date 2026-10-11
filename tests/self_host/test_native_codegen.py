@@ -116,6 +116,14 @@ def test_kuro_native_codegen_supports_named_integer_variables(tmp_path):
     assert subprocess.run([str(executable)], capture_output=True, text=True, check=True).stdout == "5\n"
 
 
+def test_kuro_native_codegen_rejects_multi_value_collection_assignment():
+    env = run_codegen(
+        '"BC_MULTI_BEGIN", "BC_CONST", "a", "BC_CONST", "b", '
+        '"BC_STORE_MULTI", "Items"'
+    )
+    assert env["NativeFailed"] == 1
+
+
 @pytest.mark.parametrize(("left", "right", "expected"), [("2", "3", "1\n"), ("4", "3", "0\n")])
 def test_kuro_native_codegen_supports_comparisons_and_if(tmp_path, left, right, expected):
     env = run_codegen(

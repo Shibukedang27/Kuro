@@ -152,19 +152,49 @@ Action LowerPrintExpr;
     Done.
 Done.
 
+Action LowerCountAssignmentValues StartPos;
+    Length AstOut;
+    LowerCountAssignmentValues_Length = @_;
+    LowerCountAssignmentValues_Pos = StartPos;
+    LowerCountAssignmentValues_Count = 0;
+    LowerCountAssignmentValues_Found = 0;
+    While LowerCountAssignmentValues_Pos is less than LowerCountAssignmentValues_Length and LowerCountAssignmentValues_Found is equal to 0;
+        Get AstOut LowerCountAssignmentValues_Pos;
+        If @_ is equal to "END_VALUES";
+            LowerCountAssignmentValues_Found = 1;
+        Else;
+            If @_ is equal to "END_EXPR";
+                Add 1 to LowerCountAssignmentValues_Count;
+            Done.
+        Done.
+        Add 1 to LowerCountAssignmentValues_Pos;
+    Done.
+    Return LowerCountAssignmentValues_Count;
+Done.
+
 Action LowerAssign;
     LowerAssign_NamePos = LowerPos + 1;
     Get AstOut LowerAssign_NamePos;
     LowerAssign_Name = @_;
     LowerPos = LowerPos + 3;
+    Call LowerCountAssignmentValues LowerPos;
+    LowerAssign_Count = @_;
+    If LowerAssign_Count is greater than 1;
+        Append "MULTI_BEGIN" to IROut;
+    Done.
     Call LowerValue;
     If LowerFailed is equal to 0;
         Add 1 to LowerPos;
         Call LowerAssignTail;
     Done.
     If LowerFailed is equal to 0;
-        Append "STORE_LIST" to IROut;
-        Append LowerAssign_Name to IROut;
+        If LowerAssign_Count is greater than 1;
+            Append "STORE_MULTI" to IROut;
+            Append LowerAssign_Name to IROut;
+        Else;
+            Append "STORE_LIST" to IROut;
+            Append LowerAssign_Name to IROut;
+        Done.
     Done.
 Done.
 

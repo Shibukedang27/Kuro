@@ -12,6 +12,8 @@ are consumed according to the table below.
 | `BC_CONST` | value |
 | `BC_LOADVAR` | variable name |
 | `BC_STORE_LIST` | variable name |
+| `BC_MULTI_BEGIN` | — |
+| `BC_STORE_MULTI` | variable name |
 | `BC_BINOP` | operator |
 | `BC_CMP` | comparison operator |
 | `BC_BOOL` | `AND` or `OR` |
@@ -34,6 +36,12 @@ onto the VM stack, mutation and output operations consume stack values, and
 structured control markers delimit nested blocks. A later encoder revision
 may replace markers with jump offsets after the Kuro VM has a verified
 instruction-pointer model.
+
+`BC_MULTI_BEGIN` records the current operand-stack depth. `BC_STORE_MULTI`
+consumes the values pushed after that marker, in source order, and stores them
+as a collection. Ordinary one-value assignments continue to use
+`BC_STORE_LIST`; the marker makes the assignment boundary explicit without
+converting a runtime value to an operand count.
 
 The JSON/binary development artifacts are executable through hosted `kuro
 exec`. The native line-stream artifact is executable through `kuro-native
