@@ -16,7 +16,7 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 ## Current state
 
 - **All PRs #2–#33 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
-- **GitHub CI:** PRs #2–#32 have 8/8 successful checks; PR #33's check state is available on its linked pull-request page.
+- **GitHub CI:** PRs #2–#33 have 8/8 successful checks.
 - **Local Linux x86-64 full suite on the current stacked branch:** 655 passed, 19 skipped, 0 failed.
 - Linux CI now builds native production images with Python, then blocks Python and host compiler tools from `PATH` while testing `doctor`, source run/compile, bytecode execution, and codegen. This proves the built images' use path only; clean-checkout image bootstrap remains Python-hosted, and native image construction still invokes the system assembler/linker.
 - Linux x86-64 native support remains experimental and incomplete. Closures dispatch at runtime among compile-time-known targets; action-created closures carry per-instance environments allocated from a syscall-grown `brk` heap in 4 KiB pages, with no fixed 128-object cap. Integer, float, NUL-terminated text, and record-reference captures are supported; maps and other captures remain unsupported. Closure actions can read and update fields using literal names when the field kind was established earlier; text-field writes remain rejected because variable display lengths are not tracked. Arbitrary runtime field names remain unsupported inside closure actions. Action returns may merge statically known closure targets across branches when every return path is known; mixed closure/scalar paths are rejected. Allocated pages remain live until process exit; reclamation, broader control-flow cases, and dynamically created targets remain open. Main-program record fields support runtime selection among statically known literal names when selected values have one known kind. Tasks remain statically bounded and are not a parallel scheduler.
@@ -56,7 +56,7 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 | [#30](https://github.com/Shibukedang27/Kuro/pull/30) | Track closure targets through branch returns in Linux native actions | Open; 8/8 checks passing |
 | [#31](https://github.com/Shibukedang27/Kuro/pull/31) | Grow Linux captured-closure storage with a syscall-backed allocator | Open; 8/8 checks passing |
 | [#32](https://github.com/Shibukedang27/Kuro/pull/32) | Capture NUL-terminated text in Linux native closures | Open; 8/8 checks passing |
-| [#33](https://github.com/Shibukedang27/Kuro/pull/33) | Capture record references and access typed fields in Linux closures | Open; check state on the PR page |
+| [#33](https://github.com/Shibukedang27/Kuro/pull/33) | Capture record references and access typed fields in Linux closures | Open; 8/8 checks passing |
 
 The PR descriptions contain the detailed intent, implementation, test outcomes, and explicit limits for each batch. The dependency chain is deliberate: review and merge in dependency order if accepting the changes.
 
