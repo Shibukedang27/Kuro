@@ -1232,9 +1232,13 @@ def _emit_dynamic_function(
                 text_label = f"L_kuro_print_dynamic_text_{function.name}_{temp}"
                 float_label = f"L_kuro_print_dynamic_float_{function.name}_{temp}"
                 done_label = f"L_kuro_print_dynamic_done_{function.name}_{temp}"
+                # Darwin ARM64 user-space pointers are above 4 GiB and below
+                # the 48-bit virtual-address ceiling.  A 4 KiB cutoff treats
+                # ordinary integer results (for example, a 70,000-byte
+                # length) as string pointers and can fault inside puts/strlen.
                 lines.extend([
-                    "    cmp x0, #4096", f"    b.lo {number_label}",
-                    "    mov x1, #0x100000000000", "    cmp x0, x1", f"    b.lo {text_label}",
+                    "    mov x1, #0x100000000", "    cmp x0, x1", f"    b.lo {number_label}",
+                    "    mov x1, #0x1000000000000", "    cmp x0, x1", f"    b.lo {text_label}",
                     f"{float_label}:", "    sub sp, sp, #16", "    str x0, [sp]", "    adrp x0, L_kuro_float_format@PAGE", "    add x0, x0, L_kuro_float_format@PAGEOFF", "    bl _printf", "    add sp, sp, #16", f"    b {done_label}",
                     f"{text_label}:", "    bl _puts", f"    b {done_label}",
                     f"{number_label}:", "    bl _kuro_print_int", f"{done_label}:",

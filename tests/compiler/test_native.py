@@ -1040,6 +1040,34 @@ def test_macos_arm64_suffix_requires_proven_text_sources():
     assert "bl _memcpy" not in assembly
 
 
+def test_macos_arm64_dynamic_print_uses_user_pointer_bounds():
+    from compiler.ir import IRFunction, IRProgram, Instr
+    from compiler.native import emit_macos_arm64
+
+    printer = IRFunction(
+        "PrintValue",
+        ["Value"],
+        [
+            Instr("JUMP", ("print_value",)),
+            Instr("LABEL", (), "print_value"),
+            Instr("PRINT", ("Value",)),
+        ],
+        parameter_types={"Value": "Text"},
+    )
+    program = IRProgram(
+        main=[
+            Instr("CONST", ("hello",), "t0"),
+            Instr("CALL", ("PrintValue", "t0"), "t1"),
+        ],
+        functions={"PrintValue": printer},
+    )
+
+    assembly = emit_macos_arm64(program)
+    assert "mov x1, #0x100000000" in assembly
+    assert "mov x1, #0x1000000000000" in assembly
+    assert "cmp x0, #4096" not in assembly
+
+
 @requires_linux_x86_64
 def test_native_backend_accepts_text_suffix_source_in_typed_action(tmp_path):
     source = (

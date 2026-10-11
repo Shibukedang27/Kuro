@@ -34,9 +34,11 @@ def _native_lldb_trace(executable: Path, payload: str, tmp_path: Path) -> str:
         result = subprocess.run(
             [
                 lldb, "--batch",
+                "-o", "breakpoint set --name _platform_strlen --condition '($x0 > 4096 && $x0 < 1048576)'",
                 "-o", f"process launch -i {input_path}",
-                "-o", "thread backtrace all",
                 "-o", "register read pc lr sp x0 x1 x2",
+                "-o", "thread backtrace all",
+                "-o", "image lookup --address $lr",
                 "--", str(executable),
             ],
             capture_output=True,
@@ -188,6 +190,20 @@ def test_native_artifact_launcher_preserves_large_input_and_runs_suffix_opcode(t
     )
     assert typed_text.returncode == 0, typed_text.stderr
     assert typed_text.stdout == "1\n"
+
+    large_integer_input = "kuro.bytecode/1\nBC_CONST\n70000\nBC_PRINT\n"
+    large_integer = subprocess.run(
+        [str(executable)], input=large_integer_input, capture_output=True,
+        text=True, timeout=60,
+    )
+    large_integer_trace = (
+        _native_lldb_trace(executable, large_integer_input, tmp_path)
+        if large_integer.returncode != 0 else ""
+    )
+    assert large_integer.returncode == 0, (
+        f"large integer output: {large_integer.stderr}\n{large_integer_trace}"
+    )
+    assert large_integer.stdout == "70000\n"
 
     payload = "Q" * 70000 + "tail-END"
     outer_loader_input = (
