@@ -9,6 +9,15 @@ from compiler.pipeline import run_source
 ROOT = Path(__file__).resolve().parents[2]
 CODEGEN = ROOT / "self_host" / "native_codegen.kuro"
 
+MACOS_ARM64_HOST = (
+    platform.system() == "Darwin"
+    and platform.machine().lower() in {"arm64", "aarch64"}
+)
+requires_macos_arm64 = pytest.mark.skipif(
+    not MACOS_ARM64_HOST,
+    reason="executes the default aarch64-macos native codegen target",
+)
+
 
 def run_codegen(bytecode: str):
     stage = f'BytecodeOut = {bytecode};\n' + CODEGEN.read_text(encoding="utf-8")
@@ -50,6 +59,7 @@ def test_kuro_native_codegen_escapes_assembly_string_characters():
     assert '.asciz "a\\"b\\\\c\\n"' in env["NativeOut"]
 
 
+@requires_macos_arm64
 def test_kuro_native_codegen_output_builds_and_runs(tmp_path):
     env = run_literal_codegen("Kuro native")
     assembly = tmp_path / "kuro-owned.s"
@@ -66,6 +76,7 @@ def test_kuro_native_codegen_output_builds_and_runs(tmp_path):
     ("left", "operator", "right", "expected"),
     [("2", "+", "3", "5\n"), ("2", "-", "3", "-1\n"), ("7", "*", "6", "42\n"), ("8", "/", "2", "4\n")],
 )
+@requires_macos_arm64
 def test_kuro_native_codegen_builds_integer_arithmetic(tmp_path, left, operator, right, expected):
     env = run_codegen(
         f'"BC_CONST", "{left}", "BC_CONST", "{right}", "BC_BINOP", "{operator}", "BC_PRINT"'
@@ -90,6 +101,7 @@ def test_kuro_native_codegen_rejects_invalid_integer_arithmetic(bytecode):
     assert run_codegen(bytecode)["NativeFailed"] == 1
 
 
+@requires_macos_arm64
 def test_kuro_native_codegen_traps_runtime_division_by_zero(tmp_path):
     env = run_codegen('"BC_CONST", "8", "BC_CONST", "0", "BC_BINOP", "/", "BC_PRINT"')
     assembly = tmp_path / "divide-zero.s"
@@ -102,6 +114,7 @@ def test_kuro_native_codegen_traps_runtime_division_by_zero(tmp_path):
     assert result.stdout == ""
 
 
+@requires_macos_arm64
 def test_kuro_native_codegen_supports_named_integer_variables(tmp_path):
     env = run_codegen(
         '"BC_CONST", "2", "BC_CONST", "3", "BC_BINOP", "+", '
@@ -125,6 +138,7 @@ def test_kuro_native_codegen_rejects_multi_value_collection_assignment():
 
 
 @pytest.mark.parametrize(("left", "right", "expected"), [("2", "3", "1\n"), ("4", "3", "0\n")])
+@requires_macos_arm64
 def test_kuro_native_codegen_supports_comparisons_and_if(tmp_path, left, right, expected):
     env = run_codegen(
         f'"BC_CONST", "{left}", "BC_CONST", "{right}", "BC_CMP", "lt", '
@@ -148,6 +162,7 @@ def test_kuro_native_codegen_rejects_duplicate_else():
     assert env["NativeFailed"] == 1
 
 
+@requires_macos_arm64
 def test_kuro_native_codegen_supports_repeat(tmp_path):
     env = run_codegen(
         '"BC_CONST", "3", "BC_REPEAT_BEGIN", '
@@ -169,6 +184,7 @@ def test_kuro_native_codegen_rejects_repeat_stack_imbalance():
     assert env["NativeFailed"] == 1
 
 
+@requires_macos_arm64
 def test_kuro_native_codegen_supports_while_and_variable_add(tmp_path):
     env = run_codegen(
         '"BC_CONST", "0", "BC_STORE_LIST", "N", "BC_WHILE_BEGIN", '
@@ -198,6 +214,7 @@ def test_kuro_native_codegen_rejects_malformed_while(bytecode):
     assert run_codegen(bytecode)["NativeFailed"] == 1
 
 
+@requires_macos_arm64
 def test_native_kuro_codegen_image_consumes_artifact(tmp_path):
     from compiler.self_host import build_native_codegen
 
