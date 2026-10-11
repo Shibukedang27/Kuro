@@ -2303,7 +2303,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             if not changed:
                 break
         for numeric_name in fn_numeric_names:
-            if numeric_name in fn_kinds:
+            if numeric_name in fn_kinds and fn_kinds[numeric_name] != "float":
                 fn_kinds[numeric_name] = "number"
         fn_text_lengths: dict[str, int] = {}
         fn_collection_kinds: dict[str, str] = {
@@ -2313,6 +2313,9 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         lines.extend([f".Lkuro_fn_{function.name}:", "    push %rbp", "    mov %rsp, %rbp", f"    sub ${fn_frame}, %rsp"])
 
         def fn_load(name: str, register: str = "%rax") -> None:
+            if name in fn_slots:
+                lines.append(f"    mov {fn_slots[name]}(%rbp), {register}")
+                return
             if name in collection_buffers:
                 lines.append(f"    lea {collection_buffers[name]}(%rip), {register}")
                 return
@@ -2322,17 +2325,16 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             if name in global_labels:
                 lines.append(f"    mov {global_labels[name]}(%rip), {register}")
                 return
-            if name not in fn_slots:
-                raise NativeBackendError(f"x86_64-linux action {function.name!r} cannot load {name!r}")
-            lines.append(f"    mov {fn_slots[name]}(%rbp), {register}")
+            raise NativeBackendError(f"x86_64-linux action {function.name!r} cannot load {name!r}")
 
         def fn_store(name: str, register: str = "%rax") -> None:
+            if name in fn_slots:
+                lines.append(f"    mov {register}, {fn_slots[name]}(%rbp)")
+                return
             if name in global_labels:
                 lines.append(f"    mov {register}, {global_labels[name]}(%rip)")
                 return
-            if name not in fn_slots:
-                raise NativeBackendError(f"x86_64-linux action {function.name!r} cannot store {name!r}")
-            lines.append(f"    mov {register}, {fn_slots[name]}(%rbp)")
+            raise NativeBackendError(f"x86_64-linux action {function.name!r} cannot store {name!r}")
 
         for index, parameter in enumerate(function.params):
             fn_store(parameter, f"%{('rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9')[index]}")
@@ -2365,7 +2367,13 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 # Actions may read text constants initialized in the main
                 # program. Preserve that concrete global kind before falling
                 # back to name-based inference (e.g. NativeBackslash).
-                fn_kinds[item.dest] = "number" if source in fn_numeric_names else ("text" if strong_text_name else fn_kinds.get(source, kinds.get(source, inferred)))
+                source_kind = fn_kinds.get(source, kinds.get(source, inferred))
+                if source_kind == "float":
+                    fn_kinds[item.dest] = "float"
+                elif source in fn_numeric_names:
+                    fn_kinds[item.dest] = "number"
+                else:
+                    fn_kinds[item.dest] = "text" if strong_text_name else source_kind
                 if source in fn_text_lengths:
                     fn_text_lengths[item.dest] = fn_text_lengths[source]
             elif fn_op == "STORE_LIST":
@@ -2384,12 +2392,16 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     continue
                 if len(values) != 1:
                     raise NativeBackendError("x86_64-linux action multi-value assignment unsupported")
-                fn_load(values[0]); fn_store(name); fn_kinds[name] = "number" if values[0] in fn_numeric_names else fn_kinds.get(values[0], inferred_symbol_kind(values[0]))
+                fn_load(values[0]); fn_store(name)
+                source_kind = fn_kinds.get(values[0], inferred_symbol_kind(values[0]))
+                fn_kinds[name] = source_kind if source_kind == "float" else ("number" if values[0] in fn_numeric_names else source_kind)
                 if values[0] in fn_text_lengths:
                     fn_text_lengths[name] = fn_text_lengths[values[0]]
             elif fn_op == "UPDATE":
                 name, value = item.args
-                fn_load(value); fn_store(name); fn_kinds[name] = "number" if value in fn_numeric_names else fn_kinds.get(value, inferred_symbol_kind(value))
+                fn_load(value); fn_store(name)
+                source_kind = fn_kinds.get(value, inferred_symbol_kind(value))
+                fn_kinds[name] = source_kind if source_kind == "float" else ("number" if value in fn_numeric_names else source_kind)
                 if value in fn_text_lengths:
                     fn_text_lengths[name] = fn_text_lengths[value]
             elif fn_op == "ADD":

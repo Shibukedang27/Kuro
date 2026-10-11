@@ -34,8 +34,13 @@ VMCollectionEntryCount = 0;
 VMNextCollectionId = 0;
 VMStack is Text;
 VMStackKinds is Integers;
+VMStackDisplay is Text;
 VMOutput is Text;
+VMOutputDisplay is Text;
 VMOutputCount = 0;
+VMDecodedFloat = 0;
+VMDecodedDisplay = "";
+VMLastPoppedDisplay = "";
 VMPos = 0;
 VMCodeLen = 0;
 VMTop = 0;
@@ -76,6 +81,7 @@ VMWhileDone = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 VMWhileBodyDone = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 VMStack = "__vm_empty__", "__vm_empty__";
 VMStackKinds = 0, 0;
+VMStackDisplay = "", "";
 VMLastPoppedKind = 0;
 
 Action VMFindName Name, SearchPos;
@@ -327,11 +333,19 @@ Action VMPush Value;
     If VMTop is less than VMPush_Len;
         Set VMStack VMTop to Value;
         Set VMStackKinds VMTop to 0;
+        Set VMStackDisplay VMTop to "";
     Else;
         Append Value to VMStack;
         Append 0 to VMStackKinds;
+        Append "" to VMStackDisplay;
     Done.
     Add 1 to VMTop;
+Done.
+
+Action VMPushDecimal Value, Display;
+    Call VMPush Value;
+    VMPushDecimal_Index = VMTop - 1;
+    Set VMStackDisplay VMPushDecimal_Index to Display;
 Done.
 
 Action VMPushCollection Name;
@@ -345,6 +359,8 @@ Action VMPop;
         VMTop = VMTop - 1;
         Get VMStackKinds VMTop;
         VMLastPoppedKind = @_;
+        Get VMStackDisplay VMTop;
+        VMLastPoppedDisplay = @_;
         Get VMStack VMTop;
         Return @_;
     Else;
@@ -767,6 +783,7 @@ Action VMDecodeNumber Value, Pos, Count, Accumulated, DecimalDivisor, DecimalMod
         Get Value Pos;
         VMDecodeNumber_Char = @_;
         If VMDecodeNumber_Char is equal to ".";
+            VMDecodedFloat = 1;
             VMDecodeNumber_Next = Pos + 1;
             Call VMDecodeNumber Value, VMDecodeNumber_Next, Count, Accumulated, DecimalDivisor, 1;
             Return @_;
@@ -795,6 +812,8 @@ Action VMDecodeNumber Value, Pos, Count, Accumulated, DecimalDivisor, DecimalMod
 Done.
 
 Action VMDecodeConstant Value;
+    VMDecodedFloat = 0;
+    VMDecodedDisplay = "";
     Length Value;
     VMDecodeConstant_Count = @_;
     If VMDecodeConstant_Count is equal to 0;
@@ -814,8 +833,13 @@ Action VMDecodeConstant Value;
     Call VMDecodeNumber Value, 0, VMDecodeConstant_Count, 0, 1, 0;
     VMDecodeConstant_Number = @_;
     If VMNumericOk is equal to 1;
+        If VMDecodedFloat is equal to 1;
+            VMDecodedDisplay = Value;
+        Done.
         Return VMDecodeConstant_Number;
     Else;
+        VMDecodedFloat = 0;
+        VMDecodedDisplay = "";
         Return Value;
     Done.
 Done.
@@ -895,7 +919,12 @@ Action VMStep;
     If VMStep_Op is equal to "BC_CONST";
         Call VMReadOperand;
         Call VMDecodeConstant @_;
-        Call VMPush @_;
+        VMStep_ConstantValue = @_;
+        If VMDecodedFloat is equal to 1;
+            Call VMPushDecimal VMStep_ConstantValue, VMDecodedDisplay;
+        Else;
+            Call VMPush VMStep_ConstantValue;
+        Done.
         Return 0;
     Done.
     If VMStep_Op is equal to "BC_LOADVAR";
@@ -1217,11 +1246,13 @@ Action VMStep;
             While VMStep_PrintIndex is less than VMStep_PrintCount;
                 Call VMGetCollectionItem VMStep_Value, VMStep_PrintIndex;
                 Append @_ to VMOutput;
+                Append "" to VMOutputDisplay;
                 Add 1 to VMOutputCount;
                 Add 1 to VMStep_PrintIndex;
             Done.
         Else;
             Append VMStep_Value to VMOutput;
+            Append VMLastPoppedDisplay to VMOutputDisplay;
             Add 1 to VMOutputCount;
         Done.
         Return 0;

@@ -18,8 +18,14 @@ Action RuntimeRun;
         If RuntimeCount is greater than 0;
             RuntimeOutput = VMOutput;
             While RuntimeIndex is less than RuntimeCount;
-                Get VMOutput RuntimeIndex;
-                Print @_.
+                Get VMOutputDisplay RuntimeIndex;
+                RuntimeDisplay = @_;
+                If RuntimeDisplay is not equal to "";
+                    Print RuntimeDisplay.
+                Else;
+                    Get VMOutput RuntimeIndex;
+                    Print @_ .
+                Done.
                 Add 1 to RuntimeIndex;
             Done.
         Else;
