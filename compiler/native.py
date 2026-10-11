@@ -1339,6 +1339,15 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     local_texts[item.dest] = local_texts[source]
                 else:
                     local_texts.pop(item.dest, None)
+            elif item.op == "GET" and item.dest:
+                source = item.args[0]
+                source_kind = local_kinds.get(source, kinds.get(source, "unknown"))
+                if source_kind.startswith("collection:"):
+                    local_kinds[item.dest] = source_kind.split(":", 1)[1]
+                elif source_kind == "text":
+                    local_kinds[item.dest] = "text"
+                else:
+                    local_kinds[item.dest] = collection_kinds.get(source, "unknown")
             elif item.op == "BINOP" and item.dest:
                 operator, left, right = item.args
                 left_kind = local_kinds.get(left, kinds.get(left, inferred_symbol_kind(left)))
@@ -1387,6 +1396,9 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         hints = function_parameter_kinds.setdefault(name, {})
         for parameter, argument in zip(function.params, arguments):
             kind = kinds.get(argument, "unknown")
+            if kind == "collection":
+                source_name = collection_ref.get(argument, argument)
+                kind = f"collection:{collection_kinds.get(source_name, 'unknown')}"
             previous = hints.get(parameter)
             hints[parameter] = kind if previous is None or previous == kind else "unknown"
         refresh_function_capture_kinds()
@@ -1531,6 +1543,11 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             for item in target.body
             if item.op == "LOADVAR" and item.args
         }
+        target_reads.update(
+            item.args[0]
+            for item in target.body
+            if item.op in {"GET", "SET", "APPEND", "LENGTH"} and item.args
+        )
         target_free_names = target_reads - target_locals - main_global_names
         available_captures = target_free_names & maker_locals
         supplied_captures.setdefault(target_name, set()).update(available_captures)
@@ -1587,6 +1604,24 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     concat_lengths = {name: f"{label}_len" for name, label in concat_buffers.items()}
     collection_kinds: dict[str, str] = {}
     collection_ref: dict[str, str] = {}
+
+    def collection_origin(name: str) -> str | None:
+        if name in collection_ref:
+            return collection_ref[name]
+        if name in collection_buffers:
+            return name
+        return None
+
+    def transfer_collection_ref(destination: str, source: str) -> None:
+        origin = collection_origin(source)
+        if origin is None:
+            collection_ref.pop(destination, None)
+            return
+        collection_ref[destination] = origin
+        collection_kinds[destination] = collection_kinds.get(
+            origin, collection_kinds.get(source, "unknown")
+        )
+
     map_dest_labels = {
         instruction.dest: f".Lkuro_map_{index}"
         for index, instruction in enumerate(
@@ -2022,8 +2057,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         elif op == "LOADVAR":
             load(instruction.args[0]); store(instruction.dest)
             kinds[instruction.dest] = kinds.get(instruction.args[0], "unknown")
-            if instruction.args[0] in collection_buffers:
-                collection_ref[instruction.dest] = instruction.args[0]
+            transfer_collection_ref(instruction.dest, instruction.args[0])
             if instruction.args[0] in map_alias:
                 map_alias[instruction.dest] = map_alias[instruction.args[0]]
             if instruction.args[0] in tagged_alias:
@@ -2042,6 +2076,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 text_length_refs[instruction.dest] = text_length_refs[instruction.args[0]]
         elif op == "STORE_LIST":
             name, values = instruction.args
+            single_collection_origin = (
+                collection_origin(values[0]) if len(values) == 1 else None
+            )
+            collection_ref.pop(name, None)
             if not (len(values) == 1 and values[0] in closure_actions):
                 closure_actions.pop(name, None)
             if not (len(values) == 1 and values[0] in task_actions):
@@ -2084,6 +2122,12 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             elif len(values) == 1:
                 load(values[0]); store(name)
                 kinds[name] = kinds.get(values[0], "unknown")
+                if single_collection_origin is not None:
+                    collection_ref[name] = single_collection_origin
+                    collection_kinds[name] = collection_kinds.get(
+                        single_collection_origin,
+                        collection_kinds.get(values[0], "unknown"),
+                    )
                 if values[0] in text_lengths:
                     text_lengths[name] = text_lengths[values[0]]
                 elif name in text_lengths:
@@ -2101,6 +2145,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         elif op == "UPDATE":
             name, value = instruction.args
             load(value); store(name); kinds[name] = kinds.get(value, "unknown")
+            transfer_collection_ref(name, value)
             if value in map_alias:
                 map_alias[name] = map_alias[value]
             if value in tagged_alias:
@@ -2133,10 +2178,12 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             name = instruction.args[0]
             load(name); store(instruction.dest)
             kinds[instruction.dest] = kinds.get(name, "unknown")
+            transfer_collection_ref(instruction.dest, name)
         elif op == "RESTOREVAR":
             name, saved = instruction.args
             load(saved); store(name)
             kinds[name] = kinds.get(saved, "unknown")
+            transfer_collection_ref(name, saved)
             if saved in text_lengths:
                 text_lengths[name] = text_lengths[saved]
             elif name in text_lengths:
@@ -2939,6 +2986,9 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             name: ("number" if any(word in name.lower() for word in ("count", "pos", "start", "end", "index", "depth", "len")) else "text")
             for name in collection_buffers
         }
+        for name, kind in fn_kinds.items():
+            if kind.startswith("collection:"):
+                fn_collection_kinds[name] = kind.split(":", 1)[1]
         fn_known_text = {
             item.dest: item.args[0]
             for item in function.body
@@ -3247,10 +3297,16 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 if index_temp is None:
                     raise NativeBackendError(f"x86_64-linux action {function.name!r} GET requires an index")
                 fn_load(index_temp, "%rcx")
-                if name in collection_buffers:
+                if (
+                    name in collection_buffers
+                    or fn_kinds.get(name, "").startswith("collection:")
+                ):
                     lines.extend([
                         f"    cmp ${NATIVE_COLLECTION_CAPACITY}, %rcx", "    jae .Lkuro_bounds",
-                        f"    lea {collection_buffers[name]}(%rip), %rax", "    mov (%rax,%rcx,8), %rax",
+                    ])
+                    fn_load(name, "%rax")
+                    lines.extend([
+                        "    mov (%rax,%rcx,8), %rax",
                     ])
                     fn_store(item.dest); fn_kinds[item.dest] = fn_collection_kinds.get(name, "text")
                 else:
@@ -3268,16 +3324,34 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             elif fn_op == "SET":
                 name, index_temp, value_temp = item.args
                 fn_load(index_temp, "%rcx"); fn_load(value_temp, "%rdx")
-                if name in collection_buffers:
+                if (
+                    name in collection_buffers
+                    or fn_kinds.get(name, "").startswith("collection:")
+                ):
                     lines.extend([
                         f"    cmp ${NATIVE_COLLECTION_CAPACITY}, %rcx", "    jae .Lkuro_bounds",
-                        f"    lea {collection_buffers[name]}(%rip), %rax", "    mov %rdx, (%rax,%rcx,8)",
                     ])
+                    if fn_kinds.get(name, "").startswith("collection:"):
+                        collection_item_kind = fn_collection_kinds.get(name, "unknown")
+                        if fn_kinds.get(value_temp, "unknown") != collection_item_kind:
+                            raise NativeBackendError(
+                                "x86_64-linux captured collection SET value kind must match the known element kind"
+                            )
+                        if collection_item_kind == "text":
+                            raise NativeBackendError(
+                                "x86_64-linux captured collection SET does not yet update text item lengths"
+                            )
+                    fn_load(name, "%rax")
+                    lines.append("    mov %rdx, (%rax,%rcx,8)")
                 else:
                     fn_load(name, "%rax")
                     lines.extend(["    mov %dl, (%rax,%rcx,1)"])
             elif fn_op == "LENGTH":
                 name = item.args[0]
+                if fn_kinds.get(name, "").startswith("collection:"):
+                    raise NativeBackendError(
+                        "x86_64-linux action LENGTH does not yet support captured collection lengths"
+                    )
                 if name in collection_lengths:
                     lines.append(f"    mov {collection_lengths[name]}(%rip), %rax")
                 elif name in input_lengths:
@@ -3290,6 +3364,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 fn_store(item.dest); fn_kinds[item.dest] = "number"
             elif fn_op == "APPEND":
                 name, value = item.args
+                if fn_kinds.get(name, "").startswith("collection:"):
+                    raise NativeBackendError(
+                        "x86_64-linux action APPEND does not yet support captured collection length metadata"
+                    )
                 if name not in collection_buffers:
                     raise NativeBackendError(f"x86_64-linux action {function.name!r} cannot append to {name!r}")
                 fn_load(value, "%rdx")
@@ -3454,9 +3532,13 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     capture_slots = function_capture_slots.get(target, {})
                     for capture_name in capture_slots:
                         capture_kind = fn_kinds.get(capture_name, "unknown")
-                        if capture_kind not in {"number", "float", "text", "record", "map"}:
+                        if capture_kind not in {"number", "float", "text", "record", "map"} and not capture_kind.startswith("collection:"):
                             raise NativeBackendError(
-                                "x86_64-linux action-created closures currently support statically known numeric, text, record, or map captures only"
+                                "x86_64-linux action-created closures currently support statically known numeric, text, record, map, or collection captures only"
+                            )
+                        if capture_kind == "collection:unknown":
+                            raise NativeBackendError(
+                                "x86_64-linux collection captures require a statically known element kind"
                             )
                         target_capture_kind = function_capture_kinds.get(target, {}).get(
                             capture_name, "unknown"
