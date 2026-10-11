@@ -3297,9 +3297,9 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     capture_slots = function_capture_slots.get(target, {})
                     for capture_name in capture_slots:
                         capture_kind = fn_kinds.get(capture_name, "unknown")
-                        if capture_kind not in {"number", "float"}:
+                        if capture_kind not in {"number", "float", "text"}:
                             raise NativeBackendError(
-                                "x86_64-linux action-created closures currently support statically known numeric captures only"
+                                "x86_64-linux action-created closures currently support statically known text or numeric captures only"
                             )
                         target_capture_kind = function_capture_kinds.get(target, {}).get(
                             capture_name, "unknown"

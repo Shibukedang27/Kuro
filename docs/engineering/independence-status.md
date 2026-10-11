@@ -15,11 +15,11 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 
 ## Current state
 
-- **All PRs #2–#31 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
-- **GitHub CI:** PRs #2–#31 have 8/8 successful checks.
-- **Local Linux x86-64 full suite on the current stacked branch:** 653 passed, 19 skipped, 0 failed.
+- **All PRs #2–#32 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
+- **GitHub CI:** PRs #2–#32 have 8/8 successful checks.
+- **Local Linux x86-64 full suite on the current stacked branch:** 654 passed, 19 skipped, 0 failed.
 - Linux CI now builds native production images with Python, then blocks Python and host compiler tools from `PATH` while testing `doctor`, source run/compile, bytecode execution, and codegen. This proves the built images' use path only; clean-checkout image bootstrap remains Python-hosted, and native image construction still invokes the system assembler/linker.
-- Linux x86-64 native support remains experimental and incomplete. Closures dispatch at runtime among compile-time-known targets; action-created closures carry per-instance environments allocated from a syscall-grown `brk` heap in 4 KiB pages, with no fixed 128-object cap. Integer and float captures are supported; non-numeric captures are rejected. Action returns may merge statically known closure targets across branches when every return path is known; mixed closure/scalar paths are rejected. Allocated pages remain live until process exit; reclamation, broader control-flow cases, and dynamically created targets remain open. Record fields support runtime selection among statically known literal names when selected values have one known kind; arbitrary runtime field names remain unsupported. Tasks remain statically bounded and are not a parallel scheduler.
+- Linux x86-64 native support remains experimental and incomplete. Closures dispatch at runtime among compile-time-known targets; action-created closures carry per-instance environments allocated from a syscall-grown `brk` heap in 4 KiB pages, with no fixed 128-object cap. Integer, float, and NUL-terminated text captures are supported; record and other non-scalar captures are rejected. Action returns may merge statically known closure targets across branches when every return path is known; mixed closure/scalar paths are rejected. Allocated pages remain live until process exit; reclamation, broader control-flow cases, and dynamically created targets remain open. Record fields support runtime selection among statically known literal names when selected values have one known kind; arbitrary runtime field names remain unsupported. Tasks remain statically bounded and are not a parallel scheduler.
 
 ## Published work
 
@@ -55,6 +55,7 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 | [#29](https://github.com/Shibukedang27/Kuro/pull/29) | Support float captures in Linux native closures | Open; 8/8 checks passing |
 | [#30](https://github.com/Shibukedang27/Kuro/pull/30) | Track closure targets through branch returns in Linux native actions | Open; 8/8 checks passing |
 | [#31](https://github.com/Shibukedang27/Kuro/pull/31) | Grow Linux captured-closure storage with a syscall-backed allocator | Open; 8/8 checks passing |
+| [#32](https://github.com/Shibukedang27/Kuro/pull/32) | Capture NUL-terminated text in Linux native closures | Open; 8/8 checks passing |
 
 The PR descriptions contain the detailed intent, implementation, test outcomes, and explicit limits for each batch. The dependency chain is deliberate: review and merge in dependency order if accepting the changes.
 
@@ -65,7 +66,7 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 - PR #20 preserves an unchanged decimal constant's value and spelling; PR #21 carries it through scalar assignment/reload and action arguments; PR #22 carries it through collection operations and action returns. PR #23 adds freestanding computed-float formatting for ordinary finite values, including a 16/17-digit round-trip selection path, scalar/action output, and float collections. Scientific notation, extreme magnitudes, and complete shortest-decimal parity still need coverage.
 - Continue differential conformance testing across the hosted compiler, Kuro-authored bytecode compiler/VM, launcher, and native backends; each mismatch should become a minimal regression test and a focused PR.
 - Replace bounded per-callsite task storage with semantics that remain correct under loops and multiple task instances; determine and implement the intended scheduler behavior.
-- Broaden per-instance capture beyond numeric values; test closure-return propagation through loops and nested action calls, and add safe reclamation or resource accounting for process-lifetime heap pages.
+- Broaden per-instance capture beyond scalar values and NUL-terminated text; test closure-return propagation through loops and nested action calls, and add safe reclamation or resource accounting for process-lifetime heap pages.
 - Expand record field selection beyond finite, compile-time-known literal sets; audit fixed-capacity collections, maps, and records for overflow, aliasing, nested elements, and error handling.
 - Track unsupported IR/native operations explicitly so the compiler either lowers them correctly or reports a deliberate capability error.
 
@@ -96,4 +97,4 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 
 ## Next concrete step
 
-Continue closure parity with non-numeric capture kinds, loop/nested-action returns, and heap reclamation/resource accounting; record parity by supporting arbitrary runtime field names. Establish a clean-checkout bootstrap that does not require Python; scientific notation/extreme binary64 formatting and the strict assembler/linker-independence decision also remain open. The current PR stack is not completion of the independence goal.
+Continue closure parity with non-scalar capture kinds beyond text, loop/nested-action returns, and heap reclamation/resource accounting; record parity by supporting arbitrary runtime field names. Establish a clean-checkout bootstrap that does not require Python; scientific notation/extreme binary64 formatting and the strict assembler/linker-independence decision also remain open. The current PR stack is not completion of the independence goal.
