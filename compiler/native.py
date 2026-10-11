@@ -1894,7 +1894,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     map_alias[instruction.dest] = map_alias.get(target, "")
                     kinds[instruction.dest] = "map"
                 elif call_name == "MapHas":
-                    lines.extend([f"    cmpq $0, {presence}(%rax)", "    sete %al", "    movzbq %al, %rax"])
+                    lines.extend([f"    cmpq $0, {presence}(%rax)", "    setne %al", "    movzbq %al, %rax"])
                     store(instruction.dest); kinds[instruction.dest] = "number"
                 else:
                     lines.extend([f"    mov {value_offset}(%rax), %rax"])
