@@ -15,11 +15,11 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 
 ## Current state
 
-- **All PRs #2–#23 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
-- **GitHub CI:** PRs #2–#22 have 8/8 successful checks; PR #23's latest check state is available on its linked pull-request page.
-- **Local Linux x86-64 full suite on the current stacked branch:** 641 passed, 19 skipped, 0 failed.
+- **All PRs #2–#24 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
+- **GitHub CI:** PRs #2–#23 have 8/8 successful checks; PR #24's current check state is available on its linked pull-request page.
+- **Local Linux x86-64 full suite on the current stacked branch:** 642 passed, 19 skipped, 0 failed.
 - The Kuro-authored compiler and launcher already provide Python-free execution of compiled bytecode, but Python remains in the bootstrap/image-construction and development path. Native image construction still invokes system assembler/linker tools.
-- Linux x86-64 native support remains experimental and incomplete. The newer closure/task path is statically bounded; it is not a general dynamic closure environment or parallel task scheduler.
+- Linux x86-64 native support remains experimental and incomplete. Closures now dispatch at runtime among compile-time-known no-capture targets with compatible signatures; escaping captured environments remain unsupported. Tasks remain statically bounded and are not a parallel scheduler.
 
 ## Published work
 
@@ -46,7 +46,8 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 | [#20](https://github.com/Shibukedang27/Kuro/pull/20) | Preserve decimal constants in Linux native runtime output | Open; 8/8 checks passing |
 | [#21](https://github.com/Shibukedang27/Kuro/pull/21) | Preserve decimal spelling through VM assignments | Open; 8/8 checks passing |
 | [#22](https://github.com/Shibukedang27/Kuro/pull/22) | Preserve decimal spelling in VM collections and returns | Open; 8/8 checks passing |
-| [#23](https://github.com/Shibukedang27/Kuro/pull/23) | Format computed floats in the Linux x86-64 native backend | Open; check state on the PR page |
+| [#23](https://github.com/Shibukedang27/Kuro/pull/23) | Format computed floats in the Linux x86-64 native backend | Open; 8/8 checks passing |
+| [#24](https://github.com/Shibukedang27/Kuro/pull/24) | Dispatch Linux native closure calls at runtime | Open; check state on the PR page |
 
 The PR descriptions contain the detailed intent, implementation, test outcomes, and explicit limits for each batch. The dependency chain is deliberate: review and merge in dependency order if accepting the changes.
 
@@ -57,7 +58,7 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 - PR #20 preserves an unchanged decimal constant's value and spelling; PR #21 carries it through scalar assignment/reload and action arguments; PR #22 carries it through collection operations and action returns. PR #23 adds freestanding computed-float formatting for ordinary finite values, including a 16/17-digit round-trip selection path, scalar/action output, and float collections. Scientific notation, extreme magnitudes, and complete shortest-decimal parity still need coverage.
 - Continue differential conformance testing across the hosted compiler, Kuro-authored bytecode compiler/VM, launcher, and native backends; each mismatch should become a minimal regression test and a focused PR.
 - Replace bounded per-callsite task storage with semantics that remain correct under loops and multiple task instances; determine and implement the intended scheduler behavior.
-- Expand closure support beyond statically known actions where the language semantics require dynamic targets or captured environments.
+- Expand closure support beyond compile-time-enumerable no-capture targets, including escaping captured environments and runtime-created targets where required by language semantics.
 - Audit fixed-capacity collections, maps, and records against specified Kuro behavior, including overflow, aliasing, nested elements, and error handling.
 - Track unsupported IR/native operations explicitly so the compiler either lowers them correctly or reports a deliberate capability error.
 
@@ -88,4 +89,4 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 
 ## Next concrete step
 
-Extend numeric-format parity to scientific notation and extreme binary64 values, then continue the roadmap's dynamic record/closure work and remove Python from required bootstrap/build workflows. The current PR stack is not completion of the independence goal.
+Continue closure parity with escaping captured environments and dynamic record behavior, while establishing a clean-checkout bootstrap that does not require Python. Scientific notation/extreme binary64 formatting and the strict assembler/linker-independence decision also remain open. The current PR stack is not completion of the independence goal.
