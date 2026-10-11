@@ -12,7 +12,7 @@ A target is not considered supported merely because its binary can be cross-buil
 | Python-free compiler and bytecode launcher images | Checked-in `dist/` images and `Makefile` release-check/doctor flow | Experimental; clean rebuild from source is not yet established as a release guarantee |
 | macOS arm64 native backend | In-tree native lowering and native-codegen tests | Supported subset only; not every Kuro construct has native lowering |
 | macOS x86-64 under Rosetta | Architecture audit records a full compiler self-compile and second-stage execution path | Documented milestone; rerun the release gate before each release |
-| Linux x86-64 native output | CI checks selected backend assembly cases; architecture audit says ELF images cross-build | Not release-verified until generated executables run on a Linux host in CI |
+| Linux x86-64 native output | Ubuntu CI assembles dynamic IR, links and runs Kuro-generated arithmetic/loop programs, and runs the native artifact launcher with multi-value reassignment | Bounded runtime smoke gate; keep experimental until exact-commit CI is green and broader compiler/runtime coverage is established |
 | Windows | No Windows execution target is established in the current architecture audit | Unsupported / unverified |
 
 ## Required release evidence
