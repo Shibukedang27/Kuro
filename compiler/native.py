@@ -34,7 +34,7 @@ def _link_x86_64_linux(assembly: Path, destination: Path) -> None:
     """
     if platform.system() == "Linux":
         command = [
-            "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
+            "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib", "-static",
             "-Wl,-e,_start", str(assembly), "-o", str(destination),
         ]
         result = subprocess.run(command, check=False, capture_output=True)
