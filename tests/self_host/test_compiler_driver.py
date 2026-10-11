@@ -1,5 +1,6 @@
 """Tests for the Kuro-authored compiler driver composition."""
 import re
+import subprocess
 from pathlib import Path
 
 from compiler.pipeline import run_source
@@ -65,3 +66,15 @@ def test_native_compiler_source_is_reproducible_complete_input():
     assert "# --- BEGIN_STANDALONE_AST" not in first
     assert "# --- BEGIN_STANDALONE_IR" not in first
     assert 'Print "kuro.bytecode/1".' in first
+
+
+def test_shell_native_compiler_source_matches_python_composer():
+    completed = subprocess.run(
+        [str(ROOT / "bootstrap" / "compose-native-compiler-source.sh")],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert completed.stdout == native_compiler_source()
