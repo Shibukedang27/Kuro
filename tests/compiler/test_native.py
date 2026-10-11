@@ -646,17 +646,36 @@ def test_native_backend_allocates_closures_across_heap_pages(tmp_path):
     assert run.stdout == "17\n135\n"
 
 
-def test_native_backend_rejects_non_numeric_closure_capture():
+@requires_linux_x86_64
+def test_native_backend_captures_text_in_independent_closures(tmp_path):
     result = compile_source(
-        'Greeting = 0;\n'
-        'Action MakeGreeting Prefix;\n'
+        'First = 0; Second = 0;\n'
+        'Action MakeGreeter Prefix;\n'
         'Action Greet Name;\nReturn Prefix + Name;\nDone.\n'
         'Call MakeClosure "Greet";\nReturn @_;\nDone.\n'
-        'Call MakeGreeting "Kuro "; Update Greeting to @_;\n'
-        'Call Invoke Greeting, "language"; Print @_.\n'
+        'Call MakeGreeter "Kuro "; Update First to @_;\n'
+        'Call MakeGreeter "Hello "; Update Second to @_;\n'
+        'Call Invoke First, "native"; Print @_.\n'
+        'Call Invoke Second, "world"; Print @_.\n'
     )
     assert result.ok
-    with pytest.raises(NativeBackendError, match="numeric captures only"):
+    executable = tmp_path / "text-captured-closures"
+    build_native(result.ir, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "Kuro native\nHello world\n"
+
+
+def test_native_backend_rejects_record_closure_capture():
+    result = compile_source(
+        'Store = 0; Holder = 0;\n'
+        'Call MakeRecord "User"; Update Store to @_;\n'
+        'Action MakeHolder Value;\n'
+        'Action GetRecord Dummy; Return Value; Done.\n'
+        'Call MakeClosure "GetRecord"; Return @_; Done.\n'
+        'Call MakeHolder Store; Update Holder to @_;\n'
+    )
+    assert result.ok
+    with pytest.raises(NativeBackendError, match="text or numeric captures only"):
         emit_x86_64_linux(result.ir)
 
 
@@ -671,7 +690,7 @@ def test_native_backend_rejects_mixed_numeric_capture_kinds():
         'Call Invoke First, 2.5; Print @_.\n'
     )
     assert result.ok
-    with pytest.raises(NativeBackendError, match="statically known numeric captures only"):
+    with pytest.raises(NativeBackendError, match="text or numeric captures only"):
         emit_x86_64_linux(result.ir)
 
 
