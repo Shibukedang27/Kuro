@@ -1308,6 +1308,37 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         if lowered == "char" or lowered.startswith("stop") or lowered in {"name", "value", "kind", "message", "code", "text", "word", "line", "source", "token"} or lowered.endswith(("name", "value", "kind", "message", "code", "text", "word", "line", "source", "token", "character", "output", "input", "values", "_op", "opname")):
             return "text"
         return "number"
+
+    def action_return_kind(name: str, arguments: tuple[str, ...] = ()) -> str:
+        function = ir.functions.get(name)
+        if function is None:
+            return "text" if action_returns_text(name) else "number"
+        local_kinds = {
+            parameter: kinds.get(argument, "unknown")
+            for parameter, argument in zip(function.params, arguments)
+        }
+        for item in function.body:
+            if item.op == "CONST" and item.dest:
+                value = item.args[0]
+                local_kinds[item.dest] = "text" if isinstance(value, str) else "float" if isinstance(value, float) else "number"
+            elif item.op == "LOADVAR" and item.dest:
+                source = item.args[0]
+                local_kinds[item.dest] = local_kinds.get(source, kinds.get(source, inferred_symbol_kind(source)))
+            elif item.op == "BINOP" and item.dest:
+                operator, left, right = item.args
+                left_kind = local_kinds.get(left, kinds.get(left, inferred_symbol_kind(left)))
+                right_kind = local_kinds.get(right, kinds.get(right, inferred_symbol_kind(right)))
+                local_kinds[item.dest] = "text" if operator == "+" and left_kind == right_kind == "text" else "float" if "float" in {left_kind, right_kind} else "number"
+            elif item.op in {"CMP", "AND", "OR", "ISCLASS", "LENGTH"} and item.dest:
+                local_kinds[item.dest] = "number"
+            elif item.op == "STORE_LIST" and len(item.args[1]) == 1:
+                local_kinds[item.args[0]] = local_kinds.get(item.args[1][0], kinds.get(item.args[1][0], "unknown"))
+            elif item.op == "UPDATE":
+                local_kinds[item.args[0]] = local_kinds.get(item.args[1], kinds.get(item.args[1], "unknown"))
+            elif item.op == "RETURN":
+                return local_kinds.get(item.args[0], kinds.get(item.args[0], "unknown"))
+        return "unknown"
+
     collection_names = {
         instruction.args[0]
         for instruction in items
@@ -1422,6 +1453,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         )
     }
     map_alias: dict[str, str] = {}
+    closure_actions: dict[str, str] = {}
     map_key_slots: dict[str, int] = {}
     record_field_slots: dict[str, int] = {}
     record_field_kinds: dict[str, str] = {}
@@ -1500,6 +1532,8 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 map_alias[instruction.dest] = map_alias[instruction.args[0]]
             if instruction.args[0] in tagged_alias:
                 tagged_alias[instruction.dest] = tagged_alias[instruction.args[0]]
+            if instruction.args[0] in closure_actions:
+                closure_actions[instruction.dest] = closure_actions[instruction.args[0]]
             if instruction.args[0] in known_text:
                 known_text[instruction.dest] = known_text[instruction.args[0]]
             if instruction.args[0] in text_lengths:
@@ -1527,6 +1561,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 load(values[0]); store(name)
                 tagged_alias[name] = tagged_alias[values[0]]
                 kinds[name] = "tagged"
+            elif len(values) == 1 and values[0] in closure_actions:
+                load(values[0]); store(name)
+                closure_actions[name] = closure_actions[values[0]]
+                kinds[name] = "closure"
             elif len(values) == 1:
                 load(values[0]); store(name)
                 kinds[name] = kinds.get(values[0], "unknown")
@@ -1551,6 +1589,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 map_alias[name] = map_alias[value]
             if value in tagged_alias:
                 tagged_alias[name] = tagged_alias[value]
+            if value in closure_actions:
+                closure_actions[name] = closure_actions[value]
+            elif name in closure_actions:
+                del closure_actions[name]
             if value in known_text:
                 known_text[name] = known_text[value]
             elif name in known_text:
@@ -1904,6 +1946,27 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     kinds[instruction.dest] = record_field_kinds.get(field, "unknown")
                     if kinds[instruction.dest] == "text" and field in record_field_lengths:
                         text_lengths[instruction.dest] = record_field_lengths[field]
+            elif call_name == "MakeClosure":
+                if len(arguments) != 1 or arguments[0] not in known_text or known_text[arguments[0]] not in ir.functions:
+                    raise NativeBackendError("x86_64-linux MakeClosure requires a statically known action")
+                action = known_text[arguments[0]]
+                lines.append(f"    lea .Lkuro_fn_{action}(%rip), %rax")
+                store(instruction.dest)
+                kinds[instruction.dest] = "closure"
+                closure_actions[instruction.dest] = action
+            elif call_name == "Invoke":
+                if not arguments or arguments[0] not in closure_actions or len(arguments) > 7:
+                    raise NativeBackendError("x86_64-linux Invoke requires a statically known closure and at most six arguments")
+                action = closure_actions[arguments[0]]
+                action_arguments = tuple(arguments[1:])
+                if len(action_arguments) != len(ir.functions[action].params):
+                    raise NativeBackendError(f"x86_64-linux Invoke of {action!r} has the wrong number of arguments")
+                registers = ("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9")
+                for index, argument in enumerate(action_arguments):
+                    load(argument, registers[index])
+                lines.append(f"    call .Lkuro_fn_{action}")
+                store(instruction.dest)
+                kinds[instruction.dest] = action_return_kind(action, action_arguments)
             elif call_name == "MakeEnum":
                 if len(arguments) != 2 or any(argument not in known_text for argument in arguments):
                     raise NativeBackendError("x86_64-linux MakeEnum requires known type and variant names")
@@ -2000,7 +2063,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     load(argument, f"%{('rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9')[index]}")
                 lines.append(f"    call .Lkuro_fn_{call_name}")
                 store(instruction.dest)
-                kinds[instruction.dest] = "text" if action_returns_text(call_name) else "number"
+                kinds[instruction.dest] = action_return_kind(call_name, tuple(arguments))
             else:
                 raise NativeBackendError(f"x86_64-linux backend does not yet lower CALL {call_name!r}")
         elif op in {"AND", "OR"}:
