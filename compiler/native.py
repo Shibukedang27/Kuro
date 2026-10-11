@@ -1729,6 +1729,121 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         if returned_closures:
             function_return_closure_targets[function.name] = returned_closures
 
+    # Recompute returned targets over the action CFG. The preceding linear scan
+    # is still useful for resolving each MakeClosure constructor, but a branch
+    # merge must retain every closure that can reach a RETURN.
+    function_return_closure_targets.clear()
+
+    def analyze_action_closure_returns(
+        function,
+        known_returns: dict[str, set[str]],
+    ) -> tuple[set[str], bool, bool]:
+        body = function.body
+        label_indices = {
+            item.dest: index for index, item in enumerate(body)
+            if item.op == "LABEL" and item.dest
+        }
+        successors: list[tuple[int, ...]] = []
+        for index, item in enumerate(body):
+            next_index = index + 1
+            if item.op == "JUMP":
+                target = label_indices.get(item.args[0])
+                successors.append((target,) if target is not None else ())
+            elif item.op == "JUMPF":
+                target = label_indices.get(item.args[0])
+                edges = [next_index] if next_index < len(body) else []
+                if target is not None:
+                    edges.append(target)
+                successors.append(tuple(edges))
+            elif item.op in {"RETURN", "STOP"}:
+                successors.append(())
+            else:
+                successors.append((next_index,) if next_index < len(body) else ())
+
+        if not body:
+            return set(), True, False
+        # Each local carries (known target set, is-known-on-every-path). The
+        # boolean prevents a known branch from masking an unknown path.
+        states: list[dict[str, tuple[set[str], bool]] | None] = [None] * len(body)
+        states[0] = {}
+        pending = [0]
+        returned: set[str] = set()
+        saw_return = False
+        all_returns_known = True
+        while pending:
+            index = pending.pop()
+            incoming = states[index]
+            if incoming is None:
+                continue
+            state = {
+                name: (set(targets), is_known)
+                for name, (targets, is_known) in incoming.items()
+            }
+            item = body[index]
+            if item.op == "LOADVAR" and item.dest:
+                source = item.args[0]
+                targets, is_known = state.get(source, (set(), False))
+                state[item.dest] = (set(targets), is_known)
+            elif item.op == "STORE_LIST":
+                name, values = item.args
+                if len(values) == 1:
+                    targets, is_known = state.get(values[0], (set(), False))
+                    state[name] = (set(targets), is_known)
+                else:
+                    state[name] = (set(), False)
+            elif item.op == "UPDATE":
+                name, value = item.args
+                targets, is_known = state.get(value, (set(), False))
+                state[name] = (set(targets), is_known)
+            elif item.op == "CALL" and item.dest:
+                call_name = item.args[0]
+                target = function_closure_construction_targets.get((function.name, index))
+                targets = {target} if target is not None else set(known_returns.get(call_name, set()))
+                state[item.dest] = (targets, bool(targets))
+            elif item.op == "RETURN" and item.args:
+                saw_return = True
+                targets, is_known = state.get(item.args[0], (set(), False))
+                if is_known and targets:
+                    returned.update(targets)
+                else:
+                    all_returns_known = False
+            elif item.op != "LABEL" and item.dest:
+                state[item.dest] = (set(), False)
+
+            for successor in successors[index]:
+                current = states[successor]
+                if current is None:
+                    states[successor] = {
+                        name: (set(targets), is_known)
+                        for name, (targets, is_known) in state.items()
+                    }
+                    pending.append(successor)
+                    continue
+                merged: dict[str, tuple[set[str], bool]] = {}
+                for name in set(current) | set(state):
+                    current_targets, current_known = current.get(name, (set(), False))
+                    incoming_targets, incoming_known = state.get(name, (set(), False))
+                    merged[name] = (
+                        set(current_targets) | set(incoming_targets),
+                        current_known and incoming_known,
+                    )
+                if merged != current:
+                    states[successor] = merged
+                    pending.append(successor)
+        return returned, all_returns_known, saw_return
+
+    for _ in range(len(ir.functions) + 1):
+        updated_returns: dict[str, set[str]] = {}
+        for function in ir.functions.values():
+            targets, all_known, saw_return = analyze_action_closure_returns(
+                function, function_return_closure_targets
+            )
+            if targets and all_known and saw_return:
+                updated_returns[function.name] = targets
+        if updated_returns == function_return_closure_targets:
+            break
+        function_return_closure_targets = updated_returns
+
     closure_label_indices = {
         instruction.dest: index
         for index, instruction in enumerate(items)

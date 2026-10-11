@@ -528,6 +528,49 @@ def test_native_backend_dispatches_to_runtime_selected_closure(tmp_path):
 
 
 @requires_linux_x86_64
+def test_native_backend_returns_branch_selected_closure_targets(tmp_path):
+    result = compile_source(
+        'First = 0; Second = 0;\n'
+        'Action Ten Value; Return Value + 10; Done.\n'
+        'Action Twenty Value; Return Value + 20; Done.\n'
+        'Action MakeChoice Choice;\n'
+        'Selected = 0;\n'
+        'If Choice is equal to 1;\n'
+        'Call MakeClosure "Ten"; Update Selected to @_;\n'
+        'Else;\n'
+        'Call MakeClosure "Twenty"; Update Selected to @_;\n'
+        'Done.\nReturn Selected;\nDone.\n'
+        'Call MakeChoice 1; Update First to @_;\n'
+        'Call MakeChoice 0; Update Second to @_;\n'
+        'Call Invoke First, 5; Print @_.\n'
+        'Call Invoke Second, 5; Print @_.\n'
+    )
+    assert result.ok
+    executable = tmp_path / "branch-returned-closures"
+    build_native(result.ir, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "15\n25\n"
+
+
+def test_native_backend_rejects_mixed_closure_and_scalar_action_returns():
+    result = compile_source(
+        'Chosen = 0;\n'
+        'Action Ten Value; Return Value + 10; Done.\n'
+        'Action MakeChoice Choice;\n'
+        'Selected = 0;\n'
+        'If Choice is equal to 1;\n'
+        'Call MakeClosure "Ten"; Update Selected to @_;\n'
+        'Else; Update Selected to Choice; Done.\n'
+        'Return Selected;\nDone.\n'
+        'Call MakeChoice 1; Update Chosen to @_;\n'
+        'Call Invoke Chosen, 5; Print @_.\n'
+    )
+    assert result.ok
+    with pytest.raises(NativeBackendError, match="statically known targets"):
+        emit_x86_64_linux(result.ir)
+
+
+@requires_linux_x86_64
 def test_native_backend_captures_one_escaping_numeric_value(tmp_path):
     result = compile_source(
         'Adder = 0;\n'
