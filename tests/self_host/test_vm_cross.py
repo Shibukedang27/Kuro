@@ -21,7 +21,7 @@ def escape(source: str) -> str:
     return source.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
-def run_kuro_vm(source: str):
+def run_kuro_vm_environment(source: str):
     replacement = f'Source = "{escape(source)}";'
     lexer = SOURCE_RE.sub(lambda _: replacement, LEXER.read_text(), count=1)
     parser = TOKENS_RE.sub("", PARSER.read_text(), count=1)
@@ -30,7 +30,12 @@ def run_kuro_vm(source: str):
     vm = BYTECODE_RE.sub("", VM.read_text(), count=1)
     result = run_source("\n".join((lexer, parser, lower, encoder, vm)))
     assert result.ok, result.compile.diags.render_all() if not result.compile.ok else result.runtime_error
-    return result.interpreter.env.get("VMOutput"), result.interpreter.env.get("VMFailed")
+    return result.interpreter.env
+
+
+def run_kuro_vm(source: str):
+    env = run_kuro_vm_environment(source)
+    return env.get("VMOutput"), env.get("VMFailed")
 
 
 def test_kuro_vm_executes_constants_and_variables():
@@ -191,6 +196,9 @@ def test_kuro_vm_decodes_multi_digit_and_decimal_constants():
     output, failed = run_kuro_vm("Print 3.25.")
     assert failed in (None, 0)
     assert output == [3.25]
+    env = run_kuro_vm_environment("Print 3.25.")
+    assert env["VMOutput"] == [3.25]
+    assert env["VMOutputDisplay"] == ["3.25"]
 
     output, failed = run_kuro_vm("Print 12 + 30.")
     assert failed in (None, 0)
