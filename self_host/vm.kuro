@@ -22,10 +22,9 @@ VMValues = "__vm_empty__", "__vm_empty__";
 VMNameCount = 0;
 VMCollectionNames is Text;
 VMCollectionNames = "__vm_empty__", "__vm_empty__";
+# Negative IDs mark names that are not currently backed by a collection.
 VMCollectionIds is Integers;
 VMCollectionIds = -1, -1;
-VMCollectionActive is Integers;
-VMCollectionActive = 0, 0;
 VMCollectionCount = 0;
 VMCollectionOwners is Integers;
 VMCollectionItems is Text;
@@ -111,37 +110,39 @@ Action VMFindFrameName Name, SearchPos, EndPos;
 Done.
 
 Action VMFindCollectionSlot Name, SearchPos;
-    If SearchPos is less than VMCollectionCount;
-        Get VMCollectionNames SearchPos;
-        If @_ is equal to Name;
-            Return SearchPos;
+    VMFindCollectionSlot_Pos = SearchPos;
+    VMFindCollectionSlot_Found = -1;
+    While VMFindCollectionSlot_Pos is less than VMCollectionCount and VMFindCollectionSlot_Found is less than 0;
+        Get VMCollectionNames VMFindCollectionSlot_Pos;
+        VMFindCollectionSlot_CurrentName = @_;
+        If VMFindCollectionSlot_CurrentName is equal to Name;
+            VMFindCollectionSlot_Found = VMFindCollectionSlot_Pos;
         Else;
-            Call VMFindCollectionSlot Name, SearchPos + 1;
-            Return @_;
+            Add 1 to VMFindCollectionSlot_Pos;
         Done.
-    Else;
-        Return -1;
     Done.
+    Return VMFindCollectionSlot_Found;
 Done.
 
 Action VMFindCollection Name, SearchPos;
-    If SearchPos is less than VMCollectionCount;
-        Get VMCollectionNames SearchPos;
-        If @_ is equal to Name;
-            Get VMCollectionActive SearchPos;
-            If @_ is equal to 1;
-                Return SearchPos;
+    VMFindCollection_Pos = SearchPos;
+    VMFindCollection_Found = -1;
+    While VMFindCollection_Pos is less than VMCollectionCount and VMFindCollection_Found is less than 0;
+        Get VMCollectionNames VMFindCollection_Pos;
+        VMFindCollection_CurrentName = @_;
+        If VMFindCollection_CurrentName is equal to Name;
+            Get VMCollectionIds VMFindCollection_Pos;
+            VMFindCollection_Id = @_;
+            If VMFindCollection_Id is greater than or equal to 0;
+                VMFindCollection_Found = VMFindCollection_Pos;
             Else;
-                Call VMFindCollection Name, SearchPos + 1;
-                Return @_;
+                Add 1 to VMFindCollection_Pos;
             Done.
         Else;
-            Call VMFindCollection Name, SearchPos + 1;
-            Return @_;
+            Add 1 to VMFindCollection_Pos;
         Done.
-    Else;
-        Return -1;
     Done.
+    Return VMFindCollection_Found;
 Done.
 
 Action VMMarkCollection Name;
@@ -154,16 +155,13 @@ Action VMMarkCollection Name;
             If VMCollectionCount is less than 2;
                 Set VMCollectionNames VMMarkCollection_Index to Name;
                 Set VMCollectionIds VMMarkCollection_Index to VMNextCollectionId;
-                Set VMCollectionActive VMMarkCollection_Index to 1;
             Else;
                 Append Name to VMCollectionNames;
                 Append VMNextCollectionId to VMCollectionIds;
-                Append 1 to VMCollectionActive;
             Done.
             Add 1 to VMCollectionCount;
         Else;
             Set VMCollectionIds VMMarkCollection_Index to VMNextCollectionId;
-            Set VMCollectionActive VMMarkCollection_Index to 1;
         Done.
         Add 1 to VMNextCollectionId;
     Done.
@@ -176,7 +174,6 @@ Action VMResetCollection Name;
         Call VMMarkCollection Name;
     Else;
         Set VMCollectionIds VMResetCollection_Index to VMNextCollectionId;
-        Set VMCollectionActive VMResetCollection_Index to 1;
         Add 1 to VMNextCollectionId;
     Done.
 Done.
@@ -185,7 +182,7 @@ Action VMDeactivateCollection Name;
     Call VMFindCollectionSlot Name, 0;
     VMDeactivateCollection_Index = @_;
     If VMDeactivateCollection_Index is greater than or equal to 0;
-        Set VMCollectionActive VMDeactivateCollection_Index to 0;
+        Set VMCollectionIds VMDeactivateCollection_Index to -1;
     Done.
 Done.
 
