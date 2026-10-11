@@ -15,10 +15,10 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 
 ## Current state
 
-- **All PRs #2–#24 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
-- **GitHub CI:** PRs #2–#23 have 8/8 successful checks; PR #24's current check state is available on its linked pull-request page.
+- **All PRs #2–#25 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
+- **GitHub CI:** PRs #2–#24 have 8/8 successful checks; PR #25's current check state is available on its linked pull-request page.
 - **Local Linux x86-64 full suite on the current stacked branch:** 642 passed, 19 skipped, 0 failed.
-- The Kuro-authored compiler and launcher already provide Python-free execution of compiled bytecode, but Python remains in the bootstrap/image-construction and development path. Native image construction still invokes system assembler/linker tools.
+- Linux CI now builds native production images with Python, then blocks Python and host compiler tools from `PATH` while testing `doctor`, source run/compile, bytecode execution, and codegen. This proves the built images' use path only; clean-checkout image bootstrap remains Python-hosted, and native image construction still invokes the system assembler/linker.
 - Linux x86-64 native support remains experimental and incomplete. Closures now dispatch at runtime among compile-time-known no-capture targets with compatible signatures; escaping captured environments remain unsupported. Tasks remain statically bounded and are not a parallel scheduler.
 
 ## Published work
@@ -47,7 +47,8 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 | [#21](https://github.com/Shibukedang27/Kuro/pull/21) | Preserve decimal spelling through VM assignments | Open; 8/8 checks passing |
 | [#22](https://github.com/Shibukedang27/Kuro/pull/22) | Preserve decimal spelling in VM collections and returns | Open; 8/8 checks passing |
 | [#23](https://github.com/Shibukedang27/Kuro/pull/23) | Format computed floats in the Linux x86-64 native backend | Open; 8/8 checks passing |
-| [#24](https://github.com/Shibukedang27/Kuro/pull/24) | Dispatch Linux native closure calls at runtime | Open; check state on the PR page |
+| [#24](https://github.com/Shibukedang27/Kuro/pull/24) | Dispatch Linux native closure calls at runtime | Open; 8/8 checks passing |
+| [#25](https://github.com/Shibukedang27/Kuro/pull/25) | Add Linux Python-free native runtime CI gate | Open; check state on the PR page |
 
 The PR descriptions contain the detailed intent, implementation, test outcomes, and explicit limits for each batch. The dependency chain is deliberate: review and merge in dependency order if accepting the changes.
 
@@ -66,7 +67,7 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 
 - Inventory every Python dependency in bootstrap, compiler, packaging, tests, release scripts, and developer commands.
 - Establish a clean-checkout bootstrap sequence that starts from checked-in Kuro source and reproducible seed artifacts, then builds the compiler/runtime using Kuro itself.
-- Add a CI job that removes or blocks Python after bootstrap and proves the supported compile/run/package workflows still work.
+- Extend the Python-blocked runtime gate from prebuilt-image use to a clean-checkout bootstrap that does not invoke Python at all.
 - Keep the frozen reference interpreter as an optional oracle if desired; it must not be a required build dependency.
 
 ### 3. Decide and implement the native toolchain boundary
