@@ -41,9 +41,13 @@ CASES = [
         id="recursive-action",
     ),
     pytest.param(
-        "Items = 1, 2, 3;\nGet Items 1;\nPrint @_.\nLength Items;\nPrint @_.",
-        "2\n3\n",
-        [2, 3],
+        'Items is Text;\n'
+        'Append "a" to Items;\n'
+        'Append "b" to Items;\n'
+        'Append "c" to Items;\n'
+        'Get Items 1;\nPrint @_.\nLength Items;\nPrint @_.',
+        "b\n3\n",
+        ["b", 3],
         id="collection-index-and-length",
     ),
 ]
