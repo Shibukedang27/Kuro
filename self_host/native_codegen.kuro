@@ -165,7 +165,8 @@ Action NativeValidateUnsignedInteger Value;
     Length Value;
     NativeIntegerLength = @_;
     NativeIntegerValid = 1;
-    If NativeIntegerLength is equal to 0 or NativeIntegerLength is greater than 4;
+    # Keep immediates within the current portable signed 32-bit range.
+    If NativeIntegerLength is equal to 0 or NativeIntegerLength is greater than 9;
         NativeIntegerValid = 0;
     Done.
     NativeIntegerIndex = 0;

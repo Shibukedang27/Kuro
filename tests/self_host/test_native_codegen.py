@@ -64,7 +64,14 @@ def test_kuro_native_codegen_output_builds_and_runs(tmp_path):
 
 @pytest.mark.parametrize(
     ("left", "operator", "right", "expected"),
-    [("2", "+", "3", "5\n"), ("2", "-", "3", "-1\n"), ("7", "*", "6", "42\n"), ("8", "/", "2", "4\n")],
+    [
+        ("2", "+", "3", "5\n"),
+        ("2", "-", "3", "-1\n"),
+        ("7", "*", "6", "42\n"),
+        ("8", "/", "2", "4\n"),
+        ("12345", "+", "67890", "80235\n"),
+        ("999999999", "+", "1", "1000000000\n"),
+    ],
 )
 def test_kuro_native_codegen_builds_integer_arithmetic(tmp_path, left, operator, right, expected):
     env = run_codegen(
@@ -83,7 +90,7 @@ def test_kuro_native_codegen_builds_integer_arithmetic(tmp_path, left, operator,
     "bytecode",
     [
         '"BC_CONST", "x", "BC_CONST", "2", "BC_BINOP", "+", "BC_PRINT"',
-        '"BC_CONST", "10000", "BC_CONST", "2", "BC_BINOP", "+", "BC_PRINT"',
+        '"BC_CONST", "1000000000", "BC_CONST", "2", "BC_BINOP", "+", "BC_PRINT"',
     ],
 )
 def test_kuro_native_codegen_rejects_invalid_integer_arithmetic(bytecode):
@@ -288,6 +295,14 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path):
     ("tokens", "expected"),
     [
         (["BC_CONST", "6", "BC_CONST", "7", "BC_BINOP", "*", "BC_PRINT"], "42\n"),
+        (
+            ["BC_CONST", "12345", "BC_CONST", "67890", "BC_BINOP", "+", "BC_PRINT"],
+            "80235\n",
+        ),
+        (
+            ["BC_CONST", "999999999", "BC_CONST", "1", "BC_BINOP", "+", "BC_PRINT"],
+            "1000000000\n",
+        ),
         (
             [
                 "BC_CONST", "0", "BC_STORE_LIST", "N", "BC_WHILE_BEGIN",
