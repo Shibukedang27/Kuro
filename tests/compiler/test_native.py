@@ -15,7 +15,7 @@ requires_linux_x86_64 = pytest.mark.skipif(
 
 
 def _native_dependency_report(executable: Path) -> str:
-    inspector = ["otool", "-L"] if platform.system() == "Darwin" else ["readelf", "-d"]
+    inspector = ["otool", "-L"] if platform.system() == "Darwin" else ["readelf", "-l", "-d"]
     return subprocess.run(
         [*inspector, str(executable)], capture_output=True, text=True, check=True
     ).stdout
@@ -27,6 +27,20 @@ def test_native_backend_builds_and_runs_literal_print(tmp_path):
     executable = tmp_path / "hello"
     build_native(result.ir, executable)
     assert subprocess.run([str(executable)], capture_output=True, text=True, check=True).stdout == "native kuro\n"
+
+
+@requires_linux_x86_64
+def test_x86_64_linux_native_image_has_no_dynamic_loader(tmp_path):
+    result = compile_source("Print 2 + 3.")
+    assert result.ok
+    executable = tmp_path / "static-linux-image"
+    build_native(result.ir, executable, target="x86_64-linux")
+
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "5\n"
+    dependencies = _native_dependency_report(executable)
+    assert "INTERP" not in dependencies
+    assert "NEEDED" not in dependencies
 
 
 def test_x86_64_linux_backend_emits_linux_syscall_assembly():
