@@ -1,5 +1,6 @@
 import platform
 import re
+import shutil
 import subprocess
 import pytest
 from pathlib import Path
@@ -19,6 +20,34 @@ VM_INPUT_DEFAULT_RE = re.compile(
     r"^# --- BEGIN_VM_INPUT_DEFAULT.*?^# --- END_VM_INPUT_DEFAULT.*?$\n?",
     re.MULTILINE | re.DOTALL,
 )
+
+
+def _native_lldb_trace(executable: Path, payload: str, tmp_path: Path) -> str:
+    if platform.system() != "Darwin":
+        return ""
+    lldb = shutil.which("lldb")
+    if lldb is None:
+        return "lldb is unavailable on this macOS runner"
+    input_path = tmp_path / "kuro-large-input.txt"
+    input_path.write_text(payload, encoding="utf-8")
+    try:
+        result = subprocess.run(
+            [
+                lldb, "--batch",
+                "-o", "breakpoint set --name _platform_strlen --condition '($x0 > 4096 && $x0 < 1048576)'",
+                "-o", f"process launch -i {input_path}",
+                "-o", "register read pc lr sp x0 x1 x2",
+                "-o", "thread backtrace all",
+                "-o", "image lookup --address $lr",
+                "--", str(executable),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as error:
+        return f"lldb timed out: {error}"
+    return result.stdout + result.stderr
 
 
 def run_artifact(payload: str):
@@ -89,6 +118,161 @@ def test_native_artifact_launcher_executes_multi_value_reassignment(tmp_path):
     assert result.stdout == "a\nb\nc\n3\n"
 
 
+def test_kuro_artifact_launcher_executes_private_suffix_opcode():
+    env, output = run_artifact(
+        "kuro.bytecode/1\n"
+        "BC_CONST\nKuro-native\nBC_CONST\n5\n"
+        "BC_ARTIFACT_SUFFIX\nBC_PRINT\n"
+    )
+
+    assert env["ArtifactFailed"] == 0
+    assert env["RuntimeExitCode"] == 0
+    assert output == "native\n"
+
+
+def test_kuro_artifact_launcher_preserves_numeric_looking_text_constants():
+    env, output = run_artifact(
+        "kuro.bytecode/1\n"
+        "BC_CONST_TEXT\n1\nBC_STORE_LIST\nTextValue\n"
+        "BC_LENGTH\nTextValue\nBC_PRINT\n"
+    )
+
+    assert env["ArtifactFailed"] == 0
+    assert env["RuntimeExitCode"] == 0
+    assert output == "1\n"
+
+
+def test_kuro_artifact_launcher_preserves_large_framed_input_exactly():
+    payload = "Q" * 70000 + "tail-END"
+    env, output = run_artifact(
+        "kuro.bytecode/1\n"
+        "BC_INPUT\nFirst\nBC_LENGTH\nFirst\nBC_PRINT\n"
+        "BC_LOADVAR\nFirst\nBC_CONST\n70000\nBC_ARTIFACT_SUFFIX\nBC_PRINT\n"
+        "BC_INPUT\nLater\nBC_LOADVAR\nLater\nBC_PRINT\n"
+        "kuro.input/1\n" + payload
+    )
+
+    assert env["ArtifactFailed"] == 0
+    assert env["RuntimeExitCode"] == 0
+    assert env["VMInput"] == payload
+    assert output == f"{len(payload)}\ntail-END\n\n"
+
+
+@pytest.mark.skipif(platform.system() not in {"Darwin", "Linux"}, reason="requires a supported native backend")
+def test_native_artifact_launcher_preserves_large_input_and_runs_suffix_opcode(tmp_path):
+    from compiler.self_host import build_native_artifact_launcher
+
+    executable = tmp_path / "kuro-bytecode"
+    build_native_artifact_launcher(executable)
+
+    small = subprocess.run(
+        [str(executable)],
+        input=(
+            "kuro.bytecode/1\nBC_CONST\nKuro-native\nBC_CONST\n5\n"
+            "BC_ARTIFACT_SUFFIX\nBC_PRINT\n"
+        ),
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert small.returncode == 0, small.stderr
+    assert small.stdout == "native\n"
+
+    typed_text = subprocess.run(
+        [str(executable)],
+        input=(
+            "kuro.bytecode/1\nBC_CONST_TEXT\n1\nBC_STORE_LIST\nTextValue\n"
+            "BC_LENGTH\nTextValue\nBC_PRINT\n"
+        ),
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert typed_text.returncode == 0, typed_text.stderr
+    assert typed_text.stdout == "1\n"
+
+    large_integer_input = "kuro.bytecode/1\nBC_CONST\n70000\nBC_PRINT\n"
+    large_integer = subprocess.run(
+        [str(executable)], input=large_integer_input, capture_output=True,
+        text=True, timeout=60,
+    )
+    large_integer_trace = (
+        _native_lldb_trace(executable, large_integer_input, tmp_path)
+        if large_integer.returncode != 0 else ""
+    )
+    assert large_integer.returncode == 0, (
+        f"large integer output: {large_integer.stderr}\n{large_integer_trace}"
+    )
+    assert large_integer.stdout == "70000\n"
+
+    payload = "Q" * 70000 + "tail-END"
+    outer_loader_input = (
+        "kuro.bytecode/1\nBC_CONST_TEXT\nOK\nBC_PRINT\n"
+        "kuro.input/1\n" + payload
+    )
+    outer_loader = subprocess.run(
+        [str(executable)], input=outer_loader_input, capture_output=True,
+        text=True, timeout=60,
+    )
+    outer_lldb_trace = (
+        _native_lldb_trace(executable, outer_loader_input, tmp_path)
+        if outer_loader.returncode != 0 else ""
+    )
+    assert outer_loader.returncode == 0, (
+        f"outer loader large frame: {outer_loader.stderr}\n{outer_lldb_trace}"
+    )
+    assert outer_loader.stdout == "OK\n"
+
+    input_read_input = (
+        "kuro.bytecode/1\n"
+        "BC_INPUT\nFirst\nBC_LOADVAR\nFirst\nBC_PRINT\n"
+        "kuro.input/1\n" + payload
+    )
+    input_read = subprocess.run(
+        [str(executable)], input=input_read_input, capture_output=True,
+        text=True, timeout=60,
+    )
+    input_read_trace = (
+        _native_lldb_trace(executable, input_read_input, tmp_path)
+        if input_read.returncode != 0 else ""
+    )
+    assert input_read.returncode == 0, (
+        f"VMInput direct read: {input_read.stderr}\n{input_read_trace}"
+    )
+    assert input_read.stdout == payload + "\n"
+
+    loader_only_input = (
+        "kuro.bytecode/1\n"
+        "BC_INPUT\nFirst\nBC_LENGTH\nFirst\nBC_PRINT\n"
+        "kuro.input/1\n" + payload
+    )
+    loader_only = subprocess.run(
+        [str(executable)], input=loader_only_input, capture_output=True,
+        text=True, timeout=60,
+    )
+    lldb_trace = (
+        _native_lldb_trace(executable, loader_only_input, tmp_path)
+        if loader_only.returncode != 0 else ""
+    )
+    assert loader_only.returncode == 0, (
+        f"VMInput large frame: {loader_only.stderr}\n{lldb_trace}"
+    )
+    assert loader_only.stdout == f"{len(payload)}\n"
+
+    framed = (
+        "kuro.bytecode/1\n"
+        "BC_INPUT\nFirst\nBC_LENGTH\nFirst\nBC_PRINT\n"
+        "BC_LOADVAR\nFirst\nBC_CONST\n70000\nBC_ARTIFACT_SUFFIX\nBC_PRINT\n"
+        "BC_INPUT\nLater\nBC_LOADVAR\nLater\nBC_PRINT\n"
+        "kuro.input/1\n" + payload
+    )
+    large = subprocess.run(
+        [str(executable)], input=framed, capture_output=True, text=True, timeout=60
+    )
+    assert large.returncode == 0, large.stderr
+    assert large.stdout == f"{len(payload)}\ntail-END\n\n"
+
+
 def test_kuro_artifact_launcher_rejects_wrong_magic():
     env, output = run_artifact("not-kuro\nBC_CONST\n5\nBC_PRINT\n")
 
@@ -123,6 +307,19 @@ def test_kuro_artifact_launcher_decodes_escaped_values(encoded, expected):
     assert env["ArtifactFailed"] == 0
     assert env["RuntimeExitCode"] == 0
     assert output == expected
+
+
+def test_native_compiler_entry_encodes_marker_literal_as_standalone_escape():
+    entry = (ROOT / "self_host" / "native_compiler_entry.kuro").read_text(encoding="utf-8")
+    source = (
+        'CompilerFailed = 0;\n'
+        'BytecodeOut = "BC_CONST_TEXT", "kuro.input/1";\n'
+        + entry
+    )
+    result = run_source(source)
+
+    assert result.ok, result.compile.diags.render_all() if not result.compile.ok else result.runtime_error
+    assert result.stdout == "kuro.bytecode/1\nBC_CONST_TEXT\n\\i\n"
 
 
 def test_kuro_artifact_launcher_rejects_unknown_escape():
@@ -171,6 +368,13 @@ def test_kuro_artifact_launcher_gives_later_inputs_empty_text():
 @pytest.mark.parametrize("body", ["BC_CONST\n", "BC_GET\nName\n", "BC_UNKNOWN\n"])
 def test_loader_rejects_invalid_instructions_before_execution(body):
     env, output = run_artifact("kuro.bytecode/1\n" + body)
+    assert env["ArtifactFailed"] == 1
+    assert env["RuntimeExitCode"] == 1
+    assert output == ""
+
+
+def test_loader_rejects_truncated_typed_text_constant():
+    env, output = run_artifact("kuro.bytecode/1\nBC_CONST_TEXT\n")
     assert env["ArtifactFailed"] == 1
     assert env["RuntimeExitCode"] == 1
     assert output == ""

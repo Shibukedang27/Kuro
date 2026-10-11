@@ -85,7 +85,7 @@ Action EmitLiteralPrint;
     NativeBytecodeLen = @_;
     If NativeBytecodeLen is equal to 3;
         Get BytecodeOut 0;
-        If @_ is equal to "BC_CONST";
+        If @_ is equal to "BC_CONST" or @_ is equal to "BC_CONST_TEXT";
             Get BytecodeOut 2;
             If @_ is equal to "BC_PRINT";
                 Get BytecodeOut 1;
@@ -787,12 +787,17 @@ If NativeTarget is not equal to "aarch64-macos" and NativeTarget is not equal to
     NativeFailed = 1;
 Done.
 If NativeProgramLength is equal to 3;
-    Get BytecodeOut 1;
-    Call NativeValidateUnsignedInteger @_;
-    If @_ is equal to 1;
-        Call EmitStraightIntegerProgram;
-    Else;
+    Get BytecodeOut 0;
+    If @_ is equal to "BC_CONST_TEXT";
         Call EmitLiteralPrint;
+    Else;
+        Get BytecodeOut 1;
+        Call NativeValidateUnsignedInteger @_;
+        If @_ is equal to 1;
+            Call EmitStraightIntegerProgram;
+        Else;
+            Call EmitLiteralPrint;
+        Done.
     Done.
 Else;
     Call EmitStraightIntegerProgram;

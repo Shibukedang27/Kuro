@@ -23,6 +23,31 @@ def test_bytecode_vm_exposes_kuro_memory_collection_boundary():
     assert vm.memory.stats()["collections"] == 1
 
 
+def test_bytecode_vm_executes_private_artifact_suffix_instruction():
+    from io import StringIO
+
+    from compiler.bytecode import BytecodeVM, encode_ir
+    from compiler.interpreter import KuroRuntimeException
+    from compiler.pipeline import compile_source
+
+    compiled = compile_source('Call __KuroArtifactSuffix "prefix-tail", 7;\nPrint @_.')
+    assert compiled.ok, compiled.diags.render_all()
+    output = StringIO()
+    vm = BytecodeVM(encode_ir(compiled.ir), output=output)
+    vm.run()
+    assert vm.env["_"] == "tail"
+    assert output.getvalue() == "tail\n"
+
+    invalid = compile_source('Call __KuroArtifactSuffix "abc", -1;')
+    assert invalid.ok, invalid.diags.render_all()
+    try:
+        BytecodeVM(encode_ir(invalid.ir), output=StringIO()).run()
+    except KuroRuntimeException as error:
+        assert error.code == "E6001"
+    else:
+        raise AssertionError("negative suffix offsets must be rejected")
+
+
 def test_kuro_heap_traces_closure_tagged_and_task_ownership_edges():
     from compiler.concurrency import Task
     from compiler.values import ClosureValue, TaggedValue, TaskValue

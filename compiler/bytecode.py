@@ -13,7 +13,7 @@ import sys
 from .interpreter import KuroRuntimeException
 from .ir import IRFunction, IRProgram, Instr
 from .memory import MemoryManager
-from .values import ClosureValue, TaskValue, builtin_call
+from .values import ClosureValue, TaskValue, _artifact_suffix, builtin_call
 from .concurrency import Scheduler
 
 
@@ -288,6 +288,12 @@ class BytecodeVM:
             elif op == "ISCLASS":
                 value, cls = temps[item.args[0]], item.args[1]
                 temps[item.dest] = isinstance(value, str) and len(value) == 1 and {"digit": value.isdigit(), "alpha": value.isalpha(), "space": value.isspace(), "alnum": value.isalnum(), "quote": value == '"'}[cls]
+            elif op == "ARTIFACT_SUFFIX":
+                source, offset = (temps[arg] for arg in item.args)
+                try:
+                    temps[item.dest] = _artifact_suffix(source, offset)
+                except (IndexError, TypeError) as error:
+                    raise KuroRuntimeException("E6001", str(error)) from error
             elif op == "CALL":
                 name, *arguments = item.args
                 temps[item.dest] = self._call(name, [temps[arg] for arg in arguments])

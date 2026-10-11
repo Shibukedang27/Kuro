@@ -14,12 +14,15 @@ STAGE1_COMPILER=
 STAGE0_PROBE_ARTIFACT=
 STAGE1_PROBE_ARTIFACT=
 BOOTSTRAP_ARTIFACT=
+STAGE2_COMPILER=
+STAGE2_INPUT=
 
 cleanup() {
     if [ -n "$PROBE" ]; then
         rm -f "$PROBE" "$ARTIFACT" "$ASSEMBLY" "$COMPOSED_SOURCE" \
             "$STAGE1_COMPILER" "$STAGE0_PROBE_ARTIFACT" \
-            "$STAGE1_PROBE_ARTIFACT" "$BOOTSTRAP_ARTIFACT"
+            "$STAGE1_PROBE_ARTIFACT" "$BOOTSTRAP_ARTIFACT" \
+            "$STAGE2_COMPILER" "$STAGE2_INPUT"
     fi
     rm -rf "$TOOL_PATH"
 }
@@ -48,6 +51,8 @@ STAGE1_COMPILER=$PROBE.stage1.kurobc
 STAGE0_PROBE_ARTIFACT=$PROBE.stage0-probe.kurobc
 STAGE1_PROBE_ARTIFACT=$PROBE.stage1-probe.kurobc
 BOOTSTRAP_ARTIFACT=$PROBE.stage1-input.kurobc
+STAGE2_COMPILER=$PROBE.stage2.kurobc
+STAGE2_INPUT=$PROBE.stage1-self-rebuild-input.kurobc
 "$ROOT/bootstrap/compose-native-compiler-source.sh" > "$COMPOSED_SOURCE"
 cmp "$COMPOSED_SOURCE" "$COMPILER_SOURCE"
 printf 'Print 2 + 3.\n' > "$PROBE"
@@ -74,3 +79,14 @@ grep -Fq '.globl _main' "$ASSEMBLY" || { echo "native codegen smoke failed" >&2;
 cmp "$STAGE0_PROBE_ARTIFACT" "$STAGE1_PROBE_ARTIFACT"
 printf 'Python-free native runtime, compiler, bytecode launcher, and codegen verified\n'
 printf 'Self-hosted stage-1 compiler matches native stage 0 on a probe\n'
+
+# Recompile the complete compiler source with the bytecode stage-1 compiler.
+# The native launcher, not the hosted compiler, must execute this build.
+{
+    cat "$STAGE1_COMPILER"
+    printf 'kuro.input/1\n'
+    cat "$COMPILER_SOURCE"
+} > "$STAGE2_INPUT"
+"$ROOT/bin/kuro-native" exec "$STAGE2_INPUT" > "$STAGE2_COMPILER"
+cmp "$STAGE1_COMPILER" "$STAGE2_COMPILER"
+printf 'Self-hosted stage-1 compiler reproduces its full compiler bytecode\n'

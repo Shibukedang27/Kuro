@@ -18,6 +18,77 @@ class NativeBackendError(ValueError):
     pass
 
 
+def _native_kind_for_type(type_name: str | None) -> str | None:
+    if type_name == "Text":
+        return "text"
+    if type_name == "Decimals":
+        return "float"
+    if type_name in {"Integers", "Symbols"}:
+        return "number"
+    if type_name and type_name.startswith(("List<", "Map<")):
+        return "collection"
+    return None
+
+
+def _statically_text_values(
+    instructions,
+    symbol_types: dict[str, str],
+    collection_names: set[str],
+    parameter_types: dict[str, str] | None = None,
+    function_return_kinds: dict[str, str] | None = None,
+) -> set[str]:
+    """Return names whose Text kind follows from declarations or IR value flow."""
+    parameter_types = parameter_types or {}
+    function_return_kinds = function_return_kinds or {}
+    declared_text = {
+        name for name, type_name in symbol_types.items()
+        if type_name == "Text" and name not in collection_names
+    }
+    known = declared_text | {
+        name for name, type_name in parameter_types.items() if type_name == "Text"
+    }
+    for item in instructions:
+        if item.op == "CONST" and item.dest:
+            if isinstance(item.args[0], str):
+                known.add(item.dest)
+            else:
+                known.discard(item.dest)
+        elif item.op == "INPUT" and item.args and item.args[0] not in collection_names:
+            known.add(item.args[0])
+        elif item.op == "LOADVAR" and item.dest:
+            if item.args[0] in known:
+                known.add(item.dest)
+            else:
+                known.discard(item.dest)
+        elif item.op == "STORE_LIST" and item.args:
+            name, values = item.args
+            if name in declared_text or (
+                name not in collection_names and len(values) == 1 and values[0] in known
+            ):
+                known.add(name)
+            else:
+                known.discard(name)
+        elif item.op == "UPDATE" and item.args:
+            name, value = item.args
+            if name in declared_text or value in known:
+                known.add(name)
+            else:
+                known.discard(name)
+        elif item.op == "BINOP" and item.dest:
+            if item.args[0] == "+" and item.args[1] in known and item.args[2] in known:
+                known.add(item.dest)
+            else:
+                known.discard(item.dest)
+        elif item.op == "CALL" and item.dest:
+            if item.args and function_return_kinds.get(item.args[0]) == "text":
+                known.add(item.dest)
+            else:
+                known.discard(item.dest)
+        elif item.op == "ARTIFACT_SUFFIX" and item.dest:
+            known.add(item.dest)
+    return known
+
+
 NATIVE_INPUT_CAPACITY = 1 << 20
 NATIVE_INPUT_READ_LIMIT = NATIVE_INPUT_CAPACITY - 1
 NATIVE_COLLECTION_CAPACITY = 1 << 16
@@ -78,6 +149,11 @@ def supported_native_targets() -> tuple[str, ...]:
 def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
     """Lower the straight-line IR/control-flow subset to real arm64 code."""
     instructions = ir.main
+    artifact_suffix_needed = any(item.op == "ARTIFACT_SUFFIX" for item in instructions) or any(
+        item.op == "ARTIFACT_SUFFIX"
+        for function in ir.functions.values()
+        for item in function.body
+    )
     collection_names = {
         item.args[0]
         for item in instructions
@@ -172,6 +248,9 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
         for item in instructions
         if item.op == "STORE_LIST" and len(item.args) > 1 and len(item.args[1]) == 1
     }
+    for name, declared_type in ir.symbol_types.items():
+        if declared_type == "Text" and global_kinds.get(name) == "unknown":
+            global_kinds[name] = "text"
     function_return_kinds: dict[str, str] = {}
     def inferred_text_name(name: str) -> bool:
         lowered = name.lower()
@@ -179,11 +258,18 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
     for _ in range(len(ir.functions) + 1):
         changed = False
         for function in ir.functions.values():
-            inferred: dict[str, str] = {parameter: ("float" if parameter.lower() in {"acc", "scale"} else "text" if any(word in parameter.lower() for word in ("kind", "word", "value", "name", "code", "message", "text", "class")) else "number") for parameter in function.params}
+            inferred: dict[str, str] = {}
+            for parameter in function.params:
+                inferred[parameter] = _native_kind_for_type(function.parameter_types.get(parameter)) or (
+                    "float" if parameter.lower() in {"acc", "scale"}
+                    else "text" if any(word in parameter.lower() for word in ("kind", "word", "value", "name", "code", "message", "text", "class"))
+                    else "number"
+                )
             for item in function.body:
                 if item.op == "CONST": inferred[item.dest] = "text" if isinstance(item.args[0], str) else "float" if isinstance(item.args[0], float) else "number"
                 elif item.op == "GET": inferred[item.dest] = collection_kinds.get(item.args[0], "unknown")
                 elif item.op == "LOADVAR": inferred[item.dest] = inferred.get(item.args[0], global_kinds.get(item.args[0], collection_kinds.get(item.args[0], "unknown")))
+                elif item.op == "ARTIFACT_SUFFIX": inferred[item.dest] = "text"
                 elif item.op == "CALL":
                     inferred[item.dest] = function_return_kinds.get(item.args[0], "unknown")
                     if inferred[item.dest] == "unknown" and inferred_text_name(item.dest):
@@ -195,6 +281,9 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
             result = "text" if returns and all(kind == "text" for kind in returns) else "float" if returns and all(kind == "float" for kind in returns) else "number" if returns and all(kind == "number" for kind in returns) else "unknown"
             if result != function_return_kinds.get(function.name): function_return_kinds[function.name] = result; changed = True
         if not changed: break
+    main_statically_text = _statically_text_values(
+        instructions, ir.symbol_types, collection_names,
+    )
     kinds: dict[str, str] = {}
     known_text: dict[str, str] = {}
     closure_actions: dict[str, str] = {}
@@ -412,6 +501,17 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
                 raise NativeBackendError("native LENGTH requires a native collection or known text value")
             store(item.dest)
             kinds[item.dest] = "number"
+        elif op == "ARTIFACT_SUFFIX":
+            if len(item.args) != 2:
+                raise NativeBackendError("native ARTIFACT_SUFFIX requires Text and an integer offset")
+            source, offset = item.args
+            if source not in main_statically_text:
+                raise NativeBackendError("native ARTIFACT_SUFFIX requires a statically known Text source")
+            load(source, "x0")
+            load(offset, "x1")
+            lines.append("    bl _kuro_artifact_suffix")
+            store(item.dest)
+            kinds[item.dest] = "text"
         elif op == "SET":
             name, index_temp, value_temp = item.args
             if name not in collection_buffers:
@@ -712,10 +812,39 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
         "    ldp x19, x20, [sp], #16",
         "    ldp x29, x30, [sp], #16",
         "    ret",
-        ".section __TEXT,__cstring",
     ])
+    if artifact_suffix_needed:
+        # Text values are immutable, so an in-range suffix can safely share its source storage.
+        lines.extend([
+            ".section __TEXT,__text",
+            "_kuro_artifact_suffix:",
+            "    stp x29, x30, [sp, #-16]!",
+            "    sub sp, sp, #16",
+            "    str x0, [sp]",
+            "    str x1, [sp, #8]",
+            "    cmp x1, #0",
+            "    b.lt L_kuro_artifact_suffix_error",
+            "    bl _strlen",
+            "    ldr x1, [sp, #8]",
+            "    cmp x1, x0",
+            "    b.hi L_kuro_artifact_suffix_error",
+            "    ldr x0, [sp]",
+            "    add x0, x0, x1",
+            "    add sp, sp, #16",
+            "    ldp x29, x30, [sp], #16",
+            "    ret",
+            "L_kuro_artifact_suffix_error:",
+            "    mov w0, #1",
+            "    bl _exit",
+            "    brk #0",
+        ])
+    lines.append(".section __TEXT,__cstring")
     for function in ir.functions.values():
-        function_sections.append(_emit_dynamic_function(function, collection_buffers, collection_lengths, global_labels, data, collection_kinds, function_return_kinds, char_buffers, known_lengths, global_kinds))
+        function_sections.append(_emit_dynamic_function(
+            function, collection_buffers, collection_lengths, global_labels,
+            data, collection_kinds, function_return_kinds, char_buffers,
+            known_lengths, global_kinds, ir.symbol_types, collection_names,
+        ))
     if function_sections:
         lines.extend([".section __TEXT,__text", *function_sections, ".section __TEXT,__cstring"])
     for label, value in data:
@@ -782,7 +911,12 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _emit_dynamic_function(function, collection_buffers=None, collection_lengths=None, global_labels=None, data=None, collection_kinds=None, function_return_kinds=None, char_buffers=None, known_lengths=None, global_kinds=None) -> str:
+def _emit_dynamic_function(
+    function, collection_buffers=None, collection_lengths=None, global_labels=None,
+    data=None, collection_kinds=None, function_return_kinds=None, char_buffers=None,
+    known_lengths=None, global_kinds=None, symbol_types=None,
+    static_collection_names=None,
+) -> str:
     """Emit numeric action bodies, including recursive calls and branches."""
     collection_buffers = collection_buffers or {}
     collection_lengths = collection_lengths or {}
@@ -793,13 +927,20 @@ def _emit_dynamic_function(function, collection_buffers=None, collection_lengths
     char_buffers = char_buffers or {}
     known_lengths = known_lengths or {}
     global_kinds = global_kinds or {}
+    function_statically_text = _statically_text_values(
+        function.body, symbol_types or {}, set(static_collection_names or ()),
+        function.parameter_types,
+    )
     kinds: dict[str, str] = {}
     def inferred_text_name(name: str) -> bool:
         lowered = name.lower()
         return any(word in lowered for word in ("kind", "operand", "name", "value", "code", "message", "text", "op"))
     for parameter in function.params:
         lowered = parameter.lower()
-        if lowered in {"acc", "scale"}:
+        declared_kind = _native_kind_for_type(function.parameter_types.get(parameter))
+        if declared_kind is not None:
+            kinds[parameter] = declared_kind
+        elif lowered in {"acc", "scale"}:
             kinds[parameter] = "float"
         elif any(word in lowered for word in ("kind", "word", "value", "name", "code", "message", "text", "class")):
             kinds[parameter] = "text"
@@ -913,6 +1054,17 @@ def _emit_dynamic_function(function, collection_buffers=None, collection_lengths
                 "    ldr x0, [x2, x1]",
             ])
             store(item.dest); kinds[item.dest] = collection_kinds.get(name, "unknown")
+        elif op == "ARTIFACT_SUFFIX":
+            if len(item.args) != 2:
+                raise NativeBackendError("native ARTIFACT_SUFFIX requires Text and an integer offset")
+            source, offset = item.args
+            if source not in function_statically_text:
+                raise NativeBackendError("native ARTIFACT_SUFFIX requires a statically known Text source")
+            load(source, "x0")
+            load(offset, "x1")
+            lines.append("    bl _kuro_artifact_suffix")
+            store(item.dest)
+            kinds[item.dest] = "text"
         elif op == "SET":
             name, index_temp, value_temp = item.args
             if name not in collection_buffers:
@@ -1080,9 +1232,13 @@ def _emit_dynamic_function(function, collection_buffers=None, collection_lengths
                 text_label = f"L_kuro_print_dynamic_text_{function.name}_{temp}"
                 float_label = f"L_kuro_print_dynamic_float_{function.name}_{temp}"
                 done_label = f"L_kuro_print_dynamic_done_{function.name}_{temp}"
+                # Darwin ARM64 user-space pointers are above 4 GiB and below
+                # the 48-bit virtual-address ceiling.  A 4 KiB cutoff treats
+                # ordinary integer results (for example, a 70,000-byte
+                # length) as string pointers and can fault inside puts/strlen.
                 lines.extend([
-                    "    cmp x0, #4096", f"    b.lo {number_label}",
-                    "    mov x1, #0x100000000000", "    cmp x0, x1", f"    b.lo {text_label}",
+                    "    mov x1, #0x100000000", "    cmp x0, x1", f"    b.lo {number_label}",
+                    "    mov x1, #0x1000000000000", "    cmp x0, x1", f"    b.lo {text_label}",
                     f"{float_label}:", "    sub sp, sp, #16", "    str x0, [sp]", "    adrp x0, L_kuro_float_format@PAGE", "    add x0, x0, L_kuro_float_format@PAGEOFF", "    bl _printf", "    add sp, sp, #16", f"    b {done_label}",
                     f"{text_label}:", "    bl _puts", f"    b {done_label}",
                     f"{number_label}:", "    bl _kuro_print_int", f"{done_label}:",
@@ -1119,10 +1275,10 @@ def emit_macos_arm64(ir: IRProgram) -> str:
     builtin_calls = {"MakeEnum", "EnumIs", "Some", "None", "Ok", "Err", "IsSome", "IsNone", "IsOk", "IsErr", "Unwrap", "UnwrapErr", "MakeRecord", "RecordSet", "RecordGet", "MakeMap", "MapSet", "MapGet", "MapHas", "MakeClosure", "Invoke", "Spawn", "Await"}
     has_dynamic_action = any(
         item.op == "CALL"
-        and (item.args[0] in builtin_calls or (ir.functions.get(item.args[0]) is not None and any(inner.op in {"JUMP", "JUMPF", "CALL", "CMP"} for inner in ir.functions[item.args[0]].body)))
+        and (item.args[0] in builtin_calls or (ir.functions.get(item.args[0]) is not None and any(inner.op in {"JUMP", "JUMPF", "CALL", "CMP", "ARTIFACT_SUFFIX"} for inner in ir.functions[item.args[0]].body)))
         for item in ir.main
     )
-    if any(item.op in {"JUMP", "JUMPF", "LOOP_GUARD", "AND", "OR", "APPEND", "ISCLASS", "INPUT"} for item in ir.main) or has_dynamic_action:
+    if any(item.op in {"JUMP", "JUMPF", "LOOP_GUARD", "AND", "OR", "APPEND", "ISCLASS", "INPUT", "ARTIFACT_SUFFIX"} for item in ir.main) or has_dynamic_action:
         return _emit_dynamic_macos_arm64(ir)
     labels: list[str] = []
     formats: list[tuple[str, str]] = []
@@ -1371,6 +1527,9 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     local_texts[target] = local_texts[source]
                 else:
                     local_texts.pop(target, None)
+            elif item.op == "ARTIFACT_SUFFIX" and item.dest:
+                local_kinds[item.dest] = "text"
+                local_texts.pop(item.dest, None)
             elif item.op == "CALL" and item.dest:
                 call_name, *call_arguments = item.args
                 if call_name == "RecordGet" and len(call_arguments) == 2:
@@ -1463,6 +1622,9 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     collection_buffers = {name: f".Lkuro_collection_{index}" for index, name in enumerate(sorted(collection_names))}
     collection_lengths = {name: f".Lkuro_collection_len_{index}" for index, name in enumerate(sorted(collection_names))}
     collection_item_lengths = {name: f".Lkuro_collection_item_len_{index}" for index, name in enumerate(sorted(collection_names))}
+    main_statically_text = _statically_text_values(
+        items, ir.symbol_types, collection_names
+    )
     input_buffers = {name: f".Lkuro_input_{index}" for index, name in enumerate(sorted(input_names))}
     input_lengths = {name: f".Lkuro_input_len_{index}" for index, name in enumerate(sorted(input_names))}
     main_global_names: set[str] = set()
@@ -2490,6 +2652,30 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             ])
             if kinds.get(value) == "text":
                 collection_kinds.setdefault(name, "text")
+        elif op == "ARTIFACT_SUFFIX":
+            if len(instruction.args) != 2:
+                raise NativeBackendError("x86_64-linux ARTIFACT_SUFFIX requires Text and an integer offset")
+            source, offset = instruction.args
+            if source not in main_statically_text:
+                raise NativeBackendError("x86_64-linux ARTIFACT_SUFFIX requires a statically known Text source")
+            load(source, "%r8")
+            load(offset, "%r9")
+            lines.extend([
+                "    test %r9, %r9", "    js .Lkuro_bounds",
+                "    mov %r8, %rax", "    call _kuro_strlen", "    cmp %rax, %r9", "    ja .Lkuro_bounds",
+                "    sub %r9, %rax", "    mov %rax, %r10",
+                "    mov .Lkuro_text_heap_cursor(%rip), %rdx", "    mov %rdx, %rcx", "    add %r10, %rcx", "    inc %rcx",
+                f"    cmp ${NATIVE_TEXT_HEAP_CAPACITY}, %rcx", "    ja .Lkuro_overflow",
+                "    lea .Lkuro_text_heap(%rip), %rdi", "    add %rdx, %rdi", "    lea (%r8,%r9,1), %rsi",
+                "    mov %r10, %rcx", "    rep movsb", "    movb $0, (%rdi)",
+                "    lea .Lkuro_text_heap(%rip), %rsi", "    mov %rdi, %rcx", "    sub %rsi, %rcx", "    inc %rcx",
+                "    mov %rcx, .Lkuro_text_heap_cursor(%rip)", "    lea .Lkuro_text_heap(%rip), %rax", "    add %rdx, %rax",
+            ])
+            store(instruction.dest)
+            kinds[instruction.dest] = "text"
+            known_text.pop(instruction.dest, None)
+            text_lengths.pop(instruction.dest, None)
+            text_length_refs.pop(instruction.dest, None)
         elif op == "CALL":
             call_name, *arguments = instruction.args
             if call_name == "MakeRecord":
@@ -2933,6 +3119,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             for name in function.params
         }
         fn_kinds.update(function_capture_kinds.get(function.name, {}))
+        for parameter, declared_type in function.parameter_types.items():
+            declared_kind = _native_kind_for_type(declared_type)
+            if declared_kind is not None:
+                fn_kinds[parameter] = declared_kind
         # The Kuro VM deliberately stores dynamically typed values in generic
         # names such as ``*_Value`` and ``_``.  For the native lowering pass,
         # collect hard numeric-use constraints before emitting instructions so
@@ -2981,6 +3171,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         for numeric_name in fn_numeric_names:
             if numeric_name in fn_kinds and fn_kinds[numeric_name] != "float":
                 fn_kinds[numeric_name] = "number"
+        function_statically_text = _statically_text_values(
+            function.body, ir.symbol_types, collection_names,
+            function.parameter_types,
+        )
         fn_text_lengths: dict[str, int] = {}
         fn_collection_kinds: dict[str, str] = {
             name: ("number" if any(word in name.lower() for word in ("count", "pos", "start", "end", "index", "depth", "len")) else "text")
@@ -3402,6 +3596,27 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     lines.extend(["    cmp $34, %rax", "    sete %al", "    movzbq %al, %rax"])
                 lines.extend([f"    jmp {done_label}", f"{invalid_label}:", "    xor %eax, %eax", f"{done_label}:"])
                 fn_store(item.dest); fn_kinds[item.dest] = "number"
+            elif fn_op == "ARTIFACT_SUFFIX":
+                if len(item.args) != 2:
+                    raise NativeBackendError(f"x86_64-linux action {function.name!r} ARTIFACT_SUFFIX requires Text and an integer offset")
+                source, offset = item.args
+                if source not in function_statically_text:
+                    raise NativeBackendError(f"x86_64-linux action {function.name!r} ARTIFACT_SUFFIX requires a statically known Text source")
+                fn_load(source, "%r8")
+                fn_load(offset, "%r9")
+                lines.extend([
+                    "    test %r9, %r9", "    js .Lkuro_bounds",
+                    "    mov %r8, %rax", "    call _kuro_strlen", "    cmp %rax, %r9", "    ja .Lkuro_bounds",
+                    "    sub %r9, %rax", "    mov %rax, %r10",
+                    "    mov .Lkuro_text_heap_cursor(%rip), %rdx", "    mov %rdx, %rcx", "    add %r10, %rcx", "    inc %rcx",
+                    f"    cmp ${NATIVE_TEXT_HEAP_CAPACITY}, %rcx", "    ja .Lkuro_overflow",
+                    "    lea .Lkuro_text_heap(%rip), %rdi", "    add %rdx, %rdi", "    lea (%r8,%r9,1), %rsi",
+                    "    mov %r10, %rcx", "    rep movsb", "    movb $0, (%rdi)",
+                    "    lea .Lkuro_text_heap(%rip), %rsi", "    mov %rdi, %rcx", "    sub %rsi, %rcx", "    inc %rcx",
+                    "    mov %rcx, .Lkuro_text_heap_cursor(%rip)", "    lea .Lkuro_text_heap(%rip), %rax", "    add %rdx, %rax",
+                ])
+                fn_store(item.dest)
+                fn_kinds[item.dest] = "text"
             elif fn_op == "CALL":
                 name, *arguments = item.args
                 if name in {"MapGet", "MapSet", "MapHas"}:

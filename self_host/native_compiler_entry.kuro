@@ -22,6 +22,7 @@ If CompilerFailed is equal to 0;
         Length NativeTokenText;
         NativeTokenLength = @_;
         NativeEncodedToken = "";
+        NativeCharacterIndex = 0;
         If NativeTokenLength is equal to 0;
             NativeEncodedToken = NativeEscape + "e";
         Else;
@@ -30,7 +31,6 @@ If CompilerFailed is equal to 0;
                 NativeCharacterIndex = NativeTokenLength;
             Done.
         Done.
-        NativeCharacterIndex = 0;
         While NativeCharacterIndex is less than NativeTokenLength;
             Get NativeTokenText NativeCharacterIndex;
             NativeCharacterText = @_;

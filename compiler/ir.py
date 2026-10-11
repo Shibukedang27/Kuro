@@ -46,6 +46,7 @@ class IRFunction:
     name: str
     params: list[str]
     body: list[Instr] = field(default_factory=list)
+    parameter_types: dict[str, str] = field(default_factory=dict)
 
     def __str__(self) -> str:
         lines = [f"func {self.name}({', '.join(self.params)}):"]
@@ -57,6 +58,9 @@ class IRFunction:
 class IRProgram:
     main: list[Instr] = field(default_factory=list)
     functions: dict[str, IRFunction] = field(default_factory=dict)
+    # Resolved source types are compiler metadata used by native lowering;
+    # runtime bytecode does not need them to execute an already-checked IR.
+    symbol_types: dict[str, str] = field(default_factory=dict)
 
     def __str__(self) -> str:
         parts = []

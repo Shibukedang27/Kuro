@@ -27,7 +27,7 @@ from .ast_nodes import (
     EnumDecl,
 )
 from .ir import IRBuilder, IRFunction, IRProgram
-from .resolver import SymbolTable
+from .resolver import INTERNAL_INTRINSICS, SymbolTable
 
 
 class Lowering:
@@ -39,6 +39,7 @@ class Lowering:
 
     def run(self) -> IRProgram:
         b = IRBuilder()
+        self.ir.symbol_types = dict(self.symbols.types)
         top = [st for st in self.program.statements if not isinstance(st, ActionDecl)]
         for st in _walk_statements(self.program.statements):
             if isinstance(st, ActionDecl):
@@ -50,6 +51,11 @@ class Lowering:
     def _lower_action(self, decl: ActionDecl):
         b = IRBuilder()
         fn = IRFunction(decl.name, [p.name for p in decl.params])
+        fn.parameter_types = {
+            parameter.name: parameter.typ
+            for parameter in decl.params
+            if parameter.typ is not None
+        }
         self._lower_block(decl.body, b)
         fn.body = b.instrs
         self.ir.functions[decl.name] = fn
@@ -160,7 +166,9 @@ class Lowering:
             return
         if isinstance(st, CallStmt):
             args = tuple(self._lower_expr(a, b) for a in st.args)
-            dest = b.emit_value("CALL", st.name, *args, span=st.span)
+            op = "ARTIFACT_SUFFIX" if st.name in INTERNAL_INTRINSICS else "CALL"
+            call_args = args if op == "ARTIFACT_SUFFIX" else (st.name, *args)
+            dest = b.emit_value(op, *call_args, span=st.span)
             b.emit("STORE_LIST", "_", (dest,), span=st.span)
             return
         if isinstance(st, ActionDecl):

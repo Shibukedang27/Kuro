@@ -21,13 +21,13 @@ what was — and was deliberately not — added, and why.
 from __future__ import annotations
 
 from .ast_nodes import (
-    AddStmt, Assign, BinaryExpr, BoolAnd, BoolOr, CallStmt, Comparison,
+    ActionDecl, AddStmt, Assign, BinaryExpr, BoolAnd, BoolOr, CallStmt, Comparison,
     CompareStmt, Condition, Expr, GetStmt, IfStmt, IsClass, LengthStmt,
     Literal, Program, RepeatStmt, SetStmt, Stmt, VarRef, WhileStmt,
     RecordDecl, EnumDecl,
 )
 from .diagnostics import DiagnosticEngine
-from .resolver import SymbolTable
+from .resolver import INTERNAL_INTRINSICS, SymbolTable
 
 # Algebraic values are represented by Kuro's tagged-value ABI. Record and
 # enum declarations are reserved for the upcoming declaration grammar, but
@@ -67,6 +67,7 @@ class TypeChecker:
         self.program = program
         self.symbols = symbols
         self.diags = diags
+        self._action_types: dict[str, str | None] = {}
 
     def run(self):
         self._check_block(self.program.statements)
@@ -76,6 +77,14 @@ class TypeChecker:
             self._check_stmt(st)
 
     def _check_stmt(self, st: Stmt):
+        if isinstance(st, ActionDecl):
+            previous = self._action_types
+            self._action_types = dict(previous)
+            for parameter in st.params:
+                self._action_types[parameter.name] = parameter.typ
+            self._check_block(st.body)
+            self._action_types = previous
+            return
         if isinstance(st, Assign):
             declared = self.symbols.types.get(st.name)
             # _infer always runs, regardless of whether the target has a
@@ -164,6 +173,17 @@ class TypeChecker:
             self._check_block(child)
 
     def _check_builtin_call(self, st: CallStmt):
+        if st.name in INTERNAL_INTRINSICS and len(st.args) == 2:
+            source_type = self._infer(st.args[0])
+            if source_type != "Text":
+                found = source_type or "unknown"
+                self.diags.error(
+                    "E3017",
+                    f"internal intrinsic {st.name!r} requires a Text source, found {found}",
+                    st.args[0].span,
+                    notes=(f"found: {found}", "expected: Text"),
+                )
+            self._check_index(st.args[1])
         if st.name == "MakeRecord" and st.args and isinstance(st.args[0], Literal):
             # Construction may be dynamic when no declaration is available;
             # validate strictly once the program has declared the type.
@@ -222,7 +242,7 @@ class TypeChecker:
         if isinstance(e, Literal):
             return type_of_literal(e.value)
         if isinstance(e, VarRef):
-            return self.symbols.types.get(e.name)
+            return self._action_types.get(e.name, self.symbols.types.get(e.name))
         if isinstance(e, BinaryExpr):
             lt, rt = self._infer(e.left), self._infer(e.right)
             if lt is None or rt is None:

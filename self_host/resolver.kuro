@@ -483,14 +483,18 @@ Action SkipTopLevelStatement;
         SkipTopLevelStatement_ParamsPos = SemPos;
         Call CountParamsAt SkipTopLevelStatement_ParamsPos;
         SkipTopLevelStatement_Arity = @_;
-        Call ActionExists SkipTopLevelStatement_AName;
-        SkipTopLevelStatement_AlreadyAction = @_;
-        If SkipTopLevelStatement_AlreadyAction is equal to 1;
-            Call RecordSemDiag "E4002", SkipTopLevelStatement_ActionDeclPos, "duplicate action " + SkipTopLevelStatement_AName;
+        If SkipTopLevelStatement_AName is equal to "__KuroArtifactSuffix";
+            Call RecordSemDiag "E4002", SkipTopLevelStatement_ActionDeclPos, "action name " + SkipTopLevelStatement_AName + " is reserved for compiler/runtime use";
         Else;
-            Append SkipTopLevelStatement_AName to ActionNames;
-            Append SkipTopLevelStatement_Arity to ActionArity;
-            Append SkipTopLevelStatement_ParamsPos to ActionParamPos;
+            Call ActionExists SkipTopLevelStatement_AName;
+            SkipTopLevelStatement_AlreadyAction = @_;
+            If SkipTopLevelStatement_AlreadyAction is equal to 1;
+                Call RecordSemDiag "E4002", SkipTopLevelStatement_ActionDeclPos, "duplicate action " + SkipTopLevelStatement_AName;
+            Else;
+                Append SkipTopLevelStatement_AName to ActionNames;
+                Append SkipTopLevelStatement_Arity to ActionArity;
+                Append SkipTopLevelStatement_ParamsPos to ActionParamPos;
+            Done.
         Done.
         Call SkipParamsHeader;
         Call SkipToTerminator;

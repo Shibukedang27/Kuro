@@ -12,6 +12,8 @@ BytecodeOut = "BC_CONST", "7", "BC_STORE_LIST", "N", "BC_LOADVAR", "N", "BC_PRIN
 # --- BEGIN_VM_INPUT_DEFAULT (stripped when an artifact loader provides it) ---
 VMInput = "";
 # --- END_VM_INPUT_DEFAULT ---
+VMStep_Source is Text;
+VMStep_Offset is Integers;
 VMNames is Text;
 VMValues is Text;
 VMValueDisplay is Text;
@@ -977,6 +979,12 @@ Action VMStep;
         VMReturnPending = 1;
         Return 0;
     Done.
+    If VMStep_Op is equal to "BC_CONST_TEXT";
+        Call VMReadOperand;
+        VMStep_ConstantValue = @_;
+        Call VMPush VMStep_ConstantValue;
+        Return 0;
+    Done.
     If VMStep_Op is equal to "BC_CONST";
         Call VMReadOperand;
         Call VMDecodeConstant @_;
@@ -1079,6 +1087,17 @@ Action VMStep;
         Else;
             Call VMStore VMStep_Name, "";
         Done.
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_ARTIFACT_SUFFIX";
+        Call VMPop;
+        VMStep_Offset = @_;
+        Call VMPop;
+        VMStep_Source = @_;
+        Call __KuroArtifactSuffix VMStep_Source, VMStep_Offset;
+        VMStep_Result = @_;
+        Call VMSetResult VMStep_Result;
+        Call VMPush VMStep_Result;
         Return 0;
     Done.
     If VMStep_Op is equal to "BC_BINOP";

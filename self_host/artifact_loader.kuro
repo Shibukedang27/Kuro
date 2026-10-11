@@ -18,6 +18,7 @@ ArtifactTokenCount = 0;
 ArtifactEscape = "\\";
 ArtifactInputMagic = "kuro.input/1";
 ArtifactReadingInput = 0;
+ArtifactInputStart = 0;
 VMInput = "";
 
 Action ArtifactDecodeLine EncodedLine;
@@ -78,6 +79,7 @@ Action ArtifactCommitLine;
         If ArtifactLine is equal to ArtifactInputMagic;
             If ArtifactTokenCount is greater than 0;
                 ArtifactReadingInput = 1;
+                ArtifactInputStart = ArtifactIndex + 1;
             Else;
                 ArtifactFailed = 1;
             Done.
@@ -109,9 +111,7 @@ ArtifactLength = @_;
 While ArtifactIndex is less than ArtifactLength;
     Get ArtifactSource ArtifactIndex;
     ArtifactCharacter = @_;
-    If ArtifactReadingInput is equal to 1;
-        VMInput = VMInput + ArtifactCharacter;
-    Else;
+    If ArtifactReadingInput is equal to 0;
         If ArtifactCharacter is equal to "\n";
             Call ArtifactCommitLine;
         Else;
@@ -123,6 +123,11 @@ While ArtifactIndex is less than ArtifactLength;
         Done.
     Done.
     Add 1 to ArtifactIndex;
+Done.
+
+If ArtifactReadingInput is equal to 1;
+    Call __KuroArtifactSuffix ArtifactSource, ArtifactInputStart;
+    VMInput = @_;
 Done.
 
 If ArtifactReadingInput is equal to 0 and ArtifactLine is not equal to "";
@@ -146,6 +151,10 @@ While ArtifactScan is less than ArtifactTokenCount and ArtifactFailed is equal t
     ArtifactOp = @_;
     ArtifactArity = 0;
     ArtifactKnown = 0;
+    If ArtifactOp is equal to "BC_CONST_TEXT";
+        ArtifactArity = 1;
+        ArtifactKnown = 1;
+    Done.
     If ArtifactOp is equal to "BC_CONST" or ArtifactOp is equal to "BC_LOADVAR" or ArtifactOp is equal to "BC_STORE_LIST" or ArtifactOp is equal to "BC_STORE_MULTI" or ArtifactOp is equal to "BC_BINOP" or ArtifactOp is equal to "BC_CMP" or ArtifactOp is equal to "BC_BOOL" or ArtifactOp is equal to "BC_ISCLASS" or ArtifactOp is equal to "BC_UPDATE" or ArtifactOp is equal to "BC_ADD" or ArtifactOp is equal to "BC_APPEND" or ArtifactOp is equal to "BC_LENGTH" or ArtifactOp is equal to "BC_SET" or ArtifactOp is equal to "BC_INPUT" or ArtifactOp is equal to "BC_FUNC_BEGIN" or ArtifactOp is equal to "BC_CALL_BEGIN";
         ArtifactArity = 1;
         ArtifactKnown = 1;
@@ -154,7 +163,7 @@ While ArtifactScan is less than ArtifactTokenCount and ArtifactFailed is equal t
         ArtifactArity = 2;
         ArtifactKnown = 1;
     Done.
-    If ArtifactOp is equal to "BC_MULTI_BEGIN" or ArtifactOp is equal to "BC_PRINT" or ArtifactOp is equal to "BC_IF_BEGIN" or ArtifactOp is equal to "BC_ELSE_BEGIN" or ArtifactOp is equal to "BC_IF_END" or ArtifactOp is equal to "BC_REPEAT_BEGIN" or ArtifactOp is equal to "BC_REPEAT_END" or ArtifactOp is equal to "BC_WHILE_BEGIN" or ArtifactOp is equal to "BC_WHILE_TEST" or ArtifactOp is equal to "BC_WHILE_END" or ArtifactOp is equal to "BC_FUNC_END" or ArtifactOp is equal to "BC_RETURN" or ArtifactOp is equal to "BC_CALL_END";
+    If ArtifactOp is equal to "BC_MULTI_BEGIN" or ArtifactOp is equal to "BC_PRINT" or ArtifactOp is equal to "BC_IF_BEGIN" or ArtifactOp is equal to "BC_ELSE_BEGIN" or ArtifactOp is equal to "BC_IF_END" or ArtifactOp is equal to "BC_REPEAT_BEGIN" or ArtifactOp is equal to "BC_REPEAT_END" or ArtifactOp is equal to "BC_WHILE_BEGIN" or ArtifactOp is equal to "BC_WHILE_TEST" or ArtifactOp is equal to "BC_WHILE_END" or ArtifactOp is equal to "BC_FUNC_END" or ArtifactOp is equal to "BC_RETURN" or ArtifactOp is equal to "BC_CALL_END" or ArtifactOp is equal to "BC_ARTIFACT_SUFFIX";
         ArtifactKnown = 1;
     Done.
 

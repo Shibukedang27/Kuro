@@ -691,6 +691,27 @@ Action TCCheckArgList ActionIdx, ParamsPos, ArgIdx;
     Done.
 Done.
 
+Action TCCheckArtifactSuffixArgs ArgIdx;
+    TCCAS_Pos = SemPos;
+    Call TCResolveExpr;
+    TCCAS_Type = @_;
+    If ArgIdx is equal to 0;
+        If TCCAS_Type is not equal to "Text";
+            Call RecordSemDiag "E3017", TCCAS_Pos, "internal intrinsic '__KuroArtifactSuffix' requires a Text source";
+        Done.
+    Else;
+        If ArgIdx is equal to 1 and TCCAS_Type is not equal to "" and TCCAS_Type is not equal to "Integers";
+            Call RecordSemDiag "E3010", TCCAS_Pos, "index must be Integers, found " + TCCAS_Type;
+        Done.
+    Done.
+    Call KindAt SemPos;
+    TCCAS_NextKind = @_;
+    If TCCAS_NextKind is equal to "COMMA";
+        Add 1 to SemPos;
+        Call TCCheckArtifactSuffixArgs ArgIdx + 1;
+    Done.
+Done.
+
 Action TCCheckCallArgs ActionName;
     Call KindAt SemPos;
     TCCCA_K = @_;
@@ -714,9 +735,13 @@ Action TCCheckCallArgs ActionName;
     Done.
 
     If TCCCA_Empty is equal to 0;
-        Call ActionParamsPosFor ActionName;
-        TCCCA_ParamsPos = @_;
-        Call TCCheckArgList 0, TCCCA_ParamsPos, 0;
+        If ActionName is equal to "__KuroArtifactSuffix";
+            Call TCCheckArtifactSuffixArgs 0;
+        Else;
+            Call ActionParamsPosFor ActionName;
+            TCCCA_ParamsPos = @_;
+            Call TCCheckArgList 0, TCCCA_ParamsPos, 0;
+        Done.
     Done.
 
     If TCCCA_HasParens is equal to 1;
@@ -1154,20 +1179,29 @@ Action TCCheckStatement;
         Call ValueAt SemPos;
         TCCS_CallName = @_;
         Add 1 to SemPos;
-        Call ActionExists TCCS_CallName;
-        TCCS_CallExists = @_;
-        If TCCS_CallExists is equal to 0;
-            Call RecordSemDiag "E4003", TCCS_CallPos, "unknown action " + TCCS_CallName;
-            Call TCSkipCallArgsOnly;
-        Else;
+        If TCCS_CallName is equal to "__KuroArtifactSuffix";
             Call TCCountCallArgs;
             TCCS_ArgCount = @_;
-            Call ActionArityFor TCCS_CallName;
-            TCCS_Arity = @_;
-            If TCCS_ArgCount is not equal to TCCS_Arity;
-                Call RecordSemDiag "E4004", TCCS_CallPos, "action " + TCCS_CallName + " expects a different number of arguments";
+            If TCCS_ArgCount is not equal to 2;
+                Call RecordSemDiag "E4004", TCCS_CallPos, "internal intrinsic '__KuroArtifactSuffix' expects 2 argument(s)";
             Done.
             Call TCCheckCallArgs TCCS_CallName;
+        Else;
+            Call ActionExists TCCS_CallName;
+            TCCS_CallExists = @_;
+            If TCCS_CallExists is equal to 0;
+                Call RecordSemDiag "E4003", TCCS_CallPos, "unknown action " + TCCS_CallName;
+                Call TCSkipCallArgsOnly;
+            Else;
+                Call TCCountCallArgs;
+                TCCS_ArgCount = @_;
+                Call ActionArityFor TCCS_CallName;
+                TCCS_Arity = @_;
+                If TCCS_ArgCount is not equal to TCCS_Arity;
+                    Call RecordSemDiag "E4004", TCCS_CallPos, "action " + TCCS_CallName + " expects a different number of arguments";
+                Done.
+                Call TCCheckCallArgs TCCS_CallName;
+            Done.
         Done.
         Add 1 to SemPos;
         Return 1;

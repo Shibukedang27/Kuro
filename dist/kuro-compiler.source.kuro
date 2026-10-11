@@ -1406,8 +1406,13 @@ Action LowerAtom;
     If LowerAtom_Tag is equal to "LIT_STR" or LowerAtom_Tag is equal to "LIT_INT" or LowerAtom_Tag is equal to "LIT_DEC";
         LowerAtom_VPos = LowerPos + 1;
         Get AstOut LowerAtom_VPos;
-        Append "CONST" to IROut;
-        Append @_ to IROut;
+        LowerAtom_Value = @_;
+        If LowerAtom_Tag is equal to "LIT_STR";
+            Append "CONST_TEXT" to IROut;
+        Else;
+            Append "CONST" to IROut;
+        Done.
+        Append LowerAtom_Value to IROut;
         LowerPos = LowerPos + 2;
     Else;
         If LowerAtom_Tag is equal to "VAR";
@@ -1439,8 +1444,13 @@ Action LowerValueTail;
     If LowerValueTail_Tag is equal to "LIT_STR" or LowerValueTail_Tag is equal to "LIT_INT" or LowerValueTail_Tag is equal to "LIT_DEC";
         LowerValueTail_VPos = LowerPos + 1;
         Get AstOut LowerValueTail_VPos;
-        Append "CONST" to IROut;
-        Append @_ to IROut;
+        LowerValueTail_Value = @_;
+        If LowerValueTail_Tag is equal to "LIT_STR";
+            Append "CONST_TEXT" to IROut;
+        Else;
+            Append "CONST" to IROut;
+        Done.
+        Append LowerValueTail_Value to IROut;
         LowerPos = LowerPos + 2;
         Call LowerValueTail;
     Else;
@@ -1534,19 +1544,49 @@ Action LowerPrintExpr;
     Done.
 Done.
 
+Action LowerCountAssignmentValues StartPos;
+    Length AstOut;
+    LowerCountAssignmentValues_Length = @_;
+    LowerCountAssignmentValues_Pos = StartPos;
+    LowerCountAssignmentValues_Count = 0;
+    LowerCountAssignmentValues_Found = 0;
+    While LowerCountAssignmentValues_Pos is less than LowerCountAssignmentValues_Length and LowerCountAssignmentValues_Found is equal to 0;
+        Get AstOut LowerCountAssignmentValues_Pos;
+        If @_ is equal to "END_VALUES";
+            LowerCountAssignmentValues_Found = 1;
+        Else;
+            If @_ is equal to "END_EXPR";
+                Add 1 to LowerCountAssignmentValues_Count;
+            Done.
+        Done.
+        Add 1 to LowerCountAssignmentValues_Pos;
+    Done.
+    Return LowerCountAssignmentValues_Count;
+Done.
+
 Action LowerAssign;
     LowerAssign_NamePos = LowerPos + 1;
     Get AstOut LowerAssign_NamePos;
     LowerAssign_Name = @_;
     LowerPos = LowerPos + 3;
+    Call LowerCountAssignmentValues LowerPos;
+    LowerAssign_Count = @_;
+    If LowerAssign_Count is greater than 1;
+        Append "MULTI_BEGIN" to IROut;
+    Done.
     Call LowerValue;
     If LowerFailed is equal to 0;
         Add 1 to LowerPos;
         Call LowerAssignTail;
     Done.
     If LowerFailed is equal to 0;
-        Append "STORE_LIST" to IROut;
-        Append LowerAssign_Name to IROut;
+        If LowerAssign_Count is greater than 1;
+            Append "STORE_MULTI" to IROut;
+            Append LowerAssign_Name to IROut;
+        Else;
+            Append "STORE_LIST" to IROut;
+            Append LowerAssign_Name to IROut;
+        Done.
     Done.
 Done.
 
@@ -1636,6 +1676,8 @@ Action LowerGet;
         Append LowerGet_Target to IROut;
         Append "0" to IROut;
     Done.
+    Append "STORE_LIST" to IROut;
+    Append "_" to IROut;
 Done.
 
 Action LowerLength;
@@ -1644,6 +1686,8 @@ Action LowerLength;
     Append "LENGTH" to IROut;
     Append @_ to IROut;
     LowerPos = LowerPos + 2;
+    Append "STORE_LIST" to IROut;
+    Append "_" to IROut;
 Done.
 
 Action LowerDecl;
@@ -1709,10 +1753,17 @@ Action LowerCall;
     Get AstOut LowerCall_NamePos;
     LowerCall_Name = @_;
     LowerPos = LowerPos + 2;
-    Append "CALL_BEGIN" to IROut;
-    Append LowerCall_Name to IROut;
-    Call LowerCallArgs;
-    Append "CALL_END" to IROut;
+    If LowerCall_Name is equal to "__KuroArtifactSuffix";
+        Call LowerCallArgs;
+        Append "ARTIFACT_SUFFIX" to IROut;
+    Else;
+        Append "CALL_BEGIN" to IROut;
+        Append LowerCall_Name to IROut;
+        Call LowerCallArgs;
+        Append "CALL_END" to IROut;
+    Done.
+    Append "STORE_LIST" to IROut;
+    Append "_" to IROut;
 Done.
 
 Action LowerParams;
@@ -1898,21 +1949,25 @@ Action BytecodeStep;
         Append "BC_" + BytecodeStep_Op to BytecodeOut;
         Add 1 to BytecodePos;
 
-        If BytecodeStep_Op is equal to "CONST" or BytecodeStep_Op is equal to "LOADVAR" or BytecodeStep_Op is equal to "STORE_LIST" or BytecodeStep_Op is equal to "UPDATE" or BytecodeStep_Op is equal to "ADD" or BytecodeStep_Op is equal to "APPEND" or BytecodeStep_Op is equal to "FUNC_BEGIN" or BytecodeStep_Op is equal to "CALL_BEGIN" or BytecodeStep_Op is equal to "BINOP" or BytecodeStep_Op is equal to "CMP" or BytecodeStep_Op is equal to "BOOL" or BytecodeStep_Op is equal to "ISCLASS" or BytecodeStep_Op is equal to "LENGTH" or BytecodeStep_Op is equal to "SET" or BytecodeStep_Op is equal to "INPUT";
+        If BytecodeStep_Op is equal to "STORE_MULTI";
             Call BytecodeConsume 1;
         Else;
-            If BytecodeStep_Op is equal to "GET";
-                Call BytecodeConsume 2;
+            If BytecodeStep_Op is equal to "CONST" or BytecodeStep_Op is equal to "CONST_TEXT" or BytecodeStep_Op is equal to "LOADVAR" or BytecodeStep_Op is equal to "STORE_LIST" or BytecodeStep_Op is equal to "UPDATE" or BytecodeStep_Op is equal to "ADD" or BytecodeStep_Op is equal to "APPEND" or BytecodeStep_Op is equal to "FUNC_BEGIN" or BytecodeStep_Op is equal to "CALL_BEGIN" or BytecodeStep_Op is equal to "BINOP" or BytecodeStep_Op is equal to "CMP" or BytecodeStep_Op is equal to "BOOL" or BytecodeStep_Op is equal to "ISCLASS" or BytecodeStep_Op is equal to "LENGTH" or BytecodeStep_Op is equal to "SET" or BytecodeStep_Op is equal to "INPUT";
+                Call BytecodeConsume 1;
             Else;
-            If BytecodeStep_Op is equal to "PARAM" or BytecodeStep_Op is equal to "DECLTYPE";
-                Call BytecodeConsume 2;
-            Else;
-            If BytecodeStep_Op is equal to "PRINT" or BytecodeStep_Op is equal to "RETURN" or BytecodeStep_Op is equal to "IF_BEGIN" or BytecodeStep_Op is equal to "ELSE_BEGIN" or BytecodeStep_Op is equal to "IF_END" or BytecodeStep_Op is equal to "REPEAT_BEGIN" or BytecodeStep_Op is equal to "REPEAT_END" or BytecodeStep_Op is equal to "WHILE_BEGIN" or BytecodeStep_Op is equal to "WHILE_TEST" or BytecodeStep_Op is equal to "WHILE_END" or BytecodeStep_Op is equal to "FUNC_END" or BytecodeStep_Op is equal to "CALL_END";
+                If BytecodeStep_Op is equal to "GET";
+                    Call BytecodeConsume 2;
                 Else;
-                    BytecodeFailed = 1;
+                    If BytecodeStep_Op is equal to "PARAM" or BytecodeStep_Op is equal to "DECLTYPE";
+                        Call BytecodeConsume 2;
+                    Else;
+                        If BytecodeStep_Op is equal to "MULTI_BEGIN" or BytecodeStep_Op is equal to "PRINT" or BytecodeStep_Op is equal to "RETURN" or BytecodeStep_Op is equal to "IF_BEGIN" or BytecodeStep_Op is equal to "ELSE_BEGIN" or BytecodeStep_Op is equal to "IF_END" or BytecodeStep_Op is equal to "REPEAT_BEGIN" or BytecodeStep_Op is equal to "REPEAT_END" or BytecodeStep_Op is equal to "WHILE_BEGIN" or BytecodeStep_Op is equal to "WHILE_TEST" or BytecodeStep_Op is equal to "WHILE_END" or BytecodeStep_Op is equal to "FUNC_END" or BytecodeStep_Op is equal to "CALL_END" or BytecodeStep_Op is equal to "ARTIFACT_SUFFIX";
+                        Else;
+                            BytecodeFailed = 1;
+                        Done.
+                    Done.
                 Done.
             Done.
-        Done.
         Done.
     Done.
 Done.
@@ -1974,6 +2029,7 @@ If CompilerFailed is equal to 0;
         Length NativeTokenText;
         NativeTokenLength = @_;
         NativeEncodedToken = "";
+        NativeCharacterIndex = 0;
         If NativeTokenLength is equal to 0;
             NativeEncodedToken = NativeEscape + "e";
         Else;
@@ -1982,7 +2038,6 @@ If CompilerFailed is equal to 0;
                 NativeCharacterIndex = NativeTokenLength;
             Done.
         Done.
-        NativeCharacterIndex = 0;
         While NativeCharacterIndex is less than NativeTokenLength;
             Get NativeTokenText NativeCharacterIndex;
             NativeCharacterText = @_;
@@ -2005,6 +2060,8 @@ If CompilerFailed is equal to 0;
             Done.
             Add 1 to NativeCharacterIndex;
         Done.
+        # Recompute runtime length after branch-dependent escape handling.
+        NativeEncodedToken = NativeEncodedToken + "";
         Print NativeEncodedToken.
         Add 1 to NativeOutputIndex;
     Done.
