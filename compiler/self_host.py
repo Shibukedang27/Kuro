@@ -106,16 +106,8 @@ def run_with_kuro_runtime(source: str):
     return result.interpreter.env
 
 
-def build_native_runtime(source: str | None, output: str | Path, target: str | None = None):
-    """Build a standalone native image from the Kuro-authored runtime.
-
-    The hosted compiler is used only during image construction.  The returned
-    executable contains the composed Kuro lexer, parser, lowerer, bytecode
-    encoder, VM, and runtime entrypoint; running it does not invoke Python.
-    """
-    from .native import build_native
-    from .pipeline import compile_source
-
+def native_runtime_source(source: str | None = None) -> str:
+    """Compose the Kuro-authored runtime source for native image construction."""
     files = [ROOT / "self_host" / name for name in ("lexer.kuro", "parser.kuro", "lower.kuro", "bytecode.kuro", "vm.kuro", "runtime.kuro")]
     replacement = 'Source is Text;\nTake user Source;' if source is None else f'Source = "{_escape(source)}";'
     lexer = _SOURCE.sub(lambda _: replacement, files[0].read_text(encoding="utf-8"), count=1)
@@ -128,32 +120,52 @@ def build_native_runtime(source: str | None, output: str | Path, target: str | N
     lower = _AST.sub("", files[2].read_text(encoding="utf-8"), count=1)
     encoder = _IR.sub("", files[3].read_text(encoding="utf-8"), count=1)
     vm = _BYTECODE.sub("", files[4].read_text(encoding="utf-8"), count=1)
-    result = compile_source("\n".join((lexer, parser, lower, encoder, vm, files[5].read_text(encoding="utf-8"))))
+    return "\n".join((lexer, parser, lower, encoder, vm, files[5].read_text(encoding="utf-8")))
+
+
+def build_native_runtime(source: str | None, output: str | Path, target: str | None = None):
+    """Build a standalone native image from the Kuro-authored runtime."""
+    from .pipeline import compile_source
+
+    from .native import build_native
+    result = compile_source(native_runtime_source(source))
     if not result.ok:
         raise SelfHostError(result.diags.render_all())
     return build_native(result.ir, output, target=target)
 
 
-def build_native_artifact_launcher(output: str | Path, target: str | None = None):
-    """Build the Python-free Kuro bytecode artifact launcher.
-
-    The executable reads a ``kuro.bytecode/1`` stream from standard input,
-    validates its framing in Kuro, and executes it with the Kuro-authored VM.
-    Python participates only in the bootstrap build of this native image.
-    """
-    from .native import build_native
-    from .pipeline import compile_source
-
+def native_artifact_launcher_source() -> str:
+    """Compose the Kuro source for the native bytecode artifact launcher."""
     loader = (ROOT / "self_host" / "artifact_loader.kuro").read_text(encoding="utf-8")
     vm = _BYTECODE.sub(
         "", (ROOT / "self_host" / "vm.kuro").read_text(encoding="utf-8"), count=1
     )
     vm = _VM_INPUT_DEFAULT.sub("", vm, count=1)
     runtime = (ROOT / "self_host" / "runtime.kuro").read_text(encoding="utf-8")
-    result = compile_source("\n".join((loader, vm, runtime)))
+    return "\n".join((loader, vm, runtime))
+
+
+def build_native_artifact_launcher(output: str | Path, target: str | None = None):
+    """Build the Python-free Kuro bytecode artifact launcher."""
+    from .native import build_native
+    from .pipeline import compile_source
+
+    result = compile_source(native_artifact_launcher_source())
     if not result.ok:
         raise SelfHostError(result.diags.render_all())
     return build_native(result.ir, output, target=target)
+
+
+def native_codegen_source(output_target: str = "aarch64-macos") -> str:
+    """Compose the Kuro source for a target-specific native code generator."""
+    loader = (ROOT / "self_host" / "artifact_loader.kuro").read_text(encoding="utf-8")
+    codegen = (ROOT / "self_host" / "native_codegen.kuro").read_text(encoding="utf-8")
+    if output_target not in {"aarch64-macos", "x86_64-macos", "x86_64-linux"}:
+        raise SelfHostError(f"unsupported code-generation output target: {output_target}")
+    codegen = codegen.replace(
+        'NativeTarget = "aarch64-macos";', f'NativeTarget = "{output_target}";', 1
+    )
+    return "\n".join((loader, codegen))
 
 
 def build_native_codegen(
@@ -168,14 +180,7 @@ def build_native_codegen(
     from .native import build_native
     from .pipeline import compile_source
 
-    loader = (ROOT / "self_host" / "artifact_loader.kuro").read_text(encoding="utf-8")
-    codegen = (ROOT / "self_host" / "native_codegen.kuro").read_text(encoding="utf-8")
-    if output_target not in {"aarch64-macos", "x86_64-macos", "x86_64-linux"}:
-        raise SelfHostError(f"unsupported code-generation output target: {output_target}")
-    codegen = codegen.replace(
-        'NativeTarget = "aarch64-macos";', f'NativeTarget = "{output_target}";', 1
-    )
-    result = compile_source("\n".join((loader, codegen)))
+    result = compile_source(native_codegen_source(output_target))
     if not result.ok:
         raise SelfHostError(result.diags.render_all())
     return build_native(result.ir, output, target=target)
