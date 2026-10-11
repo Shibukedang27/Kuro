@@ -207,6 +207,24 @@ def test_native_artifact_launcher_preserves_large_input_and_runs_suffix_opcode(t
     )
     assert outer_loader.stdout == "OK\n"
 
+    input_read_input = (
+        "kuro.bytecode/1\n"
+        "BC_INPUT\nFirst\nBC_LOADVAR\nFirst\nBC_PRINT\n"
+        "kuro.input/1\n" + payload
+    )
+    input_read = subprocess.run(
+        [str(executable)], input=input_read_input, capture_output=True,
+        text=True, timeout=60,
+    )
+    input_read_trace = (
+        _native_lldb_trace(executable, input_read_input, tmp_path)
+        if input_read.returncode != 0 else ""
+    )
+    assert input_read.returncode == 0, (
+        f"VMInput direct read: {input_read.stderr}\n{input_read_trace}"
+    )
+    assert input_read.stdout == payload + "\n"
+
     loader_only_input = (
         "kuro.bytecode/1\n"
         "BC_INPUT\nFirst\nBC_LENGTH\nFirst\nBC_PRINT\n"
