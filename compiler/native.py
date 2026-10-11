@@ -814,11 +814,12 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
         "    ret",
     ])
     if artifact_suffix_needed:
+        # Text values are immutable, so an in-range suffix can safely share its source storage.
         lines.extend([
             ".section __TEXT,__text",
             "_kuro_artifact_suffix:",
             "    stp x29, x30, [sp, #-16]!",
-            "    sub sp, sp, #48",
+            "    sub sp, sp, #16",
             "    str x0, [sp]",
             "    str x1, [sp, #8]",
             "    cmp x1, #0",
@@ -827,45 +828,9 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
             "    ldr x1, [sp, #8]",
             "    cmp x1, x0",
             "    b.hi L_kuro_artifact_suffix_error",
-            "    sub x2, x0, x1",
-            "    str x2, [sp, #16]",
-            "    add x3, x2, #1",
-            "    adrp x4, _kuro_text_heap_cursor@PAGE",
-            "    add x4, x4, _kuro_text_heap_cursor@PAGEOFF",
-            "    ldr x5, [x4]",
-            "    str x5, [sp, #32]",
-            f"    mov x6, #{NATIVE_TEXT_HEAP_CAPACITY}",
-            "    cmp x5, x6",
-            "    b.hi L_kuro_artifact_suffix_error",
-            "    sub x6, x6, x5",
-            "    cmp x3, x6",
-            "    b.hi L_kuro_artifact_suffix_error",
-            "    add x5, x5, x3",
-            "    str x5, [sp, #40]",
-            "    adrp x0, _kuro_text_heap@PAGE",
-            "    add x0, x0, _kuro_text_heap@PAGEOFF",
-            "    ldr x5, [sp, #32]",
-            "    add x0, x0, x5",
-            "    str x0, [sp, #24]",
-            "    ldr x1, [sp]",
-            "    ldr x3, [sp, #8]",
-            "    add x1, x1, x3",
-            "    ldr x2, [sp, #16]",
-            "    mov x3, #0",
-            "L_kuro_artifact_suffix_copy_loop:",
-            "    cmp x3, x2",
-            "    b.hs L_kuro_artifact_suffix_copy_done",
-            "    ldrb w4, [x1, x3]",
-            "    strb w4, [x0, x3]",
-            "    add x3, x3, #1",
-            "    b L_kuro_artifact_suffix_copy_loop",
-            "L_kuro_artifact_suffix_copy_done:",
-            "    strb wzr, [x0, x3]",
-            "    ldr x5, [sp, #40]",
-            "    adrp x4, _kuro_text_heap_cursor@PAGE",
-            "    add x4, x4, _kuro_text_heap_cursor@PAGEOFF",
-            "    str x5, [x4]",
-            "    add sp, sp, #48",
+            "    ldr x0, [sp]",
+            "    add x0, x0, x1",
+            "    add sp, sp, #16",
             "    ldp x29, x30, [sp], #16",
             "    ret",
             "L_kuro_artifact_suffix_error:",
@@ -943,9 +908,6 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
         lines.append(".zerofill __DATA,__bss,_kuro_char_heap_cursor,8,3")
         lines.append(".zerofill __DATA,__bss,_kuro_int_buffer,32,3")
         lines.append(f".zerofill __DATA,__bss,{input_buffer},{NATIVE_INPUT_CAPACITY},4")
-    if artifact_suffix_needed:
-        lines.append(f".zerofill __DATA,__bss,_kuro_text_heap,{NATIVE_TEXT_HEAP_CAPACITY},4")
-        lines.append(".zerofill __DATA,__bss,_kuro_text_heap_cursor,8,3")
     return "\n".join(lines) + "\n"
 
 

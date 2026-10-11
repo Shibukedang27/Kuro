@@ -1034,8 +1034,9 @@ def test_macos_arm64_suffix_requires_proven_text_sources():
     assembly = emit_macos_arm64(action_program(typed_action))
     assert "bl _strlen" in assembly
     assert "bl _kuro_artifact_suffix" in assembly
-    assert "L_kuro_artifact_suffix_copy_loop:" in assembly
-    assert "_kuro_text_heap_cursor" in assembly
+    assert "add x0, x0, x1" in assembly
+    assert "L_kuro_artifact_suffix_error:" in assembly
+    assert "_kuro_text_heap" not in assembly
     assert "bl _memcpy" not in assembly
 
 
