@@ -381,6 +381,27 @@ def test_native_backend_runtime_decodes_decimal_constants(tmp_path):
     assert "Python" not in linked
 
 
+def test_native_backend_runtime_preserves_decimal_after_assignment(tmp_path):
+    from compiler.self_host import build_native_runtime
+
+    executable = tmp_path / "kuro-native-runtime-decimal-assignment"
+    build_native_runtime("Amount = 3.25; Print Amount.", executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout.endswith("3.25\n")
+    linked = _native_dependency_report(executable)
+    assert "Python" not in linked
+
+
+def test_native_backend_runtime_preserves_decimal_through_action_argument(tmp_path):
+    from compiler.self_host import build_native_runtime
+
+    executable = tmp_path / "kuro-native-runtime-decimal-action-argument"
+    source = "Action Echo Value; Print Value. Done. Call Echo 3.25;"
+    build_native_runtime(source, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout.endswith("3.25\n")
+
+
 def test_native_backend_supports_enum_value_abi(tmp_path):
     result = compile_source('Enum Color Red, Green;\nCall MakeEnum "Color", "Green";\nPrint @_.')
     assert result.ok

@@ -14,11 +14,13 @@ VMInput = "";
 # --- END_VM_INPUT_DEFAULT ---
 VMNames is Text;
 VMValues is Text;
+VMValueDisplay is Text;
 # A declared-but-unassigned Kuro collection cannot be measured before its
 # first Append. Seed one slot and track the logical number of entries so the
 # VM can still represent an empty environment without host support.
 VMNames = "__vm_empty__", "__vm_empty__";
 VMValues = "__vm_empty__", "__vm_empty__";
+VMValueDisplay = "", "";
 VMNameCount = 0;
 VMCollectionNames is Text;
 VMCollectionNames = "__vm_empty__", "__vm_empty__";
@@ -41,6 +43,8 @@ VMOutputCount = 0;
 VMDecodedFloat = 0;
 VMDecodedDisplay = "";
 VMLastPoppedDisplay = "";
+VMStoreDisplayValue = "";
+VMLoadDisplayValue = "";
 VMPos = 0;
 VMCodeLen = 0;
 VMTop = 0;
@@ -60,10 +64,12 @@ VMFrameDepth = 0;
 VMFrameEntryCount = 0;
 VMFrameNames is Text;
 VMFrameValues is Text;
+VMFrameValueDisplay is Text;
 VMFrameStarts is Integers;
 VMFrameCounts is Integers;
 VMFrameNames = "__vm_empty__", "__vm_empty__";
 VMFrameValues = "__vm_empty__", "__vm_empty__";
+VMFrameValueDisplay = "", "";
 VMFrameStarts = 0, 0;
 VMFrameCounts = 0, 0;
 VMFrameSlotCapacity = 2;
@@ -370,6 +376,7 @@ Action VMPop;
 Done.
 
 Action VMLoad Name;
+    VMLoadDisplayValue = "";
     VMLoad_Index = -1;
     If Name is equal to "_";
         If VMFrameDepth is greater than 0;
@@ -389,14 +396,20 @@ Action VMLoad Name;
         VMLoad_Index = @_;
         If VMLoad_Index is greater than or equal to 0;
             Get VMFrameValues VMLoad_Index;
-            Return @_;
+            VMLoad_Value = @_;
+            Get VMFrameValueDisplay VMLoad_Index;
+            VMLoadDisplayValue = @_;
+            Return VMLoad_Value;
         Done.
     Done.
     Call VMFindName Name, 0;
     VMLoad_Index = @_;
     If VMLoad_Index is greater than or equal to 0;
         Get VMValues VMLoad_Index;
-        Return @_;
+        VMLoad_Value = @_;
+        Get VMValueDisplay VMLoad_Index;
+        VMLoadDisplayValue = @_;
+        Return VMLoad_Value;
     Else;
         VMFailed = 1;
         Return 0;
@@ -415,6 +428,7 @@ Action VMStore Name, Value;
         VMStore_Index = @_;
         If VMStore_Index is greater than or equal to 0;
             Set VMFrameValues VMStore_Index to Value;
+            Set VMFrameValueDisplay VMStore_Index to VMStoreDisplayValue;
             VMStore_WroteFrame = 1;
         Done.
     Done.
@@ -424,17 +438,21 @@ Action VMStore Name, Value;
         VMStore_Index = @_;
         If VMStore_Index is greater than or equal to 0;
             Set VMValues VMStore_Index to Value;
+            Set VMValueDisplay VMStore_Index to VMStoreDisplayValue;
         Else;
             If VMNameCount is less than 2;
                 Set VMNames VMNameCount to Name;
                 Set VMValues VMNameCount to Value;
+                Set VMValueDisplay VMNameCount to VMStoreDisplayValue;
             Else;
                 Append Name to VMNames;
                 Append Value to VMValues;
+                Append VMStoreDisplayValue to VMValueDisplay;
             Done.
             Add 1 to VMNameCount;
         Done.
     Done.
+    VMStoreDisplayValue = "";
 Done.
 
 Action VMStoreFrame Name, Value;
@@ -443,25 +461,30 @@ Action VMStoreFrame Name, Value;
     If VMFrameEntryCount is equal to 0;
         Set VMFrameNames 0 to Name;
         Set VMFrameValues 0 to Value;
+        Set VMFrameValueDisplay 0 to VMStoreDisplayValue;
     Else;
         If VMFrameEntryCount is equal to 1;
             Set VMFrameNames 1 to Name;
             Set VMFrameValues 1 to Value;
+            Set VMFrameValueDisplay 1 to VMStoreDisplayValue;
         Else;
             Length VMFrameNames;
             VMStoreFrame_Capacity = @_;
             If VMFrameEntryCount is less than VMStoreFrame_Capacity;
                 Set VMFrameNames VMFrameEntryCount to Name;
                 Set VMFrameValues VMFrameEntryCount to Value;
+                Set VMFrameValueDisplay VMFrameEntryCount to VMStoreDisplayValue;
             Else;
                 Append Name to VMFrameNames;
                 Append Value to VMFrameValues;
+                Append VMStoreDisplayValue to VMFrameValueDisplay;
             Done.
         Done.
     Done.
     Add 1 to VMFrameEntryCount;
     VMStoreFrame_NewCount = VMStoreFrame_Count + 1;
     Set VMFrameCounts VMFrameDepth to VMStoreFrame_NewCount;
+    VMStoreDisplayValue = "";
 Done.
 
 Action VMReadOperand;
@@ -711,6 +734,7 @@ Action VMInvoke Name;
             VMInvoke_NamePos = VMInvoke_Index + 2;
             Get VMParamNames VMInvoke_NamePos;
             VMInvoke_Name = @_;
+            VMStoreDisplayValue = VMLastPoppedDisplay;
             Call VMStoreFrame VMInvoke_Name, VMInvoke_Value;
             VMInvoke_Index = VMInvoke_Index - 1;
         Done.
@@ -943,7 +967,12 @@ Action VMStep;
                 Call VMPushCollection VMStep_Name;
             Else;
                 Call VMLoad VMStep_Name;
-                Call VMPush @_;
+                VMStep_LoadedValue = @_;
+                If VMLoadDisplayValue is not equal to "";
+                    Call VMPushDecimal VMStep_LoadedValue, VMLoadDisplayValue;
+                Else;
+                    Call VMPush VMStep_LoadedValue;
+                Done.
             Done.
         Done.
         Return 0;
@@ -956,6 +985,7 @@ Action VMStep;
         If VMLastPoppedKind is equal to 1;
             Call VMCopyCollection VMStep_Value, VMStep_Name;
         Else;
+            VMStoreDisplayValue = VMLastPoppedDisplay;
             Call VMStore VMStep_Name, VMStep_Value;
         Done.
         Return 0;
