@@ -44,8 +44,16 @@ build_one() {
     assembly="$BUILD/$name.s"
     image="$BUILD/$name"
 
-    "$ROOT/bootstrap/compose-native-source.sh" "$mode" "$source_target" > "$source"
-    "$SEED_COMPILER" < "$source" > "$artifact"
+    printf '[native-build] compose %s source\n' "$name" >&2
+    if ! "$ROOT/bootstrap/compose-native-source.sh" "$mode" "$source_target" > "$source"; then
+        echo "source composition failed for $name" >&2
+        exit 1
+    fi
+    printf '[native-build] compile %s source with Kuro seed\n' "$name" >&2
+    if ! "$SEED_COMPILER" < "$source" > "$artifact"; then
+        echo "native compiler seed failed while compiling $name" >&2
+        exit 1
+    fi
     IFS= read -r marker < "$artifact" || {
         echo "seed compiler produced no bytecode for $name" >&2
         exit 1
@@ -54,12 +62,20 @@ build_one() {
         echo "seed compiler produced an invalid bytecode stream for $name" >&2
         exit 1
     }
-    "$SEED_CODEGEN" < "$artifact" > "$assembly"
+    printf '[native-build] generate %s assembly with Kuro codegen seed\n' "$name" >&2
+    if ! "$SEED_CODEGEN" < "$artifact" > "$assembly"; then
+        echo "native codegen seed failed while generating $name" >&2
+        exit 1
+    fi
     grep -Fq '.globl _main' "$assembly" || {
         echo "seed codegen produced no native entry point for $name" >&2
         exit 1
     }
-    "$CLANG" "$assembly" -o "$image"
+    printf '[native-build] assemble and link %s\n' "$name" >&2
+    if ! "$CLANG" "$assembly" -o "$image"; then
+        echo "assembler/linker driver failed while building $name" >&2
+        exit 1
+    fi
     chmod 755 "$image"
     test -s "$image"
 }
@@ -72,9 +88,17 @@ build_one bytecode artifact-launcher "$TARGET"
 build_one codegen codegen "$TARGET"
 
 # Prove the new compiler reproduces its own complete input before promotion.
-"$BUILD/kuro-compiler" < "$BUILD/kuro-compiler.source.kuro" > "$BUILD/kuro-compiler-self.kurobc"
-cmp "$BUILD/kuro-compiler.kurobc" "$BUILD/kuro-compiler-self.kurobc"
+printf '[native-build] verify compiler self-reproduction\n' >&2
+if ! "$BUILD/kuro-compiler" < "$BUILD/kuro-compiler.source.kuro" > "$BUILD/kuro-compiler-self.kurobc"; then
+    echo "rebuilt compiler failed its complete-source self-build" >&2
+    exit 1
+fi
+if ! cmp "$BUILD/kuro-compiler.kurobc" "$BUILD/kuro-compiler-self.kurobc"; then
+    echo "rebuilt compiler output differs from the seed compiler output" >&2
+    exit 1
+fi
 
+printf '[native-build] promote rebuilt production images\n' >&2
 for name in compiler runtime bytecode codegen; do
     mv "$BUILD/$name" "$ROOT/dist/kuro-$name"
     cp "$BUILD/$name.s" "$ROOT/dist/kuro-$name.s"
