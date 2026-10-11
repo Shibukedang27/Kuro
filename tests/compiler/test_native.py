@@ -624,24 +624,26 @@ def test_native_backend_supports_independent_captured_closure_instances(tmp_path
 
 
 @requires_linux_x86_64
-def test_native_backend_exits_when_closure_heap_is_exhausted(tmp_path):
+def test_native_backend_allocates_closures_across_heap_pages(tmp_path):
     source = (
-        'Current = 0;\n'
+        'First = 0; Last = 0;\n'
         'Action MakeAdder Base;\n'
         'Action AddBase Value;\nReturn Base + Value;\nDone.\n'
         'Call MakeClosure "AddBase";\nReturn @_;\nDone.\n'
+        'Call MakeAdder 10; Update First to @_;\n'
         + "".join(
-            f"Call MakeAdder {value}; Update Current to @_;\n"
-            for value in range(129)
+            f"Call MakeAdder {value}; Update Last to @_;\n"
+            for value in range(1, 129)
         )
+        + 'Call Invoke First, 7; Print @_.\n'
+        + 'Call Invoke Last, 7; Print @_.\n'
     )
     result = compile_source(source)
     assert result.ok
-    executable = tmp_path / "closure-heap-exhausted"
+    executable = tmp_path / "closures-across-heap-pages"
     build_native(result.ir, executable)
-    run = subprocess.run([str(executable)], capture_output=True, text=True)
-    assert run.returncode == 1
-    assert run.stdout == ""
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "17\n135\n"
 
 
 def test_native_backend_rejects_non_numeric_closure_capture():
