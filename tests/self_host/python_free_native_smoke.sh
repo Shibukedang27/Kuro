@@ -10,10 +10,16 @@ PROBE=
 ARTIFACT=
 ASSEMBLY=
 COMPOSED_SOURCE=
+STAGE1_COMPILER=
+STAGE0_PROBE_ARTIFACT=
+STAGE1_PROBE_ARTIFACT=
+BOOTSTRAP_ARTIFACT=
 
 cleanup() {
     if [ -n "$PROBE" ]; then
-        rm -f "$PROBE" "$ARTIFACT" "$ASSEMBLY" "$COMPOSED_SOURCE"
+        rm -f "$PROBE" "$ARTIFACT" "$ASSEMBLY" "$COMPOSED_SOURCE" \
+            "$STAGE1_COMPILER" "$STAGE0_PROBE_ARTIFACT" \
+            "$STAGE1_PROBE_ARTIFACT" "$BOOTSTRAP_ARTIFACT"
     fi
     rm -rf "$TOOL_PATH"
 }
@@ -38,6 +44,10 @@ PROBE=$(mktemp "${TMPDIR:-/tmp}/kuro-no-python.XXXXXX.kuro")
 ARTIFACT=$PROBE.kurobc
 ASSEMBLY=$PROBE.s
 COMPOSED_SOURCE=$PROBE.composed-source.kuro
+STAGE1_COMPILER=$PROBE.stage1.kurobc
+STAGE0_PROBE_ARTIFACT=$PROBE.stage0-probe.kurobc
+STAGE1_PROBE_ARTIFACT=$PROBE.stage1-probe.kurobc
+BOOTSTRAP_ARTIFACT=$PROBE.stage1-input.kurobc
 "$ROOT/bootstrap/compose-native-compiler-source.sh" > "$COMPOSED_SOURCE"
 cmp "$COMPOSED_SOURCE" "$COMPILER_SOURCE"
 printf 'Print 2 + 3.\n' > "$PROBE"
@@ -50,4 +60,17 @@ exec_output=$("$ROOT/bin/kuro-native" exec "$ARTIFACT")
 "$ROOT/bin/kuro-native" codegen "$ARTIFACT" > "$ASSEMBLY"
 grep -Fq '.globl _main' "$ASSEMBLY" || { echo "native codegen smoke failed" >&2; exit 1; }
 "$ROOT/bin/kuro-native" doctor
+
+# Bootstrap the compiler as bytecode, then execute that stage-1 compiler to
+# compile a small program. Its output must match the native stage-0 compiler.
+"$ROOT/bin/kuro-native" compile "$COMPILER_SOURCE" > "$STAGE1_COMPILER"
+"$ROOT/bin/kuro-native" compile "$PROBE" > "$STAGE0_PROBE_ARTIFACT"
+{
+    cat "$STAGE1_COMPILER"
+    printf 'kuro.input/1\n'
+    cat "$PROBE"
+} > "$BOOTSTRAP_ARTIFACT"
+"$ROOT/bin/kuro-native" exec "$BOOTSTRAP_ARTIFACT" > "$STAGE1_PROBE_ARTIFACT"
+cmp "$STAGE0_PROBE_ARTIFACT" "$STAGE1_PROBE_ARTIFACT"
 printf 'Python-free native runtime, compiler, bytecode launcher, and codegen verified\n'
+printf 'Self-hosted stage-1 compiler matches native stage 0 on a probe\n'
