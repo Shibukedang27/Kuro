@@ -1319,6 +1319,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         if function is None:
             return "text" if action_returns_text(name) else "number"
         local_kinds = dict(function_capture_kinds.get(name, {}))
+        local_texts: dict[str, str] = {}
         local_kinds.update({
             parameter: kinds.get(argument, "unknown")
             for parameter, argument in zip(function.params, arguments)
@@ -1327,20 +1328,47 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             if item.op == "CONST" and item.dest:
                 value = item.args[0]
                 local_kinds[item.dest] = "text" if isinstance(value, str) else "float" if isinstance(value, float) else "number"
+                if isinstance(value, str):
+                    local_texts[item.dest] = value
+                else:
+                    local_texts.pop(item.dest, None)
             elif item.op == "LOADVAR" and item.dest:
                 source = item.args[0]
                 local_kinds[item.dest] = local_kinds.get(source, kinds.get(source, inferred_symbol_kind(source)))
+                if source in local_texts:
+                    local_texts[item.dest] = local_texts[source]
+                else:
+                    local_texts.pop(item.dest, None)
             elif item.op == "BINOP" and item.dest:
                 operator, left, right = item.args
                 left_kind = local_kinds.get(left, kinds.get(left, inferred_symbol_kind(left)))
                 right_kind = local_kinds.get(right, kinds.get(right, inferred_symbol_kind(right)))
                 local_kinds[item.dest] = "text" if operator == "+" and left_kind == right_kind == "text" else "float" if "float" in {left_kind, right_kind} else "number"
+                local_texts.pop(item.dest, None)
             elif item.op in {"CMP", "AND", "OR", "ISCLASS", "LENGTH"} and item.dest:
                 local_kinds[item.dest] = "number"
+                local_texts.pop(item.dest, None)
             elif item.op == "STORE_LIST" and len(item.args[1]) == 1:
-                local_kinds[item.args[0]] = local_kinds.get(item.args[1][0], kinds.get(item.args[1][0], "unknown"))
+                target, source = item.args[0], item.args[1][0]
+                local_kinds[target] = local_kinds.get(source, kinds.get(source, "unknown"))
+                if source in local_texts:
+                    local_texts[target] = local_texts[source]
+                else:
+                    local_texts.pop(target, None)
             elif item.op == "UPDATE":
-                local_kinds[item.args[0]] = local_kinds.get(item.args[1], kinds.get(item.args[1], "unknown"))
+                target, source = item.args
+                local_kinds[target] = local_kinds.get(source, kinds.get(source, "unknown"))
+                if source in local_texts:
+                    local_texts[target] = local_texts[source]
+                else:
+                    local_texts.pop(target, None)
+            elif item.op == "CALL" and item.dest:
+                call_name, *call_arguments = item.args
+                if call_name == "RecordGet" and len(call_arguments) == 2:
+                    field = local_texts.get(call_arguments[1])
+                    local_kinds[item.dest] = record_field_kinds.get(field, "unknown") if field is not None else "unknown"
+                elif call_name == "RecordSet" and len(call_arguments) == 3:
+                    local_kinds[item.dest] = "record"
             elif item.op == "RETURN":
                 return local_kinds.get(item.args[0], kinds.get(item.args[0], "unknown"))
         return "unknown"
@@ -2904,6 +2932,11 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             name: ("number" if any(word in name.lower() for word in ("count", "pos", "start", "end", "index", "depth", "len")) else "text")
             for name in collection_buffers
         }
+        fn_known_text = {
+            item.dest: item.args[0]
+            for item in function.body
+            if item.op == "CONST" and item.dest and isinstance(item.args[0], str)
+        }
         lines.extend([
             "    .p2align 4", f".Lkuro_fn_{function.name}:", "    push %rbp", "    mov %rsp, %rbp",
             f"    sub ${fn_frame}, %rsp", f"    mov %r10, {fn_env_slot}(%rbp)",
@@ -3286,6 +3319,57 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 fn_store(item.dest); fn_kinds[item.dest] = "number"
             elif fn_op == "CALL":
                 name, *arguments = item.args
+                if name in {"RecordGet", "RecordSet"}:
+                    expected_count = 2 if name == "RecordGet" else 3
+                    if len(arguments) != expected_count:
+                        expected_arguments = (
+                            "a record and field name"
+                            if name == "RecordGet"
+                            else "a record, field name, and value"
+                        )
+                        raise NativeBackendError(
+                            f"x86_64-linux action {name} requires {expected_arguments}"
+                        )
+                    if fn_kinds.get(arguments[0]) != "record":
+                        raise NativeBackendError(
+                            f"x86_64-linux action {name} currently requires a statically known record reference"
+                        )
+                    field = fn_known_text.get(arguments[1])
+                    if field is None:
+                        raise NativeBackendError(
+                            f"x86_64-linux action {name} requires a statically known literal field name"
+                        )
+                    slot = record_field_slots.setdefault(field, len(record_field_slots))
+                    if slot >= 63:
+                        raise NativeBackendError("x86_64-linux record exceeds fixed capacity of 63 fields")
+                    field_kind = record_field_kinds.get(field, "unknown")
+                    if field_kind == "unknown":
+                        raise NativeBackendError(
+                            f"x86_64-linux action {name} requires a field with a previously known value kind"
+                        )
+                    if name == "RecordGet":
+                        fn_load(arguments[0], "%rax")
+                        lines.append(f"    mov {8 + slot * 8}(%rax), %rax")
+                        fn_store(item.dest)
+                        fn_kinds[item.dest] = field_kind
+                        if field_kind == "text" and field in record_field_lengths:
+                            fn_text_lengths[item.dest] = record_field_lengths[field]
+                    else:
+                        value_kind = fn_kinds.get(arguments[2], "unknown")
+                        if value_kind != field_kind:
+                            raise NativeBackendError(
+                                "x86_64-linux action RecordSet value kind must match the field's statically known kind"
+                            )
+                        if field_kind == "text":
+                            raise NativeBackendError(
+                                "x86_64-linux action RecordSet does not yet support text fields with variable display lengths"
+                            )
+                        fn_load(arguments[0], "%rax")
+                        fn_load(arguments[2], "%rdx")
+                        lines.append(f"    mov %rdx, {8 + slot * 8}(%rax)")
+                        fn_store(item.dest)
+                        fn_kinds[item.dest] = "record"
+                    continue
                 if name == "MakeClosure":
                     target = function_closure_construction_targets.get(
                         (function.name, function_item_index)
@@ -3297,9 +3381,9 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     capture_slots = function_capture_slots.get(target, {})
                     for capture_name in capture_slots:
                         capture_kind = fn_kinds.get(capture_name, "unknown")
-                        if capture_kind not in {"number", "float", "text"}:
+                        if capture_kind not in {"number", "float", "text", "record"}:
                             raise NativeBackendError(
-                                "x86_64-linux action-created closures currently support statically known text or numeric captures only"
+                                "x86_64-linux action-created closures currently support statically known numeric, text, or record-reference captures only"
                             )
                         target_capture_kind = function_capture_kinds.get(target, {}).get(
                             capture_name, "unknown"
