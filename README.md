@@ -27,6 +27,8 @@ Kuro's in-house implementation policy is documented in
 [`docs/architecture/in-house-implementation.md`](docs/architecture/in-house-implementation.md).
 The current target support and release-evidence requirements are summarized in
 [`docs/release-matrix.md`](docs/release-matrix.md).
+[`docs/engineering/independence-status.md`](docs/engineering/independence-status.md)
+tracks the active independence work, verification results, and remaining roadmap.
 
 - `bootstrap/python/` — the original 425-line reference interpreter this
   project started from, frozen and unmodified as the compatibility oracle.
