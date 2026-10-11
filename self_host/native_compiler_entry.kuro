@@ -53,6 +53,8 @@ If CompilerFailed is equal to 0;
             Done.
             Add 1 to NativeCharacterIndex;
         Done.
+        # Recompute runtime length after branch-dependent escape handling.
+        NativeEncodedToken = NativeEncodedToken + "";
         Print NativeEncodedToken.
         Add 1 to NativeOutputIndex;
     Done.
