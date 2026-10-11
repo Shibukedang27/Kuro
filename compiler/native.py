@@ -1319,10 +1319,11 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         function = ir.functions.get(name)
         if function is None:
             return "text" if action_returns_text(name) else "number"
-        local_kinds = {
+        local_kinds = dict(function_capture_kinds.get(name, {}))
+        local_kinds.update({
             parameter: kinds.get(argument, "unknown")
             for parameter, argument in zip(function.params, arguments)
-        }
+        })
         for item in function.body:
             if item.op == "CONST" and item.dest:
                 value = item.args[0]
@@ -1354,6 +1355,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             kind = kinds.get(argument, "unknown")
             previous = hints.get(parameter)
             hints[parameter] = kind if previous is None or previous == kind else "unknown"
+        refresh_function_capture_kinds()
 
     collection_names = {
         instruction.args[0]
@@ -1474,6 +1476,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 text_values.pop(action_instruction.dest, None)
 
     supplied_captures: dict[str, set[str]] = {}
+    supplied_capture_sources: dict[str, dict[str, set[tuple[str, str]]]] = {}
     for maker_name, target_name in action_closure_sites:
         maker = ir.functions[maker_name]
         target = ir.functions[target_name]
@@ -1495,7 +1498,12 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             if item.op == "LOADVAR" and item.args
         }
         target_free_names = target_reads - target_locals - main_global_names
-        supplied_captures.setdefault(target_name, set()).update(target_free_names & maker_locals)
+        available_captures = target_free_names & maker_locals
+        supplied_captures.setdefault(target_name, set()).update(available_captures)
+        for capture_name in available_captures:
+            supplied_capture_sources.setdefault(target_name, {}).setdefault(capture_name, set()).add(
+                (maker_name, capture_name)
+            )
 
     for captures in supplied_captures.values():
         global_names.difference_update(captures)
@@ -1572,6 +1580,26 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     task_argument_refs: dict[str, str] = {}
     task_argument_values: dict[str, str] = {}
     function_parameter_kinds: dict[str, dict[str, str]] = {}
+    function_capture_kinds: dict[str, dict[str, str]] = {name: {} for name in ir.functions}
+
+    def refresh_function_capture_kinds() -> None:
+        for target_name, captures in supplied_capture_sources.items():
+            for capture_name, sources in captures.items():
+                observed_kinds: set[str] = set()
+                has_unknown = False
+                for maker_name, source_name in sources:
+                    maker_hints = function_parameter_kinds.get(maker_name, {})
+                    if source_name not in maker_hints:
+                        continue
+                    kind = maker_hints[source_name]
+                    if kind == "unknown":
+                        has_unknown = True
+                    else:
+                        observed_kinds.add(kind)
+                if has_unknown or len(observed_kinds) > 1:
+                    function_capture_kinds[target_name][capture_name] = "unknown"
+                elif observed_kinds:
+                    function_capture_kinds[target_name][capture_name] = next(iter(observed_kinds))
     map_key_slots: dict[str, int] = {}
     record_field_slots: dict[str, int] = {}
     record_field_kinds: dict[str, str] = {}
@@ -2711,6 +2739,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             name: parameter_hints.get(name, inferred_symbol_kind(name))
             for name in function.params
         }
+        fn_kinds.update(function_capture_kinds.get(function.name, {}))
         # The Kuro VM deliberately stores dynamically typed values in generic
         # names such as ``*_Value`` and ``_``.  For the native lowering pass,
         # collect hard numeric-use constraints before emitting instructions so
@@ -3156,9 +3185,17 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                         )
                     capture_slots = function_capture_slots.get(target, {})
                     for capture_name in capture_slots:
-                        if fn_kinds.get(capture_name, "unknown") != "number":
+                        capture_kind = fn_kinds.get(capture_name, "unknown")
+                        if capture_kind not in {"number", "float"}:
                             raise NativeBackendError(
-                                "x86_64-linux action-created closures currently support integer captures only"
+                                "x86_64-linux action-created closures currently support statically known numeric captures only"
+                            )
+                        target_capture_kind = function_capture_kinds.get(target, {}).get(
+                            capture_name, "unknown"
+                        )
+                        if target_capture_kind != capture_kind:
+                            raise NativeBackendError(
+                                "x86_64-linux closure capture kinds must be statically consistent across constructors"
                             )
                     if capture_slots:
                         lines.extend([
