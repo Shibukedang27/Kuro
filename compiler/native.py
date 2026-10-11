@@ -1411,19 +1411,105 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     collection_item_lengths = {name: f".Lkuro_collection_item_len_{index}" for index, name in enumerate(sorted(collection_names))}
     input_buffers = {name: f".Lkuro_input_{index}" for index, name in enumerate(sorted(input_names))}
     input_lengths = {name: f".Lkuro_input_len_{index}" for index, name in enumerate(sorted(input_names))}
-    global_names: set[str] = set()
+    main_global_names: set[str] = set()
     for item in items:
         if item.op in {"LOADVAR", "STORE_LIST", "UPDATE", "ADD", "INPUT", "SAVEVAR", "RESTOREVAR"} and item.args:
             name = item.args[0]
             if isinstance(name, str) and not name.startswith(("t", "__")):
-                global_names.add(name)
+                main_global_names.add(name)
+    global_names = set(main_global_names)
     for function in ir.functions.values():
         prefix = f"{function.name}_"
         for item in function.body:
             for argument in item.args:
                 if isinstance(argument, str) and not argument.startswith(("t", "__")) and argument not in function.params and not argument.startswith(prefix):
                     global_names.add(argument)
+
+    action_closure_sites: list[tuple[str, str]] = []
+    for function in ir.functions.values():
+        text_values: dict[str, str] = {}
+        for action_instruction in function.body:
+            if action_instruction.op == "CONST" and action_instruction.dest:
+                value = action_instruction.args[0]
+                if isinstance(value, str):
+                    text_values[action_instruction.dest] = value
+                else:
+                    text_values.pop(action_instruction.dest, None)
+            elif action_instruction.op == "LOADVAR" and action_instruction.dest:
+                source = action_instruction.args[0]
+                if source in text_values:
+                    text_values[action_instruction.dest] = text_values[source]
+                else:
+                    text_values.pop(action_instruction.dest, None)
+            elif action_instruction.op == "STORE_LIST":
+                name, values = action_instruction.args
+                if len(values) == 1 and values[0] in text_values:
+                    text_values[name] = text_values[values[0]]
+                else:
+                    text_values.pop(name, None)
+            elif action_instruction.op == "UPDATE":
+                name, value = action_instruction.args
+                if value in text_values:
+                    text_values[name] = text_values[value]
+                else:
+                    text_values.pop(name, None)
+            elif action_instruction.op == "CALL":
+                call_name, *arguments = action_instruction.args
+                if (
+                    call_name == "MakeClosure"
+                    and len(arguments) == 1
+                    and arguments[0] in text_values
+                    and text_values[arguments[0]] in ir.functions
+                ):
+                    action_closure_sites.append((function.name, text_values[arguments[0]]))
+                if action_instruction.dest:
+                    text_values.pop(action_instruction.dest, None)
+            elif action_instruction.dest:
+                text_values.pop(action_instruction.dest, None)
+
+    supplied_captures: dict[str, set[str]] = {}
+    for maker_name, target_name in action_closure_sites:
+        maker = ir.functions[maker_name]
+        target = ir.functions[target_name]
+        maker_locals = set(maker.params)
+        maker_locals.update(
+            item.args[0]
+            for item in maker.body
+            if item.op in {"STORE_LIST", "UPDATE", "ADD", "INPUT"} and item.args
+        )
+        target_locals = set(target.params)
+        target_locals.update(
+            item.args[0]
+            for item in target.body
+            if item.op == "STORE_LIST" and item.args
+        )
+        target_reads = {
+            item.args[0]
+            for item in target.body
+            if item.op == "LOADVAR" and item.args
+        }
+        target_free_names = target_reads - target_locals - main_global_names
+        supplied_captures.setdefault(target_name, set()).update(target_free_names & maker_locals)
+
+    for captures in supplied_captures.values():
+        global_names.difference_update(captures)
     global_names -= set(collection_buffers) | set(input_buffers)
+    function_capture_names: dict[str, tuple[str, ...]] = {
+        name: tuple(sorted(supplied_captures.get(name, set())))
+        for name in ir.functions
+    }
+    function_capture_labels: dict[str, dict[str, str]] = {}
+    next_capture_index = 0
+    for function in ir.functions.values():
+        function_capture_labels[function.name] = {}
+        for name in function_capture_names[function.name]:
+            function_capture_labels[function.name][name] = f".Lkuro_capture_{next_capture_index}"
+            next_capture_index += 1
+    capture_seen_labels = {
+        name: f".Lkuro_capture_seen_{index}"
+        for index, (name, captures) in enumerate(function_capture_labels.items())
+        if captures
+    }
     global_labels = {name: f".Lkuro_global_{index}" for index, name in enumerate(sorted(global_names))}
     char_buffers = {
         instruction.dest: f".Lkuro_char_{index}"
@@ -1543,6 +1629,75 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             if instruction.dest:
                 static_text_values.pop(instruction.dest, None)
 
+    function_closure_construction_targets: dict[tuple[str, int], str] = {}
+    function_return_closure_targets: dict[str, set[str]] = {}
+    for function in ir.functions.values():
+        action_text_values: dict[str, str] = {}
+        action_closure_values: dict[str, set[str]] = {}
+        returned_closures: set[str] = set()
+        for action_instruction_index, action_instruction in enumerate(function.body):
+            if action_instruction.op == "CONST" and action_instruction.dest:
+                value = action_instruction.args[0]
+                if isinstance(value, str):
+                    action_text_values[action_instruction.dest] = value
+                else:
+                    action_text_values.pop(action_instruction.dest, None)
+                action_closure_values.pop(action_instruction.dest, None)
+            elif action_instruction.op == "LOADVAR" and action_instruction.dest:
+                source = action_instruction.args[0]
+                if source in action_text_values:
+                    action_text_values[action_instruction.dest] = action_text_values[source]
+                else:
+                    action_text_values.pop(action_instruction.dest, None)
+                if source in action_closure_values:
+                    action_closure_values[action_instruction.dest] = set(action_closure_values[source])
+                else:
+                    action_closure_values.pop(action_instruction.dest, None)
+            elif action_instruction.op == "STORE_LIST":
+                name, values = action_instruction.args
+                if len(values) == 1 and values[0] in action_text_values:
+                    action_text_values[name] = action_text_values[values[0]]
+                else:
+                    action_text_values.pop(name, None)
+                if len(values) == 1 and values[0] in action_closure_values:
+                    action_closure_values[name] = set(action_closure_values[values[0]])
+                else:
+                    action_closure_values.pop(name, None)
+            elif action_instruction.op == "UPDATE":
+                name, value = action_instruction.args
+                if value in action_text_values:
+                    action_text_values[name] = action_text_values[value]
+                else:
+                    action_text_values.pop(name, None)
+                if value in action_closure_values:
+                    action_closure_values[name] = set(action_closure_values[value])
+                else:
+                    action_closure_values.pop(name, None)
+            elif action_instruction.op == "CALL":
+                call_name, *arguments = action_instruction.args
+                target = None
+                if (
+                    call_name == "MakeClosure"
+                    and len(arguments) == 1
+                    and arguments[0] in action_text_values
+                    and action_text_values[arguments[0]] in ir.functions
+                ):
+                    target = action_text_values[arguments[0]]
+                    function_closure_construction_targets[(function.name, action_instruction_index)] = target
+                if action_instruction.dest:
+                    action_text_values.pop(action_instruction.dest, None)
+                    if target is not None:
+                        action_closure_values[action_instruction.dest] = {target}
+                    else:
+                        action_closure_values.pop(action_instruction.dest, None)
+            elif action_instruction.op == "RETURN" and action_instruction.args:
+                returned_closures.update(action_closure_values.get(action_instruction.args[0], set()))
+            elif action_instruction.op != "LABEL" and action_instruction.dest:
+                action_text_values.pop(action_instruction.dest, None)
+                action_closure_values.pop(action_instruction.dest, None)
+        if returned_closures:
+            function_return_closure_targets[function.name] = returned_closures
+
     closure_label_indices = {
         instruction.dest: index
         for index, instruction in enumerate(items)
@@ -1624,9 +1779,15 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     pending.append(successor)
         return targets_before
 
-    closure_targets_before = propagate_static_targets(
-        {index: {action} for index, action in closure_construction_actions.items()}
-    )
+    closure_target_seeds = {
+        index: {action} for index, action in closure_construction_actions.items()
+    }
+    for instruction_index, instruction in enumerate(items):
+        if instruction.op == "CALL" and instruction.args:
+            returned = function_return_closure_targets.get(instruction.args[0])
+            if returned:
+                closure_target_seeds[instruction_index] = set(returned)
+    closure_targets_before = propagate_static_targets(closure_target_seeds)
     field_text_targets_before = propagate_static_targets(static_text_value_seeds)
     lines = [
         ".section .text", ".globl _start", ".globl main", "_start:",
@@ -2224,6 +2385,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 if len(arguments) != 1 or arguments[0] not in known_text or known_text[arguments[0]] not in ir.functions:
                     raise NativeBackendError("x86_64-linux MakeClosure requires a statically known action")
                 action = known_text[arguments[0]]
+                if function_capture_names.get(action):
+                    raise NativeBackendError(
+                        "x86_64-linux captured MakeClosure requires construction inside an action"
+                    )
                 lines.append(f"    lea .Lkuro_fn_{action}(%rip), %rax")
                 store(instruction.dest)
                 kinds[instruction.dest] = "closure"
@@ -2375,6 +2540,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     lines.extend([f"    cmpq ${expected}, (%rax)", "    sete %al", "    movzbq %al, %rax"])
                     store(instruction.dest); kinds[instruction.dest] = "number"
             elif call_name in ir.functions:
+                if function_capture_names.get(call_name):
+                    raise NativeBackendError(
+                        f"x86_64-linux action {call_name!r} requires a captured closure environment"
+                    )
                 if len(arguments) > 6:
                     raise NativeBackendError("x86_64-linux action call supports at most six arguments")
                 remember_action_argument_kinds(call_name, tuple(arguments))
@@ -2573,6 +2742,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         lines.extend([f".Lkuro_fn_{function.name}:", "    push %rbp", "    mov %rsp, %rbp", f"    sub ${fn_frame}, %rsp"])
 
         def fn_load(name: str, register: str = "%rax") -> None:
+            capture_label = function_capture_labels.get(function.name, {}).get(name)
+            if capture_label is not None:
+                lines.append(f"    mov {capture_label}(%rip), {register}")
+                return
             if name in fn_slots:
                 lines.append(f"    mov {fn_slots[name]}(%rbp), {register}")
                 return
@@ -2588,6 +2761,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             raise NativeBackendError(f"x86_64-linux action {function.name!r} cannot load {name!r}")
 
         def fn_store(name: str, register: str = "%rax") -> None:
+            capture_label = function_capture_labels.get(function.name, {}).get(name)
+            if capture_label is not None:
+                lines.append(f"    mov {register}, {capture_label}(%rip)")
+                return
             if name in fn_slots:
                 lines.append(f"    mov {register}, {fn_slots[name]}(%rbp)")
                 return
@@ -2598,7 +2775,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
 
         for index, parameter in enumerate(function.params):
             fn_store(parameter, f"%{('rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9')[index]}")
-        for item in function.body:
+        for function_item_index, item in enumerate(function.body):
             fn_op = item.op
             if fn_op == "CONST":
                 value = item.args[0]
@@ -2939,6 +3116,37 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 fn_store(item.dest); fn_kinds[item.dest] = "number"
             elif fn_op == "CALL":
                 name, *arguments = item.args
+                if name == "MakeClosure":
+                    target = function_closure_construction_targets.get(
+                        (function.name, function_item_index)
+                    )
+                    if target is None:
+                        raise NativeBackendError(
+                            f"x86_64-linux action {function.name!r} MakeClosure requires a statically known action"
+                        )
+                    seen_label = capture_seen_labels.get(target)
+                    if seen_label is not None:
+                        lines.extend([
+                            f"    cmpq $0, {seen_label}(%rip)",
+                            "    jne .Lkuro_closure_capture_error",
+                            f"    movq $1, {seen_label}(%rip)",
+                        ])
+                    for capture_name, capture_label in function_capture_labels.get(target, {}).items():
+                        capture_kind = fn_kinds.get(capture_name, "unknown")
+                        if capture_kind != "number":
+                            raise NativeBackendError(
+                                "x86_64-linux action-created closures currently support integer captures only"
+                            )
+                        fn_load(capture_name, "%rax")
+                        lines.append(f"    mov %rax, {capture_label}(%rip)")
+                    lines.append(f"    lea .Lkuro_fn_{target}(%rip), %rax")
+                    fn_store(item.dest)
+                    fn_kinds[item.dest] = "closure"
+                    continue
+                if name in ir.functions and function_capture_names.get(name):
+                    raise NativeBackendError(
+                        f"x86_64-linux action {name!r} requires a captured closure environment"
+                    )
                 if name not in ir.functions or len(arguments) > 6:
                     raise NativeBackendError(f"x86_64-linux action {function.name!r} cannot call {name!r}")
                 registers = ("rdi", "rsi", "rdx", "rcx", "r8", "r9")
@@ -2994,6 +3202,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         ".Lkuro_bounds:", "    mov $60, %eax", "    mov $1, %edi", "    syscall", "    ud2",
         ".Lkuro_overflow:", "    mov $60, %eax", "    mov $1, %edi", "    syscall", "    ud2",
         ".Lkuro_runtime_error:", "    mov $1, %eax", "    leave", "    ret",
+        ".Lkuro_closure_capture_error:", "    mov $60, %eax", "    mov $1, %edi", "    syscall", "    ud2",
     ])
     lines.extend([
         "_kuro_print_int:", "    push %rbp", "    mov %rsp, %rbp", "    sub $32, %rsp",
@@ -3071,6 +3280,11 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         lines.extend([f"    .p2align 3", f"{label}: .zero 8"])
     for label in global_labels.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 8"])
+    for capture_labels in function_capture_labels.values():
+        for label in capture_labels.values():
+            lines.extend(["    .p2align 3", f"{label}: .zero 8"])
+    for label in capture_seen_labels.values():
+        lines.extend(["    .p2align 3", f"{label}: .zero 8"])
     for label in map_dest_labels.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 8192"])
     for label in record_dest_labels.values():

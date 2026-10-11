@@ -15,11 +15,11 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 
 ## Current state
 
-- **All PRs #2–#26 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
-- **GitHub CI:** PRs #2–#25 have 8/8 successful checks; PR #26's current check state is available on its linked pull-request page.
-- **Local Linux x86-64 full suite on the current stacked branch:** 645 passed, 19 skipped, 0 failed.
+- **All PRs #2–#27 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
+- **GitHub CI:** PRs #2–#27 have 8/8 successful checks.
+- **Local Linux x86-64 full suite on the current stacked branch:** 648 passed, 19 skipped, 0 failed.
 - Linux CI now builds native production images with Python, then blocks Python and host compiler tools from `PATH` while testing `doctor`, source run/compile, bytecode execution, and codegen. This proves the built images' use path only; clean-checkout image bootstrap remains Python-hosted, and native image construction still invokes the system assembler/linker.
-- Linux x86-64 native support remains experimental and incomplete. Closures now dispatch at runtime among compile-time-known no-capture targets with compatible signatures; escaping captured environments remain unsupported. Record fields now support runtime selection among statically known literal names when the selected values have one known kind; arbitrary runtime field names remain unsupported. Tasks remain statically bounded and are not a parallel scheduler.
+- Linux x86-64 native support remains experimental and incomplete. Closures dispatch at runtime among compile-time-known targets; a straight-line action-created closure can capture one integer value in a shared per-target slot. A second instance of that target exits with status 1, and non-integer captures are rejected; independent environments and broader capture/return control flow remain open. Record fields support runtime selection among statically known literal names when selected values have one known kind; arbitrary runtime field names remain unsupported. Tasks remain statically bounded and are not a parallel scheduler.
 
 ## Published work
 
@@ -49,8 +49,8 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 | [#23](https://github.com/Shibukedang27/Kuro/pull/23) | Format computed floats in the Linux x86-64 native backend | Open; 8/8 checks passing |
 | [#24](https://github.com/Shibukedang27/Kuro/pull/24) | Dispatch Linux native closure calls at runtime | Open; 8/8 checks passing |
 | [#25](https://github.com/Shibukedang27/Kuro/pull/25) | Add Linux Python-free native runtime CI gate | Open; 8/8 checks passing |
-| [#26](https://github.com/Shibukedang27/Kuro/pull/26) | Dispatch Linux native record fields at runtime | Open; check state on the PR page |
-| [#25](https://github.com/Shibukedang27/Kuro/pull/25) | Add Linux Python-free native runtime CI gate | Open; check state on the PR page |
+| [#26](https://github.com/Shibukedang27/Kuro/pull/26) | Dispatch Linux native record fields at runtime | Open; 8/8 checks passing |
+| [#27](https://github.com/Shibukedang27/Kuro/pull/27) | Capture a numeric value in an escaping Linux native closure | Open; 8/8 checks passing |
 
 The PR descriptions contain the detailed intent, implementation, test outcomes, and explicit limits for each batch. The dependency chain is deliberate: review and merge in dependency order if accepting the changes.
 
@@ -61,7 +61,7 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 - PR #20 preserves an unchanged decimal constant's value and spelling; PR #21 carries it through scalar assignment/reload and action arguments; PR #22 carries it through collection operations and action returns. PR #23 adds freestanding computed-float formatting for ordinary finite values, including a 16/17-digit round-trip selection path, scalar/action output, and float collections. Scientific notation, extreme magnitudes, and complete shortest-decimal parity still need coverage.
 - Continue differential conformance testing across the hosted compiler, Kuro-authored bytecode compiler/VM, launcher, and native backends; each mismatch should become a minimal regression test and a focused PR.
 - Replace bounded per-callsite task storage with semantics that remain correct under loops and multiple task instances; determine and implement the intended scheduler behavior.
-- Expand closure support beyond compile-time-enumerable no-capture targets, including escaping captured environments and runtime-created targets where required by language semantics.
+- Replace guarded shared per-target capture slots with independent closure environments; broaden capture kinds and closure-valued returns beyond the currently verified integer, straight-line case.
 - Expand record field selection beyond finite, compile-time-known literal sets; audit fixed-capacity collections, maps, and records for overflow, aliasing, nested elements, and error handling.
 - Track unsupported IR/native operations explicitly so the compiler either lowers them correctly or reports a deliberate capability error.
 
@@ -92,4 +92,4 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 
 ## Next concrete step
 
-Continue closure parity with escaping captured environments and record parity with arbitrary runtime field names, while establishing a clean-checkout bootstrap that does not require Python. Scientific notation/extreme binary64 formatting and the strict assembler/linker-independence decision also remain open. The current PR stack is not completion of the independence goal.
+Continue closure parity by replacing the guarded shared capture slot with per-instance environments, and record parity by supporting arbitrary runtime field names. Establish a clean-checkout bootstrap that does not require Python; scientific notation/extreme binary64 formatting and the strict assembler/linker-independence decision also remain open. The current PR stack is not completion of the independence goal.

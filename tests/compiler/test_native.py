@@ -527,6 +527,56 @@ def test_native_backend_dispatches_to_runtime_selected_closure(tmp_path):
     assert run.stdout == "15\n"
 
 
+@requires_linux_x86_64
+def test_native_backend_captures_one_escaping_numeric_value(tmp_path):
+    result = compile_source(
+        'Adder = 0;\n'
+        'Action MakeAdder Base;\n'
+        'Action AddBase Value;\nReturn Base + Value;\nDone.\n'
+        'Call MakeClosure "AddBase";\nReturn @_;\nDone.\n'
+        'Call MakeAdder 10; Update Adder to @_;\n'
+        'Call Invoke Adder, 7; Print @_.\n'
+    )
+    assert result.ok
+    executable = tmp_path / "captured-closure"
+    build_native(result.ir, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "17\n"
+
+
+@requires_linux_x86_64
+def test_native_backend_rejects_second_captured_closure_instance(tmp_path):
+    result = compile_source(
+        'First = 0; Second = 0;\n'
+        'Action MakeAdder Base;\n'
+        'Action AddBase Value;\nReturn Base + Value;\nDone.\n'
+        'Call MakeClosure "AddBase";\nReturn @_;\nDone.\n'
+        'Call MakeAdder 10; Update First to @_;\n'
+        'Call MakeAdder 20; Update Second to @_;\n'
+        'Call Invoke First, 7; Print @_.\n'
+    )
+    assert result.ok
+    executable = tmp_path / "second-captured-closure"
+    build_native(result.ir, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True)
+    assert run.returncode == 1
+    assert run.stdout == ""
+
+
+def test_native_backend_rejects_non_integer_closure_capture():
+    result = compile_source(
+        'Greeting = 0;\n'
+        'Action MakeGreeting Prefix;\n'
+        'Action Greet Name;\nReturn Prefix + Name;\nDone.\n'
+        'Call MakeClosure "Greet";\nReturn @_;\nDone.\n'
+        'Call MakeGreeting "Kuro "; Update Greeting to @_;\n'
+        'Call Invoke Greeting, "language"; Print @_.\n'
+    )
+    assert result.ok
+    with pytest.raises(NativeBackendError, match="integer captures only"):
+        emit_x86_64_linux(result.ir)
+
+
 def test_native_backend_supports_record_field_abi(tmp_path):
     result = compile_source(
         'Store = 0;\nCall MakeRecord "User";\nUpdate Store to @_;\n'
