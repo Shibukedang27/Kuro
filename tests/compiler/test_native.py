@@ -8,6 +8,12 @@ from compiler.native import build_native, emit_x86_64_linux, emit_x86_64_macos
 from compiler.pipeline import compile_source
 
 
+requires_linux_x86_64 = pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires the Linux x86-64 native backend",
+)
+
+
 def _native_dependency_report(executable: Path) -> str:
     inspector = ["otool", "-L"] if platform.system() == "Darwin" else ["readelf", "-d"]
     return subprocess.run(
@@ -431,6 +437,7 @@ def test_native_backend_runtime_clears_stale_decimal_display_on_overwrite(tmp_pa
     assert run.stdout == "4\n7\n2.5\n"
 
 
+@requires_linux_x86_64
 def test_native_backend_formats_computed_floats_and_mixed_division(tmp_path):
     result = compile_source(
         "Left = 1.5; Right = 2.25; Print Left + Right.\n"
@@ -446,6 +453,7 @@ def test_native_backend_formats_computed_floats_and_mixed_division(tmp_path):
     assert run.stdout == "3.75\n2.75\n6.0\n0.3333333333333333\n0.30000000000000004\n"
 
 
+@requires_linux_x86_64
 def test_native_backend_formats_float_collection_items(tmp_path):
     result = compile_source("Amounts = 1.25, 2.5, 3.0; Print Amounts.")
     assert result.ok
@@ -455,6 +463,7 @@ def test_native_backend_formats_float_collection_items(tmp_path):
     assert run.stdout == "1.25\n2.5\n3.0\n"
 
 
+@requires_linux_x86_64
 def test_native_backend_formats_float_action_argument(tmp_path):
     result = compile_source("Action Echo Value; Print Value. Done. Call Echo 1.25;")
     assert result.ok
