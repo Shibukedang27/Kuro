@@ -1,5 +1,6 @@
 import platform
 import re
+import shutil
 import subprocess
 import pytest
 from pathlib import Path
@@ -19,6 +20,32 @@ VM_INPUT_DEFAULT_RE = re.compile(
     r"^# --- BEGIN_VM_INPUT_DEFAULT.*?^# --- END_VM_INPUT_DEFAULT.*?$\n?",
     re.MULTILINE | re.DOTALL,
 )
+
+
+def _native_lldb_trace(executable: Path, payload: str, tmp_path: Path) -> str:
+    if platform.system() != "Darwin":
+        return ""
+    lldb = shutil.which("lldb")
+    if lldb is None:
+        return "lldb is unavailable on this macOS runner"
+    input_path = tmp_path / "kuro-large-input.txt"
+    input_path.write_text(payload, encoding="utf-8")
+    try:
+        result = subprocess.run(
+            [
+                lldb, "--batch",
+                "-o", f"process launch -i {input_path}",
+                "-o", "thread backtrace all",
+                "-o", "register read pc lr sp x0 x1 x2",
+                "--", str(executable),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as error:
+        return f"lldb timed out: {error}"
+    return result.stdout + result.stderr
 
 
 def run_artifact(payload: str):
@@ -163,6 +190,23 @@ def test_native_artifact_launcher_preserves_large_input_and_runs_suffix_opcode(t
     assert typed_text.stdout == "1\n"
 
     payload = "Q" * 70000 + "tail-END"
+    outer_loader_input = (
+        "kuro.bytecode/1\nBC_CONST_TEXT\nOK\nBC_PRINT\n"
+        "kuro.input/1\n" + payload
+    )
+    outer_loader = subprocess.run(
+        [str(executable)], input=outer_loader_input, capture_output=True,
+        text=True, timeout=60,
+    )
+    outer_lldb_trace = (
+        _native_lldb_trace(executable, outer_loader_input, tmp_path)
+        if outer_loader.returncode != 0 else ""
+    )
+    assert outer_loader.returncode == 0, (
+        f"outer loader large frame: {outer_loader.stderr}\n{outer_lldb_trace}"
+    )
+    assert outer_loader.stdout == "OK\n"
+
     loader_only_input = (
         "kuro.bytecode/1\n"
         "BC_INPUT\nFirst\nBC_LENGTH\nFirst\nBC_PRINT\n"
@@ -172,7 +216,13 @@ def test_native_artifact_launcher_preserves_large_input_and_runs_suffix_opcode(t
         [str(executable)], input=loader_only_input, capture_output=True,
         text=True, timeout=60,
     )
-    assert loader_only.returncode == 0, f"large loader extraction: {loader_only.stderr}"
+    lldb_trace = (
+        _native_lldb_trace(executable, loader_only_input, tmp_path)
+        if loader_only.returncode != 0 else ""
+    )
+    assert loader_only.returncode == 0, (
+        f"VMInput large frame: {loader_only.stderr}\n{lldb_trace}"
+    )
     assert loader_only.stdout == f"{len(payload)}\n"
 
     framed = (
