@@ -420,13 +420,15 @@ def test_native_backend_supports_record_field_abi(tmp_path):
     result = compile_source(
         'Store = 0;\nCall MakeRecord "User";\nUpdate Store to @_;\n'
         'Call RecordSet Store, "name", "Kuro";\n'
+        'Call RecordSet Store, "rank", 7;\n'
         'Call RecordGet Store, "name";\nPrint @_.\n'
+        'Call RecordGet Store, "rank";\nPrint @_.\n'
     )
     assert result.ok
     executable = tmp_path / "record"
     build_native(result.ir, executable)
     run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
-    assert run.stdout == "Kuro\n"
+    assert run.stdout == "Kuro\n7\n"
 
 
 def test_native_backend_supports_map_abi_for_known_keys(tmp_path):
