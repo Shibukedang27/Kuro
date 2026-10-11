@@ -200,6 +200,16 @@ def test_kuro_vm_decodes_multi_digit_and_decimal_constants():
     assert env["VMOutput"] == [3.25]
     assert env["VMOutputDisplay"] == ["3.25"]
 
+    env = run_kuro_vm_environment("Amount = 3.25; Print Amount.")
+    assert env["VMFailed"] in (None, 0)
+    assert env["VMOutput"] == [3.25]
+    assert env["VMOutputDisplay"] == ["3.25"]
+
+    env = run_kuro_vm_environment("Action Echo Value; Print Value. Done. Call Echo 3.25;")
+    assert env["VMFailed"] in (None, 0)
+    assert env["VMOutput"] == [3.25]
+    assert env["VMOutputDisplay"] == ["3.25"]
+
     output, failed = run_kuro_vm("Print 12 + 30.")
     assert failed in (None, 0)
     assert output == [42]
