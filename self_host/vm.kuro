@@ -32,8 +32,13 @@ VMCollectionOwners is Integers;
 VMCollectionItems is Text;
 VMCollectionOwners = -1, -1;
 VMCollectionItems = "__vm_empty__", "__vm_empty__";
+VMCollectionItemDisplay is Text;
+VMCollectionItemDisplay = "", "";
 VMCollectionEntryCount = 0;
 VMNextCollectionId = 0;
+VMAppendCollectionDisplay = "";
+VMGetCollectionDisplay = "";
+VMSetCollectionDisplay = "";
 VMStack is Text;
 VMStackKinds is Integers;
 VMStackDisplay is Text;
@@ -55,7 +60,10 @@ VMCallName = "";
 VMFunctionBody = 0;
 VMReturnValue = 0;
 VMReturnPending = 0;
+VMReturnDisplay = "";
 VMLastResult = 0;
+VMLastResultDisplay = "";
+VMSetResultDisplay = "";
 VMInputAvailable = 1;
 VMParamNames is Text;
 VMParamNames = "__vm_empty__", "__vm_empty__";
@@ -75,6 +83,8 @@ VMFrameCounts = 0, 0;
 VMFrameSlotCapacity = 2;
 VMFrameReturns is Integers;
 VMFrameReturns = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+VMFrameReturnDisplay is Text;
+VMFrameReturnDisplay = "", "", "", "", "", "", "", "", "", "";
 VMFrameReturnCapacity = 10;
 VMReturnPositions is Integers;
 VMReturnPositions = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -209,12 +219,15 @@ Action VMAppendCollectionItem Name, Value;
         If VMCollectionEntryCount is less than 2;
             Set VMCollectionOwners VMCollectionEntryCount to VMAppendCollection_Id;
             Set VMCollectionItems VMCollectionEntryCount to Value;
+            Set VMCollectionItemDisplay VMCollectionEntryCount to VMAppendCollectionDisplay;
         Else;
             Append VMAppendCollection_Id to VMCollectionOwners;
             Append Value to VMCollectionItems;
+            Append VMAppendCollectionDisplay to VMCollectionItemDisplay;
         Done.
         Add 1 to VMCollectionEntryCount;
     Done.
+    VMAppendCollectionDisplay = "";
 Done.
 
 Action VMGetCollectionItem Name, WantedIndex;
@@ -231,12 +244,15 @@ Action VMGetCollectionItem Name, WantedIndex;
     VMGetCollectionItem_Seen = 0;
     VMGetCollectionItem_Found = 0;
     VMGetCollectionItem_Value = 0;
+    VMGetCollectionDisplay = "";
     While VMGetCollectionItem_Pos is less than VMCollectionEntryCount and VMGetCollectionItem_Found is equal to 0;
         Get VMCollectionOwners VMGetCollectionItem_Pos;
         If @_ is equal to VMGetCollectionItem_Id;
             If VMGetCollectionItem_Seen is equal to WantedIndex;
                 Get VMCollectionItems VMGetCollectionItem_Pos;
                 VMGetCollectionItem_Value = @_;
+                Get VMCollectionItemDisplay VMGetCollectionItem_Pos;
+                VMGetCollectionDisplay = @_;
                 VMGetCollectionItem_Found = 1;
             Else;
                 Add 1 to VMGetCollectionItem_Seen;
@@ -290,6 +306,7 @@ Action VMSetCollectionItem Name, WantedIndex, Value;
         If @_ is equal to VMSetCollectionItem_Id;
             If VMSetCollectionItem_Seen is equal to WantedIndex;
                 Set VMCollectionItems VMSetCollectionItem_Pos to Value;
+                Set VMCollectionItemDisplay VMSetCollectionItem_Pos to VMSetCollectionDisplay;
                 VMSetCollectionItem_Found = 1;
             Else;
                 Add 1 to VMSetCollectionItem_Seen;
@@ -300,6 +317,7 @@ Action VMSetCollectionItem Name, WantedIndex, Value;
     If VMSetCollectionItem_Found is equal to 0;
         VMFailed = 1;
     Done.
+    VMSetCollectionDisplay = "";
 Done.
 
 Action VMCopyCollection SourceName, DestinationName;
@@ -317,7 +335,10 @@ Action VMCopyCollection SourceName, DestinationName;
                 Get VMCollectionOwners VMCopyCollection_Pos;
                 If @_ is equal to VMCopyCollection_SourceId;
                     Get VMCollectionItems VMCopyCollection_Pos;
-                    Call VMAppendCollectionItem DestinationName, @_;
+                    VMCopyCollection_Value = @_;
+                    Get VMCollectionItemDisplay VMCopyCollection_Pos;
+                    VMAppendCollectionDisplay = @_;
+                    Call VMAppendCollectionItem DestinationName, VMCopyCollection_Value;
                 Done.
                 Add 1 to VMCopyCollection_Pos;
             Done.
@@ -328,9 +349,12 @@ Done.
 Action VMSetResult Value;
     If VMFrameDepth is greater than 0;
         Set VMFrameReturns VMFrameDepth to Value;
+        Set VMFrameReturnDisplay VMFrameDepth to VMSetResultDisplay;
     Else;
         VMLastResult = Value;
+        VMLastResultDisplay = VMSetResultDisplay;
     Done.
+    VMSetResultDisplay = "";
 Done.
 
 Action VMPush Value;
@@ -381,8 +405,12 @@ Action VMLoad Name;
     If Name is equal to "_";
         If VMFrameDepth is greater than 0;
             Get VMFrameReturns VMFrameDepth;
-            Return @_;
+            VMLoad_Value = @_;
+            Get VMFrameReturnDisplay VMFrameDepth;
+            VMLoadDisplayValue = @_;
+            Return VMLoad_Value;
         Else;
+            VMLoadDisplayValue = VMLastResultDisplay;
             Return VMLastResult;
         Done.
     Done.
@@ -715,8 +743,10 @@ Action VMInvoke Name;
         Done.
         If VMFrameDepth is less than VMFrameReturnCapacity;
             Set VMFrameReturns VMFrameDepth to 0;
+            Set VMFrameReturnDisplay VMFrameDepth to "";
         Else;
             Append 0 to VMFrameReturns;
+            Append "" to VMFrameReturnDisplay;
             Add 1 to VMFrameReturnCapacity;
         Done.
         If VMFrameDepth is less than VMFrameSlotCapacity;
@@ -748,8 +778,13 @@ Action VMInvoke Name;
         Get VMFrameStarts VMFrameDepth;
         VMFrameEntryCount = @_;
         VMFrameDepth = VMFrameDepth - 1;
+        VMSetResultDisplay = VMReturnDisplay;
         Call VMSetResult VMReturnValue;
-        Call VMPush VMReturnValue;
+        If VMReturnDisplay is not equal to "";
+            Call VMPushDecimal VMReturnValue, VMReturnDisplay;
+        Else;
+            Call VMPush VMReturnValue;
+        Done.
     Done.
 Done.
 
@@ -916,6 +951,7 @@ Action VMStep;
     If VMStep_Op is equal to "BC_FUNC_END";
         If VMFrameDepth is greater than 0;
             VMReturnValue = 0;
+            VMReturnDisplay = "";
             VMReturnPending = 1;
         Done.
         Return 0;
@@ -937,6 +973,7 @@ Action VMStep;
     If VMStep_Op is equal to "BC_RETURN";
         Call VMPop;
         VMReturnValue = @_;
+        VMReturnDisplay = VMLastPoppedDisplay;
         VMReturnPending = 1;
         Return 0;
     Done.
@@ -957,9 +994,17 @@ Action VMStep;
         If VMStep_Name is equal to "_";
             If VMFrameDepth is greater than 0;
                 Get VMFrameReturns VMFrameDepth;
-                Call VMPush @_;
+                VMStep_LoadedValue = @_;
+                Get VMFrameReturnDisplay VMFrameDepth;
+                VMStep_LoadedDisplay = @_;
             Else;
-                Call VMPush VMLastResult;
+                VMStep_LoadedValue = VMLastResult;
+                VMStep_LoadedDisplay = VMLastResultDisplay;
+            Done.
+            If VMStep_LoadedDisplay is not equal to "";
+                Call VMPushDecimal VMStep_LoadedValue, VMStep_LoadedDisplay;
+            Else;
+                Call VMPush VMStep_LoadedValue;
             Done.
         Else;
             Call VMFindCollection VMStep_Name, 0;
@@ -1004,6 +1049,8 @@ Action VMStep;
                 Else;
                     Get VMStack VMStoreMulti_Pos;
                     VMStoreMulti_Value = @_;
+                    Get VMStackDisplay VMStoreMulti_Pos;
+                    VMAppendCollectionDisplay = @_;
                     Call VMAppendCollectionItem VMStep_Name, VMStoreMulti_Value;
                 Done.
                 Add 1 to VMStoreMulti_Pos;
@@ -1187,6 +1234,7 @@ Action VMStep;
         VMStep_Name = @_;
         Call VMReadOperand;
         VMStep_Indexed = @_;
+        VMStep_CurrentDisplay = "";
         Call VMFindCollection VMStep_Name, 0;
         VMStep_CollectionIndex = @_;
         If VMStep_CollectionIndex is greater than or equal to 0;
@@ -1194,6 +1242,7 @@ Action VMStep;
             VMStep_Index = @_;
             Call VMGetCollectionItem VMStep_Name, VMStep_Index;
             VMStep_Current = @_;
+            VMStep_CurrentDisplay = VMGetCollectionDisplay;
         Else;
             Call VMLoad VMStep_Name;
             VMStep_Current = @_;
@@ -1204,8 +1253,13 @@ Action VMStep;
                 VMStep_Current = @_;
             Done.
         Done.
+        VMSetResultDisplay = VMStep_CurrentDisplay;
         Call VMSetResult VMStep_Current;
-        Call VMPush VMStep_Current;
+        If VMStep_CurrentDisplay is not equal to "";
+            Call VMPushDecimal VMStep_Current, VMStep_CurrentDisplay;
+        Else;
+            Call VMPush VMStep_Current;
+        Done.
         Return 0;
     Done.
     If VMStep_Op is equal to "BC_LENGTH";
@@ -1230,10 +1284,12 @@ Action VMStep;
         VMStep_Name = @_;
         Call VMPop;
         VMStep_Value = @_;
+        VMStep_ValueDisplay = VMLastPoppedDisplay;
         Call VMPop;
         VMStep_Index = @_;
         Call VMFindCollection VMStep_Name, 0;
         If @_ is greater than or equal to 0;
+            VMSetCollectionDisplay = VMStep_ValueDisplay;
             Call VMSetCollectionItem VMStep_Name, VMStep_Index, VMStep_Value;
         Else;
             Call VMLoad VMStep_Name;
@@ -1248,14 +1304,17 @@ Action VMStep;
         VMStep_Name = @_;
         Call VMPop;
         VMStep_Value = @_;
+        VMStep_ValueDisplay = VMLastPoppedDisplay;
         Call VMFindName VMStep_Name, 0;
         VMStep_NameIndex = @_;
         If VMStep_NameIndex is less than 0;
             Call VMMarkCollection VMStep_Name;
+            VMAppendCollectionDisplay = VMStep_ValueDisplay;
             Call VMAppendCollectionItem VMStep_Name, VMStep_Value;
         Else;
             Call VMFindCollection VMStep_Name, 0;
             If @_ is greater than or equal to 0;
+                VMAppendCollectionDisplay = VMStep_ValueDisplay;
                 Call VMAppendCollectionItem VMStep_Name, VMStep_Value;
             Else;
                 Call VMLoad VMStep_Name;
@@ -1276,7 +1335,7 @@ Action VMStep;
             While VMStep_PrintIndex is less than VMStep_PrintCount;
                 Call VMGetCollectionItem VMStep_Value, VMStep_PrintIndex;
                 Append @_ to VMOutput;
-                Append "" to VMOutputDisplay;
+                Append VMGetCollectionDisplay to VMOutputDisplay;
                 Add 1 to VMOutputCount;
                 Add 1 to VMStep_PrintIndex;
             Done.
