@@ -1398,6 +1398,14 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     text_length_refs: dict[str, str] = {}
     data: list[tuple[str, bytes]] = []
     float_data: list[tuple[str, float]] = []
+    text_constant_labels: dict[str, list[str]] = {}
+    next_text_label = 0
+    for text_instruction in items:
+        if text_instruction.op == "CONST" and isinstance(text_instruction.args[0], str):
+            text_constant_labels.setdefault(text_instruction.args[0], []).append(
+                f".Lkuro_data_{next_text_label}"
+            )
+            next_text_label += 1
     collection_buffers = {name: f".Lkuro_collection_{index}" for index, name in enumerate(sorted(collection_names))}
     collection_lengths = {name: f".Lkuro_collection_len_{index}" for index, name in enumerate(sorted(collection_names))}
     collection_item_lengths = {name: f".Lkuro_collection_item_len_{index}" for index, name in enumerate(sorted(collection_names))}
@@ -1496,11 +1504,13 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     tagged_alias: dict[str, str] = {}
     closure_construction_actions: dict[int, str] = {}
     static_text_values: dict[str, str] = {}
+    static_text_value_seeds: dict[int, set[str]] = {}
     for instruction_index, instruction in enumerate(items):
         if instruction.op == "CONST" and instruction.dest:
             value = instruction.args[0]
             if isinstance(value, str):
                 static_text_values[instruction.dest] = value
+                static_text_value_seeds[instruction_index] = {value}
             else:
                 static_text_values.pop(instruction.dest, None)
         elif instruction.op == "LOADVAR" and instruction.dest:
@@ -1553,19 +1563,27 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         else:
             closure_successors.append((next_index,) if next_index < len(items) else ())
 
-    closure_targets_before: list[dict[str, set[str]] | None] = [None] * len(items)
-    if items:
-        closure_targets_before[0] = {}
+    def propagate_static_targets(
+        seeds: dict[int, set[str]],
+    ) -> list[dict[str, set[str]] | None]:
+        targets_before: list[dict[str, set[str]] | None] = [None] * len(items)
+        if not items:
+            return targets_before
+        targets_before[0] = {}
         pending = [0]
         while pending:
             index = pending.pop()
-            incoming = closure_targets_before[index]
+            incoming = targets_before[index]
             if incoming is None:
                 continue
             state = {name: set(targets) for name, targets in incoming.items()}
             instruction = items[index]
             if instruction.op == "CONST" and instruction.dest:
-                state.pop(instruction.dest, None)
+                targets = seeds.get(index, set())
+                if targets:
+                    state[instruction.dest] = set(targets)
+                else:
+                    state.pop(instruction.dest, None)
             elif instruction.op == "LOADVAR" and instruction.dest:
                 source = instruction.args[0]
                 if state.get(source):
@@ -1584,18 +1602,16 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     state[name] = set(state[value])
                 else:
                     state.pop(name, None)
-            elif instruction.op == "CALL" and instruction.dest:
-                target = closure_construction_actions.get(index)
-                if target:
-                    state[instruction.dest] = {target}
+            elif instruction.op != "LABEL" and instruction.dest:
+                targets = seeds.get(index, set())
+                if targets:
+                    state[instruction.dest] = set(targets)
                 else:
                     state.pop(instruction.dest, None)
-            elif instruction.dest:
-                state.pop(instruction.dest, None)
             for successor in closure_successors[index]:
-                current = closure_targets_before[successor]
+                current = targets_before[successor]
                 if current is None:
-                    closure_targets_before[successor] = {
+                    targets_before[successor] = {
                         name: set(targets) for name, targets in state.items()
                     }
                     pending.append(successor)
@@ -1604,8 +1620,14 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 for name, targets in state.items():
                     merged.setdefault(name, set()).update(targets)
                 if merged != current:
-                    closure_targets_before[successor] = merged
+                    targets_before[successor] = merged
                     pending.append(successor)
+        return targets_before
+
+    closure_targets_before = propagate_static_targets(
+        {index: {action} for index, action in closure_construction_actions.items()}
+    )
+    field_text_targets_before = propagate_static_targets(static_text_value_seeds)
     lines = [
         ".section .text", ".globl _start", ".globl main", "_start:",
         "    call main", "    mov %eax, %edi", "    mov $60, %eax", "    syscall",
@@ -2092,33 +2114,112 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 store(instruction.dest)
                 kinds[instruction.dest] = "record"
             elif call_name in {"RecordSet", "RecordGet"}:
-                if len(arguments) < 2 or arguments[0] not in slots or arguments[1] not in known_text:
-                    raise NativeBackendError(f"x86_64-linux {call_name} requires a record and known field name")
-                field = known_text[arguments[1]]
-                slot = record_field_slots.setdefault(field, len(record_field_slots))
-                if slot >= 63:
-                    raise NativeBackendError("x86_64-linux record exceeds fixed capacity of 63 fields")
-                load(arguments[0], "%rax")
-                if call_name == "RecordSet":
-                    if len(arguments) != 3:
-                        raise NativeBackendError("x86_64-linux RecordSet requires record, field, and value")
-                    load(arguments[2], "%rdx")
-                    lines.append(f"    mov %rdx, {8 + slot * 8}(%rax)")
-                    store(instruction.dest)
-                    kinds[instruction.dest] = "record"
-                    record_field_kinds[field] = kinds.get(arguments[2], "unknown")
-                    if arguments[2] in text_lengths:
-                        record_field_lengths[field] = text_lengths[arguments[2]]
-                    elif field in record_field_lengths:
-                        del record_field_lengths[field]
+                if len(arguments) < 2 or arguments[0] not in slots:
+                    raise NativeBackendError(f"x86_64-linux {call_name} requires a record and field name")
+                if call_name == "RecordSet" and len(arguments) != 3:
+                    raise NativeBackendError("x86_64-linux RecordSet requires record, field, and value")
+                if call_name == "RecordGet" and len(arguments) != 2:
+                    raise NativeBackendError("x86_64-linux RecordGet requires record and field")
+                incoming_text_targets = field_text_targets_before[instruction_index] or {}
+                fields = set(incoming_text_targets.get(arguments[1], set()))
+                if not fields and arguments[1] in known_text:
+                    fields.add(known_text[arguments[1]])
+                if not fields:
+                    raise NativeBackendError(
+                        f"x86_64-linux {call_name} requires a statically bounded field-name set"
+                    )
+                ordered_fields = sorted(fields)
+                field_slots: dict[str, int] = {}
+                for field in ordered_fields:
+                    slot = record_field_slots.setdefault(field, len(record_field_slots))
+                    if slot >= 63:
+                        raise NativeBackendError("x86_64-linux record exceeds fixed capacity of 63 fields")
+                    field_slots[field] = slot
+
+                if len(ordered_fields) == 1:
+                    field = ordered_fields[0]
+                    slot = field_slots[field]
+                    load(arguments[0], "%rax")
+                    if call_name == "RecordSet":
+                        load(arguments[2], "%rdx")
+                        lines.append(f"    mov %rdx, {8 + slot * 8}(%rax)")
+                        store(instruction.dest)
+                        kinds[instruction.dest] = "record"
+                        record_field_kinds[field] = kinds.get(arguments[2], "unknown")
+                        if arguments[2] in text_lengths:
+                            record_field_lengths[field] = text_lengths[arguments[2]]
+                        else:
+                            record_field_lengths.pop(field, None)
+                    else:
+                        lines.append(f"    mov {8 + slot * 8}(%rax), %rax")
+                        store(instruction.dest)
+                        kinds[instruction.dest] = record_field_kinds.get(field, "unknown")
+                        if kinds[instruction.dest] == "text" and field in record_field_lengths:
+                            text_lengths[instruction.dest] = record_field_lengths[field]
                 else:
-                    if len(arguments) != 2:
-                        raise NativeBackendError("x86_64-linux RecordGet requires record and field")
-                    lines.append(f"    mov {8 + slot * 8}(%rax), %rax")
-                    store(instruction.dest)
-                    kinds[instruction.dest] = record_field_kinds.get(field, "unknown")
-                    if kinds[instruction.dest] == "text" and field in record_field_lengths:
-                        text_lengths[instruction.dest] = record_field_lengths[field]
+                    result_kind = "record"
+                    if call_name == "RecordGet":
+                        field_kinds = {record_field_kinds.get(field, "unknown") for field in ordered_fields}
+                        if len(field_kinds) != 1 or "unknown" in field_kinds:
+                            raise NativeBackendError(
+                                "x86_64-linux runtime RecordGet requires fields with one known value kind"
+                            )
+                        result_kind = next(iter(field_kinds))
+                    unique = len(lines)
+                    dispatch_labels = {
+                        field: f".Lkuro_record_field_{unique}_{index}"
+                        for index, field in enumerate(ordered_fields)
+                    }
+                    done_label = f".Lkuro_record_field_done_{unique}"
+                    load(arguments[1], "%r8")
+                    for field in ordered_fields:
+                        literal_labels = text_constant_labels.get(field, [])
+                        if not literal_labels:
+                            raise NativeBackendError(
+                                f"x86_64-linux cannot dispatch runtime field name {field!r}"
+                            )
+                        for literal_label in literal_labels:
+                            lines.extend([
+                                f"    lea {literal_label}(%rip), %r9",
+                                "    cmp %r9, %r8",
+                                f"    je {dispatch_labels[field]}",
+                            ])
+                    lines.append("    jmp .Lkuro_runtime_error")
+                    for field in ordered_fields:
+                        lines.append(f"{dispatch_labels[field]}:")
+                        load(arguments[0], "%rax")
+                        if call_name == "RecordSet":
+                            load(arguments[2], "%rdx")
+                            lines.append(f"    mov %rdx, {8 + field_slots[field] * 8}(%rax)")
+                        else:
+                            lines.append(f"    mov {8 + field_slots[field] * 8}(%rax), %rax")
+                        store(instruction.dest)
+                        lines.append(f"    jmp {done_label}")
+                    lines.append(f"{done_label}:")
+                    kinds[instruction.dest] = result_kind
+                    if call_name == "RecordSet":
+                        value_kind = kinds.get(arguments[2], "unknown")
+                        value_length = text_lengths.get(arguments[2])
+                        for field in ordered_fields:
+                            previous_kind = record_field_kinds.get(field, "unknown")
+                            record_field_kinds[field] = (
+                                value_kind if previous_kind == value_kind else "unknown"
+                            )
+                            previous_length = record_field_lengths.get(field)
+                            if (
+                                previous_kind == value_kind == "text"
+                                and previous_length is not None
+                                and previous_length == value_length
+                            ):
+                                record_field_lengths[field] = value_length
+                            else:
+                                record_field_lengths.pop(field, None)
+                    elif result_kind == "text":
+                        lengths = {record_field_lengths.get(field) for field in ordered_fields}
+                        if len(lengths) == 1 and None not in lengths:
+                            text_lengths[instruction.dest] = next(iter(lengths))
+                        else:
+                            text_lengths.pop(instruction.dest, None)
             elif call_name == "MakeClosure":
                 if len(arguments) != 1 or arguments[0] not in known_text or known_text[arguments[0]] not in ir.functions:
                     raise NativeBackendError("x86_64-linux MakeClosure requires a statically known action")

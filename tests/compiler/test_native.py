@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from compiler.native import build_native, emit_x86_64_linux, emit_x86_64_macos
+from compiler.native import NativeBackendError, build_native, emit_x86_64_linux, emit_x86_64_macos
 from compiler.pipeline import compile_source
 
 
@@ -540,6 +540,38 @@ def test_native_backend_supports_record_field_abi(tmp_path):
     build_native(result.ir, executable)
     run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
     assert run.stdout == "Kuro\n7\n"
+
+
+@requires_linux_x86_64
+@pytest.mark.parametrize("choice, field, initial_value", [(1, "name", 1), (0, "rank", 2)])
+def test_native_backend_dispatches_branch_selected_record_fields(tmp_path, choice, field, initial_value):
+    result = compile_source(
+        f'Store = 0; Choice = {choice}; Field = "";\n'
+        'Call MakeRecord "User"; Update Store to @_;\n'
+        'Call RecordSet Store, "name", 1;\n'
+        'Call RecordSet Store, "rank", 2;\n'
+        'If Choice is equal to 1; Update Field to "name";\n'
+        'Else; Update Field to "rank"; Done.\n'
+        'Call RecordGet Store, Field; Print @_.\n'
+        'Call RecordSet Store, Field, 42;\n'
+        f'Call RecordGet Store, "{field}"; Print @_.\n'
+    )
+    assert result.ok
+    executable = tmp_path / "dynamic-record-fields"
+    build_native(result.ir, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == f"{initial_value}\n42\n"
+
+
+def test_native_backend_rejects_unbounded_runtime_record_field_name():
+    result = compile_source(
+        'Store = 0; Field = "name" + "suffix";\n'
+        'Call MakeRecord "User"; Update Store to @_;\n'
+        'Call RecordGet Store, Field; Print @_.\n'
+    )
+    assert result.ok
+    with pytest.raises(NativeBackendError, match="statically bounded field-name set"):
+        emit_x86_64_linux(result.ir)
 
 
 def test_native_backend_supports_map_abi_for_known_keys(tmp_path):
