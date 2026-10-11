@@ -1857,7 +1857,19 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 collection_kinds.setdefault(name, "text")
         elif op == "CALL":
             call_name, *arguments = instruction.args
-            if call_name == "MakeMap" and not arguments:
+            if call_name == "MakeEnum":
+                if len(arguments) != 2 or any(argument not in known_text for argument in arguments):
+                    raise NativeBackendError("x86_64-linux MakeEnum requires known type and variant names")
+                enum_text = f"{known_text[arguments[0]]}.{known_text[arguments[1]]}"
+                label = f".Lkuro_data_{len(data)}"
+                encoded = enum_text.encode("utf-8")
+                data.append((label, encoded + b"\0"))
+                lines.append(f"    lea {label}(%rip), %rax")
+                store(instruction.dest)
+                kinds[instruction.dest] = "text"
+                text_lengths[instruction.dest] = len(encoded)
+                known_text[instruction.dest] = enum_text
+            elif call_name == "MakeMap" and not arguments:
                 label = map_dest_labels.get(instruction.dest)
                 if label is None:
                     raise NativeBackendError("x86_64-linux MakeMap requires a destination")
