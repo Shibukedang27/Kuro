@@ -88,3 +88,4 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 ## Next concrete step
 
 Implement native formatting for computed float results with tests that verify numeric value and exact output, not only preserved source-literal spellings. Then continue differential native/runtime conformance and update this page with each pushed result; this PR stack is not completion of the independence goal.
+- **Local Linux x86-64 full suite on the current stacked branch:** 638 passed, 19 skipped, 0 failed.
