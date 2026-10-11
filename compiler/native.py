@@ -1583,7 +1583,11 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 lines.append(f"    mov ${len(values)}, %rax")
                 lines.append(f"    mov %rax, {collection_lengths[name]}(%rip)")
                 kinds[name] = "collection"
-                collection_kinds[name] = "text" if values and all(kinds.get(value) == "text" for value in values) else "number"
+                collection_kinds[name] = (
+                    "text" if values and all(kinds.get(value) == "text" for value in values)
+                    else "float" if values and all(kinds.get(value) == "float" for value in values)
+                    else "number"
+                )
             elif len(values) == 1 and values[0] in map_alias:
                 load(values[0]); store(name)
                 map_alias[name] = map_alias[values[0]]
@@ -1699,9 +1703,21 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             text_length_refs[name] = input_lengths[name]
         elif op == "ADD":
             name, value = instruction.args
-            load(name, "%rax"); load(value, "%rcx")
-            lines.append("    add %rcx, %rax"); store(name)
-            kinds[name] = "number"
+            if kinds.get(name) in {"number", "float"} and kinds.get(value) in {"number", "float"} and (kinds.get(name) == "float" or kinds.get(value) == "float"):
+                if kinds.get(name) == "float":
+                    load(name, "%rax"); lines.append("    movq %rax, %xmm0")
+                else:
+                    load(name, "%rax"); lines.append("    cvtsi2sd %rax, %xmm0")
+                if kinds.get(value) == "float":
+                    load(value, "%rax"); lines.append("    movq %rax, %xmm1")
+                else:
+                    load(value, "%rax"); lines.append("    cvtsi2sd %rax, %xmm1")
+                lines.extend(["    addsd %xmm1, %xmm0", "    movq %xmm0, %rax"])
+                store(name); kinds[name] = "float"
+            else:
+                load(name, "%rax"); load(value, "%rcx")
+                lines.append("    add %rcx, %rax"); store(name)
+                kinds[name] = "number"
         elif op == "BINOP":
             operator, left, right = instruction.args
             if operator == "+" and kinds.get(left) == "text" and kinds.get(right) == "text":
@@ -2199,6 +2215,8 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 ])
             elif kind == "number":
                 load(name); lines.append("    call _kuro_print_int")
+            elif kind == "float":
+                load(name); lines.append("    call _kuro_print_float")
             elif kind == "collection":
                 if collection_kinds.get(collection_name) == "text":
                     # Linux syscall clobbers %rcx, so reload the collection
@@ -2217,6 +2235,19 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                         "    mov $1, %rax", "    mov $1, %rdi", "    syscall",
                         "    inc %r8", "    jmp .Lkuro_print_text_collection",
                         ".Lkuro_print_collection_done:",
+                    ])
+                elif collection_kinds.get(collection_name) == "float":
+                    unique = len(lines)
+                    loop_label = f".Lkuro_print_float_collection_{unique}"
+                    done_label = f".Lkuro_print_float_collection_done_{unique}"
+                    lines.extend([
+                        "    xor %r8d, %r8d",
+                        f"    lea {collection_buffers[collection_name]}(%rip), %r9",
+                        f"{loop_label}:",
+                        f"    mov {collection_lengths[collection_name]}(%rip), %rcx",
+                        "    cmp %rcx, %r8", f"    jae {done_label}",
+                        "    mov (%r9,%r8,8), %rax", "    push %r9", "    call _kuro_print_float", "    pop %r9",
+                        "    inc %r8", f"    jmp {loop_label}", f"{done_label}:",
                     ])
                 else:
                     lines.extend([
@@ -2706,6 +2737,8 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                         f"{number_label}:", "    mov %rsi, %rax", "    call _kuro_print_int",
                         f"{done_label}:",
                     ])
+                elif fn_kinds.get(name) == "float":
+                    fn_load(name); lines.append("    call _kuro_print_float")
                 else:
                     fn_load(name); lines.append("    call _kuro_print_int")
             elif fn_op == "JUMPF":
@@ -2749,6 +2782,41 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         "    cmpb $0, (%rdi,%rax,1)", "    je .Lkuro_strlen_done", "    inc %rax", "    jmp .Lkuro_strlen_loop",
         ".Lkuro_strlen_done:", "    ret",
     ])
+    lines.extend([
+        "_kuro_print_float:", "    push %rbp", "    mov %rsp, %rbp", "    sub $96, %rsp",
+        "    mov %rax, %r11", "    sar $63, %r11", "    mov %r11, -88(%rbp)",
+        "    btr $63, %rax", "    mov %rax, -96(%rbp)", "    movq %rax, %xmm0", "    cvttsd2si %xmm0, %rax",
+        "    mov %rax, -72(%rbp)", "    mov %rax, -56(%rbp)", "    cvtsi2sd %rax, %xmm1", "    subsd %xmm1, %xmm0",
+        "    mulsd .Lkuro_float_scale(%rip), %xmm0", "    addsd .Lkuro_float_round(%rip), %xmm0",
+        "    cvttsd2si %xmm0, %rax", "    movabs $100000000000000000, %r9",
+        "    cmp %r9, %rax", "    jne .Lkuro_print_float_frac_ready", "    incq -72(%rbp)", "    xor %eax, %eax",
+        ".Lkuro_print_float_frac_ready:", "    mov %rax, -80(%rbp)",
+        "    movq -96(%rbp), %xmm0", "    cvttsd2si %xmm0, %rax", "    cvtsi2sd %rax, %xmm1", "    subsd %xmm1, %xmm0",
+        "    mulsd .Lkuro_float_scale16(%rip), %xmm0", "    addsd .Lkuro_float_round(%rip), %xmm0", "    cvttsd2si %xmm0, %rax",
+        "    mov %rax, -64(%rbp)", "    movq -96(%rbp), %xmm0", "    cvttsd2si %xmm0, %rax", "    cvtsi2sd %rax, %xmm0",
+        "    mov -64(%rbp), %rax", "    cvtsi2sd %rax, %xmm1", "    divsd .Lkuro_float_scale16(%rip), %xmm1", "    addsd %xmm1, %xmm0",
+        "    movq %xmm0, %rax", "    cmp -96(%rbp), %rax", "    jne .Lkuro_print_float_use17",
+        "    mov -56(%rbp), %rax", "    mov %rax, -72(%rbp)", "    mov -64(%rbp), %rax", "    movabs $10000000000000000, %r9",
+        "    cmp %r9, %rax", "    jne .Lkuro_print_float_16_no_carry", "    incq -72(%rbp)", "    xor %eax, %eax",
+        ".Lkuro_print_float_16_no_carry:", "    mov %rax, -80(%rbp)", "    mov $16, %r10", "    jmp .Lkuro_print_float_format_fraction",
+        ".Lkuro_print_float_use17:", "    mov $17, %r10",
+        ".Lkuro_print_float_format_fraction:", "    lea -1(%rbp), %rsi", "    movb $10, (%rsi)", "    mov $1, %rcx",
+        "    mov -80(%rbp), %rax", "    test %rax, %rax", "    jnz .Lkuro_print_float_trim_start",
+        "    mov $1, %r10", "    jmp .Lkuro_print_float_trim_done",
+        ".Lkuro_print_float_trim_start:", "    mov $10, %r9",
+        ".Lkuro_print_float_trim:", "    xor %edx, %edx", "    div %r9", "    test %rdx, %rdx",
+        "    jne .Lkuro_print_float_trim_done", "    mov %rax, -80(%rbp)", "    dec %r10", "    jmp .Lkuro_print_float_trim",
+        ".Lkuro_print_float_trim_done:", "    mov -80(%rbp), %rax", "    mov $10, %r9",
+        ".Lkuro_print_float_fraction:", "    xor %edx, %edx", "    div %r9", "    add $48, %dl",
+        "    dec %rsi", "    mov %dl, (%rsi)", "    inc %rcx", "    dec %r10", "    jnz .Lkuro_print_float_fraction",
+        "    dec %rsi", "    movb $46, (%rsi)", "    inc %rcx",
+        ".Lkuro_print_float_integer:", "    mov -72(%rbp), %rax", "    mov $10, %r9",
+        ".Lkuro_print_float_integer_loop:", "    xor %edx, %edx", "    div %r9", "    add $48, %dl",
+        "    dec %rsi", "    mov %dl, (%rsi)", "    inc %rcx", "    test %rax, %rax", "    jnz .Lkuro_print_float_integer_loop",
+        "    cmpq $0, -88(%rbp)", "    je .Lkuro_print_float_write", "    dec %rsi", "    movb $45, (%rsi)", "    inc %rcx",
+        ".Lkuro_print_float_write:", "    mov $1, %rax", "    mov $1, %rdi", "    mov %rcx, %rdx", "    syscall",
+        "    leave", "    ret",
+    ])
     lines.extend([".section .bss", ".Lkuro_bss_begin:"])
     for label in collection_buffers.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero {NATIVE_COLLECTION_BYTES}"])
@@ -2787,7 +2855,13 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         lines.append(f"{label}: .byte {', '.join(str(byte) for byte in encoded)}")
     for label, value in float_data:
         lines.append(f"{label}: .double {value!r}")
-    lines.extend([".Lkuro_newline: .byte 10", ".Lkuro_rodata_end:"])
+    lines.extend([
+        "    .p2align 3",
+        ".Lkuro_float_scale: .double 100000000000000000.0",
+        ".Lkuro_float_scale16: .double 10000000000000000.0",
+        ".Lkuro_float_round: .double 0.5",
+        ".Lkuro_newline: .byte 10", ".Lkuro_rodata_end:",
+    ])
     return "\n".join(lines) + "\n"
 
 
