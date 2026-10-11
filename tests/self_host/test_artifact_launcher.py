@@ -1,3 +1,4 @@
+import platform
 import re
 import subprocess
 import pytest
@@ -51,6 +52,41 @@ def test_kuro_artifact_launcher_accepts_balanced_control_flow():
     assert env["ArtifactFailed"] == 0
     assert env["RuntimeExitCode"] == 0
     assert output == "yes\n"
+
+
+def test_kuro_artifact_launcher_executes_multi_value_assignment():
+    env, output = run_artifact(
+        "kuro.bytecode/1\n"
+        "BC_MULTI_BEGIN\n"
+        "BC_CONST\na\nBC_CONST\nb\nBC_CONST\nc\n"
+        "BC_STORE_MULTI\nItems\n"
+        "BC_LOADVAR\nItems\nBC_PRINT\n"
+        "BC_LENGTH\nItems\nBC_PRINT\n"
+    )
+
+    assert env["ArtifactFailed"] == 0
+    assert env["RuntimeExitCode"] == 0
+    assert output == "a\nb\nc\n3\n"
+
+
+@pytest.mark.skipif(platform.system() not in {"Darwin", "Linux"}, reason="requires a supported native backend")
+def test_native_artifact_launcher_executes_multi_value_reassignment(tmp_path):
+    from compiler.self_host import build_native_artifact_launcher
+
+    executable = tmp_path / "kuro-bytecode"
+    build_native_artifact_launcher(executable)
+    payload = (
+        "kuro.bytecode/1\n"
+        "BC_MULTI_BEGIN\nBC_CONST\nold1\nBC_CONST\nold2\nBC_STORE_MULTI\nItems\n"
+        "BC_MULTI_BEGIN\nBC_CONST\na\nBC_CONST\nb\nBC_CONST\nc\nBC_STORE_MULTI\nItems\n"
+        "BC_LOADVAR\nItems\nBC_PRINT\nBC_LENGTH\nItems\nBC_PRINT\n"
+    )
+    result = subprocess.run(
+        [str(executable)], input=payload, capture_output=True, text=True, timeout=20
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "a\nb\nc\n3\n"
 
 
 def test_kuro_artifact_launcher_rejects_wrong_magic():
@@ -171,7 +207,14 @@ def test_loader_rejects_unbalanced_structures(body):
     assert output == ""
 
 
-@pytest.mark.parametrize("body", ["BC_PRINT\n", "BC_CALL_BEGIN\nMissing\nBC_CALL_END\n"])
+@pytest.mark.parametrize(
+    "body",
+    [
+        "BC_PRINT\n",
+        "BC_CALL_BEGIN\nMissing\nBC_CALL_END\n",
+        "BC_MULTI_BEGIN\nBC_CONST\na\nBC_STORE_MULTI\nItems\n",
+    ],
+)
 def test_vm_preserves_runtime_failures(body):
     env, output = run_artifact("kuro.bytecode/1\n" + body)
     assert env["ArtifactFailed"] == 0

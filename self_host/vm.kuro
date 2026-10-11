@@ -22,12 +22,16 @@ VMValues = "__vm_empty__", "__vm_empty__";
 VMNameCount = 0;
 VMCollectionNames is Text;
 VMCollectionNames = "__vm_empty__", "__vm_empty__";
+# Negative IDs mark names that are not currently backed by a collection.
+VMCollectionIds is Integers;
+VMCollectionIds = -1, -1;
 VMCollectionCount = 0;
-VMCollectionOwners is Text;
+VMCollectionOwners is Integers;
 VMCollectionItems is Text;
-VMCollectionOwners = "__vm_empty__", "__vm_empty__";
+VMCollectionOwners = -1, -1;
 VMCollectionItems = "__vm_empty__", "__vm_empty__";
 VMCollectionEntryCount = 0;
+VMNextCollectionId = 0;
 VMStack is Text;
 VMStackKinds is Integers;
 VMOutput is Text;
@@ -35,6 +39,7 @@ VMOutputCount = 0;
 VMPos = 0;
 VMCodeLen = 0;
 VMTop = 0;
+VMStoreMulti_Base = 0;
 VMFailed = 0;
 VMCallPending = 0;
 VMCallName = "";
@@ -104,51 +109,119 @@ Action VMFindFrameName Name, SearchPos, EndPos;
     Done.
 Done.
 
-Action VMFindCollection Name, SearchPos;
-    If SearchPos is less than VMCollectionCount;
-        Get VMCollectionNames SearchPos;
-        If @_ is equal to Name;
-            Return SearchPos;
+Action VMFindCollectionSlot Name, SearchPos;
+    VMFindCollectionSlot_Pos = SearchPos;
+    VMFindCollectionSlot_Found = -1;
+    While VMFindCollectionSlot_Pos is less than VMCollectionCount and VMFindCollectionSlot_Found is less than 0;
+        Get VMCollectionNames VMFindCollectionSlot_Pos;
+        VMFindCollectionSlot_CurrentName = @_;
+        If VMFindCollectionSlot_CurrentName is equal to Name;
+            VMFindCollectionSlot_Found = VMFindCollectionSlot_Pos;
         Else;
-            Call VMFindCollection Name, SearchPos + 1;
-            Return @_;
+            Add 1 to VMFindCollectionSlot_Pos;
         Done.
-    Else;
-        Return -1;
     Done.
+    Return VMFindCollectionSlot_Found;
+Done.
+
+Action VMFindCollection Name, SearchPos;
+    VMFindCollection_Pos = SearchPos;
+    VMFindCollection_Found = -1;
+    While VMFindCollection_Pos is less than VMCollectionCount and VMFindCollection_Found is less than 0;
+        Get VMCollectionNames VMFindCollection_Pos;
+        VMFindCollection_CurrentName = @_;
+        If VMFindCollection_CurrentName is equal to Name;
+            Get VMCollectionIds VMFindCollection_Pos;
+            VMFindCollection_Id = @_;
+            If VMFindCollection_Id is greater than or equal to 0;
+                VMFindCollection_Found = VMFindCollection_Pos;
+            Else;
+                Add 1 to VMFindCollection_Pos;
+            Done.
+        Else;
+            Add 1 to VMFindCollection_Pos;
+        Done.
+    Done.
+    Return VMFindCollection_Found;
 Done.
 
 Action VMMarkCollection Name;
     Call VMFindCollection Name, 0;
     If @_ is less than 0;
-        If VMCollectionCount is less than 2;
-            Set VMCollectionNames VMCollectionCount to Name;
+        Call VMFindCollectionSlot Name, 0;
+        VMMarkCollection_Index = @_;
+        If VMMarkCollection_Index is less than 0;
+            VMMarkCollection_Index = VMCollectionCount;
+            If VMCollectionCount is less than 2;
+                Set VMCollectionNames VMMarkCollection_Index to Name;
+                Set VMCollectionIds VMMarkCollection_Index to VMNextCollectionId;
+            Else;
+                Append Name to VMCollectionNames;
+                Append VMNextCollectionId to VMCollectionIds;
+            Done.
+            Add 1 to VMCollectionCount;
         Else;
-            Append Name to VMCollectionNames;
+            Set VMCollectionIds VMMarkCollection_Index to VMNextCollectionId;
         Done.
-        Add 1 to VMCollectionCount;
+        Add 1 to VMNextCollectionId;
+    Done.
+Done.
+
+Action VMResetCollection Name;
+    Call VMFindCollectionSlot Name, 0;
+    VMResetCollection_Index = @_;
+    If VMResetCollection_Index is less than 0;
+        Call VMMarkCollection Name;
+    Else;
+        Set VMCollectionIds VMResetCollection_Index to VMNextCollectionId;
+        Add 1 to VMNextCollectionId;
+    Done.
+Done.
+
+Action VMDeactivateCollection Name;
+    Call VMFindCollectionSlot Name, 0;
+    VMDeactivateCollection_Index = @_;
+    If VMDeactivateCollection_Index is greater than or equal to 0;
+        Set VMCollectionIds VMDeactivateCollection_Index to -1;
     Done.
 Done.
 
 Action VMAppendCollectionItem Name, Value;
-    If VMCollectionEntryCount is less than 2;
-        Set VMCollectionOwners VMCollectionEntryCount to Name;
-        Set VMCollectionItems VMCollectionEntryCount to Value;
+    Call VMFindCollection Name, 0;
+    VMAppendCollection_Index = @_;
+    If VMAppendCollection_Index is less than 0;
+        VMFailed = 1;
     Else;
-        Append Name to VMCollectionOwners;
-        Append Value to VMCollectionItems;
+        Get VMCollectionIds VMAppendCollection_Index;
+        VMAppendCollection_Id = @_;
+        If VMCollectionEntryCount is less than 2;
+            Set VMCollectionOwners VMCollectionEntryCount to VMAppendCollection_Id;
+            Set VMCollectionItems VMCollectionEntryCount to Value;
+        Else;
+            Append VMAppendCollection_Id to VMCollectionOwners;
+            Append Value to VMCollectionItems;
+        Done.
+        Add 1 to VMCollectionEntryCount;
     Done.
-    Add 1 to VMCollectionEntryCount;
 Done.
 
 Action VMGetCollectionItem Name, WantedIndex;
+    Call VMFindCollection Name, 0;
+    VMGetCollectionItem_Index = @_;
+    VMGetCollectionItem_Id = -1;
+    If VMGetCollectionItem_Index is greater than or equal to 0;
+        Get VMCollectionIds VMGetCollectionItem_Index;
+        VMGetCollectionItem_Id = @_;
+    Else;
+        VMFailed = 1;
+    Done.
     VMGetCollectionItem_Pos = 0;
     VMGetCollectionItem_Seen = 0;
     VMGetCollectionItem_Found = 0;
     VMGetCollectionItem_Value = 0;
     While VMGetCollectionItem_Pos is less than VMCollectionEntryCount and VMGetCollectionItem_Found is equal to 0;
         Get VMCollectionOwners VMGetCollectionItem_Pos;
-        If @_ is equal to Name;
+        If @_ is equal to VMGetCollectionItem_Id;
             If VMGetCollectionItem_Seen is equal to WantedIndex;
                 Get VMCollectionItems VMGetCollectionItem_Pos;
                 VMGetCollectionItem_Value = @_;
@@ -166,11 +239,20 @@ Action VMGetCollectionItem Name, WantedIndex;
 Done.
 
 Action VMLengthCollection Name;
+    Call VMFindCollection Name, 0;
+    VMLengthCollection_Index = @_;
+    VMLengthCollection_Id = -1;
+    If VMLengthCollection_Index is greater than or equal to 0;
+        Get VMCollectionIds VMLengthCollection_Index;
+        VMLengthCollection_Id = @_;
+    Else;
+        VMFailed = 1;
+    Done.
     VMLengthCollection_Pos = 0;
     VMLengthCollection_Count = 0;
     While VMLengthCollection_Pos is less than VMCollectionEntryCount;
         Get VMCollectionOwners VMLengthCollection_Pos;
-        If @_ is equal to Name;
+        If @_ is equal to VMLengthCollection_Id;
             Add 1 to VMLengthCollection_Count;
         Done.
         Add 1 to VMLengthCollection_Pos;
@@ -179,12 +261,21 @@ Action VMLengthCollection Name;
 Done.
 
 Action VMSetCollectionItem Name, WantedIndex, Value;
+    Call VMFindCollection Name, 0;
+    VMSetCollectionItem_Index = @_;
+    VMSetCollectionItem_Id = -1;
+    If VMSetCollectionItem_Index is greater than or equal to 0;
+        Get VMCollectionIds VMSetCollectionItem_Index;
+        VMSetCollectionItem_Id = @_;
+    Else;
+        VMFailed = 1;
+    Done.
     VMSetCollectionItem_Pos = 0;
     VMSetCollectionItem_Seen = 0;
     VMSetCollectionItem_Found = 0;
     While VMSetCollectionItem_Pos is less than VMCollectionEntryCount and VMSetCollectionItem_Found is equal to 0;
         Get VMCollectionOwners VMSetCollectionItem_Pos;
-        If @_ is equal to Name;
+        If @_ is equal to VMSetCollectionItem_Id;
             If VMSetCollectionItem_Seen is equal to WantedIndex;
                 Set VMCollectionItems VMSetCollectionItem_Pos to Value;
                 VMSetCollectionItem_Found = 1;
@@ -200,15 +291,25 @@ Action VMSetCollectionItem Name, WantedIndex, Value;
 Done.
 
 Action VMCopyCollection SourceName, DestinationName;
-    Call VMMarkCollection DestinationName;
-    VMCopyCollection_Pos = 0;
-    While VMCopyCollection_Pos is less than VMCollectionEntryCount;
-        Get VMCollectionOwners VMCopyCollection_Pos;
-        If @_ is equal to SourceName;
-            Get VMCollectionItems VMCopyCollection_Pos;
-            Call VMAppendCollectionItem DestinationName, @_;
+    If SourceName is not equal to DestinationName;
+        Call VMFindCollection SourceName, 0;
+        VMCopyCollection_SourceIndex = @_;
+        If VMCopyCollection_SourceIndex is less than 0;
+            VMFailed = 1;
+        Else;
+            Get VMCollectionIds VMCopyCollection_SourceIndex;
+            VMCopyCollection_SourceId = @_;
+            Call VMResetCollection DestinationName;
+            VMCopyCollection_Pos = 0;
+            While VMCopyCollection_Pos is less than VMCollectionEntryCount;
+                Get VMCollectionOwners VMCopyCollection_Pos;
+                If @_ is equal to VMCopyCollection_SourceId;
+                    Get VMCollectionItems VMCopyCollection_Pos;
+                    Call VMAppendCollectionItem DestinationName, @_;
+                Done.
+                Add 1 to VMCopyCollection_Pos;
+            Done.
         Done.
-        Add 1 to VMCopyCollection_Pos;
     Done.
 Done.
 
@@ -302,6 +403,7 @@ Action VMStore Name, Value;
         Done.
     Done.
     If VMStore_WroteFrame is equal to 0;
+        Call VMDeactivateCollection Name;
         Call VMFindName Name, 0;
         VMStore_Index = @_;
         If VMStore_Index is greater than or equal to 0;
@@ -723,6 +825,10 @@ Action VMStep;
     Get BytecodeOut VMPos;
     VMStep_Op = @_;
     Add 1 to VMPos;
+    If VMStep_Op is equal to "BC_MULTI_BEGIN";
+        VMStoreMulti_Base = VMTop;
+        Return 0;
+    Done.
     If VMStep_Op is equal to "BC_IF_BEGIN";
         Call VMPop;
         If @_ is equal to 0;
@@ -823,6 +929,31 @@ Action VMStep;
         Else;
             Call VMStore VMStep_Name, VMStep_Value;
         Done.
+        Return 0;
+    Done.
+    If VMStep_Op is equal to "BC_STORE_MULTI";
+        Call VMReadOperand;
+        VMStep_Name = @_;
+        VMStoreMulti_Count = VMTop - VMStoreMulti_Base;
+        If VMStoreMulti_Count is greater than 1;
+            Call VMResetCollection VMStep_Name;
+            VMStoreMulti_Pos = VMStoreMulti_Base;
+            While VMStoreMulti_Pos is less than VMTop and VMFailed is equal to 0;
+                Get VMStackKinds VMStoreMulti_Pos;
+                If @_ is equal to 1;
+                    VMFailed = 1;
+                Else;
+                    Get VMStack VMStoreMulti_Pos;
+                    VMStoreMulti_Value = @_;
+                    Call VMAppendCollectionItem VMStep_Name, VMStoreMulti_Value;
+                Done.
+                Add 1 to VMStoreMulti_Pos;
+            Done.
+            VMTop = VMStoreMulti_Base;
+        Else;
+            VMFailed = 1;
+        Done.
+        VMStoreMulti_Base = 0;
         Return 0;
     Done.
     If VMStep_Op is equal to "BC_DECLTYPE";
