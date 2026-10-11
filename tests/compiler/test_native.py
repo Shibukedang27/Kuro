@@ -712,6 +712,71 @@ def test_native_backend_captures_and_updates_map_via_closure(tmp_path):
     assert run.stdout == "1\n42\n42\n"
 
 
+@requires_linux_x86_64
+def test_native_backend_captures_collections_for_indexed_closure_access(tmp_path):
+    result = compile_source(
+        'Values = 10, 20, 30; Other = 1, 2, 3;\n'
+        'AliasValues = Values; AliasOther = 0; First = 0; Second = 0;\n'
+        'Update AliasOther to Other;\n'
+        'Action MakeAccess Bag;\n'
+        'Action Modify Index; Current = 0;\n'
+        'Get Bag Index; Update Current to @_; Add 1 to Current;\n'
+        'Set Bag Index to Current; Return Current; Done.\n'
+        'Call MakeClosure "Modify"; Return @_; Done.\n'
+        'Call MakeAccess AliasValues; Update First to @_;\n'
+        'Call MakeAccess AliasOther; Update Second to @_;\n'
+        'Call Invoke First, 1; Print @_.\n'
+        'Call Invoke Second, 0; Print @_.\n'
+        'Get Values 1; Print @_. Get Other 0; Print @_.\n'
+    )
+    assert result.ok
+    executable = tmp_path / "captured-collection-index-update"
+    build_native(result.ir, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "21\n2\n21\n2\n"
+
+
+@requires_linux_x86_64
+def test_native_backend_captures_text_collections_for_indexed_reads(tmp_path):
+    result = compile_source(
+        'Values = "red", "blue"; Reader = 0;\n'
+        'Action MakeReader Bag;\n'
+        'Action Read Index; Get Bag Index; Print @_. Return Index; Done.\n'
+        'Call MakeClosure "Read"; Return @_; Done.\n'
+        'Call MakeReader Values; Update Reader to @_;\n'
+        'Call Invoke Reader, 1; Print @_.\n'
+    )
+    assert result.ok
+    executable = tmp_path / "captured-text-collection-read"
+    build_native(result.ir, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "blue\n1\n"
+
+
+@pytest.mark.parametrize(
+    ("values", "operation", "message"),
+    [
+        ("1, 2", "Length Bag;", "LENGTH does not yet support captured collection lengths"),
+        ("1, 2", "Append 3 to Bag;", "APPEND does not yet support captured collection length metadata"),
+        ("1, 2", 'Set Bag 0 to "wrong";', "SET value kind must match the known element kind"),
+        ('"a", "b"', 'Set Bag 0 to "longer";', "does not yet update text item lengths"),
+    ],
+)
+def test_native_backend_rejects_captured_collection_operations_without_length_metadata(
+    values, operation, message
+):
+    result = compile_source(
+        f'Values = {values}; Reader = 0;\n'
+        'Action MakeAccess Bag;\n'
+        f'Action Read Dummy; {operation} Return Dummy; Done.\n'
+        'Call MakeClosure "Read"; Return @_; Done.\n'
+        'Call MakeAccess Values; Update Reader to @_;\n'
+    )
+    assert result.ok
+    with pytest.raises(NativeBackendError, match=message):
+        emit_x86_64_linux(result.ir)
+
+
 def test_native_backend_rejects_closure_value_capture():
     result = compile_source(
         'Stored = 0; Holder = 0;\n'
@@ -723,7 +788,7 @@ def test_native_backend_rejects_closure_value_capture():
         'Call MakeHolder Stored; Update Holder to @_;\n'
     )
     assert result.ok
-    with pytest.raises(NativeBackendError, match="numeric, text, record, or map captures only"):
+    with pytest.raises(NativeBackendError, match="numeric, text, record, map, or collection captures only"):
         emit_x86_64_linux(result.ir)
 
 
@@ -738,7 +803,7 @@ def test_native_backend_rejects_mixed_numeric_capture_kinds():
         'Call Invoke First, 2.5; Print @_.\n'
     )
     assert result.ok
-    with pytest.raises(NativeBackendError, match="numeric, text, record, or map captures only"):
+    with pytest.raises(NativeBackendError, match="numeric, text, record, map, or collection captures only"):
         emit_x86_64_linux(result.ir)
 
 
