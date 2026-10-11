@@ -210,6 +210,36 @@ def test_kuro_vm_decodes_multi_digit_and_decimal_constants():
     assert env["VMOutput"] == [3.25]
     assert env["VMOutputDisplay"] == ["3.25"]
 
+    env = run_kuro_vm_environment("Action Echo Value; Return Value; Done. Call Echo 3.25; Print @_.")
+    assert env["VMFailed"] in (None, 0)
+    assert env["VMOutput"] == [3.25]
+    assert env["VMOutputDisplay"] == ["3.25"]
+
     output, failed = run_kuro_vm("Print 12 + 30.")
     assert failed in (None, 0)
     assert output == [42]
+
+
+def test_kuro_vm_preserves_decimal_display_in_collection_items():
+    cases = [
+        ("Amounts = 3.25, 4.5; Print Amounts.", [3.25, 4.5], ["3.25", "4.5"]),
+        ("Amounts = 1.0, 2.0; Get Amounts 0; Print @_.", [1.0], ["1.0"]),
+        ("Amounts = 1.0, 2.0; Set Amounts 1 to 3.25; Print Amounts.", [1.0, 3.25], ["1.0", "3.25"]),
+        ("Amounts = 3.25, 4.5; Copy = Amounts; Print Copy.", [3.25, 4.5], ["3.25", "4.5"]),
+        ("Amounts = 1.0, 2.0; Append 3.25 to Amounts; Print Amounts.", [1.0, 2.0, 3.25], ["1.0", "2.0", "3.25"]),
+    ]
+    for source, values, displays in cases:
+        env = run_kuro_vm_environment(source)
+        assert env["VMFailed"] in (None, 0), source
+        assert env["VMOutput"] == values, source
+        assert env["VMOutputDisplay"] == displays, source
+
+
+def test_kuro_vm_clears_stale_decimal_display_after_integer_overwrite():
+    env = run_kuro_vm_environment("Amount = 3.25; Amount = 4; Print Amount.")
+    assert env["VMOutput"] == [4]
+    assert env["VMOutputDisplay"] == [""]
+
+    env = run_kuro_vm_environment("Amounts = 1.25, 2.5; Set Amounts 0 to 7; Print Amounts.")
+    assert env["VMOutput"] == [7, 2.5]
+    assert env["VMOutputDisplay"] == ["", "2.5"]

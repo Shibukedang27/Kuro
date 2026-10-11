@@ -402,6 +402,35 @@ def test_native_backend_runtime_preserves_decimal_through_action_argument(tmp_pa
     assert run.stdout.endswith("3.25\n")
 
 
+def test_native_backend_runtime_preserves_decimal_through_action_return(tmp_path):
+    from compiler.self_host import build_native_runtime
+
+    executable = tmp_path / "kuro-native-runtime-decimal-action-return"
+    source = "Action Echo Value; Return Value; Done. Call Echo 3.25; Print @_."
+    build_native_runtime(source, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout.endswith("3.25\n")
+
+
+def test_native_backend_runtime_prints_decimal_collection_items(tmp_path):
+    from compiler.self_host import build_native_runtime
+
+    executable = tmp_path / "kuro-native-runtime-decimal-collection"
+    build_native_runtime("Amounts = 3.25, 4.5; Print Amounts.", executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "3.25\n4.5\n"
+
+
+def test_native_backend_runtime_clears_stale_decimal_display_on_overwrite(tmp_path):
+    from compiler.self_host import build_native_runtime
+
+    executable = tmp_path / "kuro-native-runtime-decimal-overwrite"
+    source = "Amount = 3.25; Amount = 4; Print Amount.\nAmounts = 1.25, 2.5; Set Amounts 0 to 7; Print Amounts."
+    build_native_runtime(source, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "4\n7\n2.5\n"
+
+
 def test_native_backend_supports_enum_value_abi(tmp_path):
     result = compile_source('Enum Color Red, Green;\nCall MakeEnum "Color", "Green";\nPrint @_.')
     assert result.ok

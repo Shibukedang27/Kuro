@@ -15,9 +15,9 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 
 ## Current state
 
-- **All PRs #2–#21 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
-- **GitHub CI:** PRs #2–#20 each have 8/8 successful checks; PR #21's current check state is available on its linked pull-request page.
-- **Local Linux x86-64 full suite on the current stacked branch:** 633 passed, 19 skipped, 0 failed.
+- **All PRs #2–#22 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
+- **GitHub CI:** PRs #2–#21 each have 8/8 successful checks; PR #22's current check state is available on its linked pull-request page.
+- **Local Linux x86-64 full suite on the current stacked branch:** 636 passed, 19 skipped, 0 failed.
 - The Kuro-authored compiler and launcher already provide Python-free execution of compiled bytecode, but Python remains in the bootstrap/image-construction and development path. Native image construction still invokes system assembler/linker tools.
 - Linux x86-64 native support remains experimental and incomplete. The newer closure/task path is statically bounded; it is not a general dynamic closure environment or parallel task scheduler.
 
@@ -45,6 +45,7 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 | [#19](https://github.com/Shibukedang27/Kuro/pull/19) | Support deterministic tasks in the Linux native backend | Open; 8/8 checks passing |
 | [#20](https://github.com/Shibukedang27/Kuro/pull/20) | Preserve decimal constants in Linux native runtime output | Open; 8/8 checks passing |
 | [#21](https://github.com/Shibukedang27/Kuro/pull/21) | Preserve decimal spelling through VM assignments | Open; see live CI status |
+| [#22](https://github.com/Shibukedang27/Kuro/pull/22) | Preserve decimal spelling in VM collections and returns | Open; see live CI status |
 
 The PR descriptions contain the detailed intent, implementation, test outcomes, and explicit limits for each batch. The dependency chain is deliberate: review and merge in dependency order if accepting the changes.
 
@@ -52,7 +53,7 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 
 ### 1. Close the native/runtime parity gaps
 
-- PR #20 preserves an unchanged decimal constant's value and spelling; PR #21 carries that spelling through scalar assignment/reload and action arguments. General formatting for computed floats and decimals inside collections remains open; expand parity coverage across arithmetic, formatting, and round trips.
+- PR #20 preserves an unchanged decimal constant's value and spelling; PR #21 carries it through scalar assignment/reload and action arguments; PR #22 carries it through collection operations and action returns. General formatting for computed floats remains open; expand parity coverage across arithmetic, formatting, and round trips.
 - Continue differential conformance testing across the hosted compiler, Kuro-authored bytecode compiler/VM, launcher, and native backends; each mismatch should become a minimal regression test and a focused PR.
 - Replace bounded per-callsite task storage with semantics that remain correct under loops and multiple task instances; determine and implement the intended scheduler behavior.
 - Expand closure support beyond statically known actions where the language semantics require dynamic targets or captured environments.
@@ -86,4 +87,5 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 
 ## Next concrete step
 
-Implement native formatting for computed float results and collection-held decimals with tests that verify numeric value and exact output, not only preserved source-literal spellings. Then continue differential native/runtime conformance and update this page with each pushed result; this PR stack is not completion of the independence goal.
+Implement native formatting for computed float results with tests that verify numeric value and exact output, not only preserved source-literal spellings. Then continue differential native/runtime conformance and update this page with each pushed result; this PR stack is not completion of the independence goal.
+- **Local Linux x86-64 full suite on the current stacked branch:** 638 passed, 19 skipped, 0 failed.
