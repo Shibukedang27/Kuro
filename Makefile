@@ -6,11 +6,10 @@ NATIVE_TARGET ?= aarch64-macos
 test:
 	$(PYTHON) -m pytest -q
 
-native:
-	NATIVE_TARGET=$(NATIVE_TARGET) ./bootstrap/build-native-images.sh
+native: native-hosted-bootstrap
 
-# Transitional Python-hosted builder for targets without a runnable native
-# seed. Remove it after native stage-0 seeds are available for those targets.
+# Keep full native image construction on the hosted backend until Kuro-owned
+# codegen can lower the compiler and runtime bytecode without Python.
 native-hosted-bootstrap:
 	$(PYTHON) -c 'from compiler.self_host import build_native_artifact_launcher, build_native_codegen, build_native_compiler, build_native_runtime; build_native_compiler(None, "dist/kuro-compiler", target="$(NATIVE_TARGET)"); build_native_runtime(None, "dist/kuro-runtime", target="$(NATIVE_TARGET)"); build_native_artifact_launcher("dist/kuro-bytecode", target="$(NATIVE_TARGET)"); build_native_codegen("dist/kuro-codegen", target="$(NATIVE_TARGET)"); print("hosted bootstrap images rebuilt")'
 

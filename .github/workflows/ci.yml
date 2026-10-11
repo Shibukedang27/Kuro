@@ -32,33 +32,6 @@ jobs:
       - name: Install Kuro
         run: python -m pip install -e .
 
-      # Temporary one-time refresh: commit these outputs as the current native
-      # bootstrap seeds, then remove this hosted step and artifact upload.
-      - name: Refresh macOS ARM64 native bootstrap seeds
-        if: matrix.python-version == '3.12'
-        run: make native-hosted-bootstrap PYTHON=python NATIVE_TARGET=aarch64-macos
-
-      - name: Upload refreshed macOS ARM64 native seeds
-        if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v4
-        with:
-          name: kuro-macos-arm64-native-seeds
-          path: |
-            dist/kuro-bytecode
-            dist/kuro-bytecode.s
-            dist/kuro-codegen
-            dist/kuro-codegen.s
-            dist/kuro-compiler
-            dist/kuro-compiler.s
-            dist/kuro-compiler.source.kuro
-            dist/kuro-runtime
-            dist/kuro-runtime.s
-          if-no-files-found: error
-
-      - name: Rebuild native images from Kuro sources without Python
-        if: matrix.python-version == '3.12'
-        run: sh tests/self_host/python_free_native_build.sh
-
       - name: Run tests
         run: python -m pytest -q
 
