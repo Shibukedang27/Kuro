@@ -47,5 +47,5 @@ def test_native_compiler_verification_accepts_existing_image():
     image = root / "dist" / "kuro-compiler"
     if not image.is_file():
         return
-    report = verify_native_compiler('Print "prebuilt".', image=image)
+    report = verify_native_compiler("Print 7.", image=image)
     assert report["failed"] == 0

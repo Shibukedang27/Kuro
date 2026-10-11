@@ -1,6 +1,6 @@
 # Kuro independence status and roadmap
 
-**Updated:** 2026-10-11  
+**Updated:** 2026-10-12
 **Status:** In progress; Kuro is not yet entirely independent.
 
 This is the running index for the independence work. Each implementation batch is published as a reviewable GitHub pull request with its own change summary, rationale, verification results, and known limits. Keep this page current as follow-up work is pushed.
@@ -16,8 +16,8 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 ## Current state
 
 - **All PRs #2–#39 are open and unmerged.** `main` is unchanged; the stack is submitted for inspection and review, not silently integrated.
-- **GitHub CI:** PRs #2–#38 have 8/8 successful checks. PR #39 is open; verify its eight-check matrix before advancing the stack.
-- **Full-suite checkpoint:** 685 passed, 19 skipped, 0 failed on the current `feat/text-tail-bootstrap` candidate (2026-10-11).
+- **GitHub CI:** PRs #2–#38 have 8/8 successful checks. PR #39’s first matrix run exposed a stale-image compatibility probe and a macOS ARM64 large-suffix crash; the current candidate fixes both, and its updated eight-check matrix must pass before advancing the stack.
+- **Full-suite checkpoint:** 685 passed, 19 skipped, 0 failed on the current `feat/text-tail-bootstrap` candidate (2026-10-12).
 - Linux CI builds static native production images, then blocks Python and host toolchains from `PATH` while testing `doctor`, source run/compile, bytecode execution, and codegen. PR #38 adds the stage-1 compiler bootstrap probe; PR #39 extends this to a stage-2 full-source rebuild whose bytecode matches stage 1 exactly. Clean-checkout image bootstrap remains Python-hosted, and native image construction still invokes the system assembler/linker.
 - Linux x86-64 native support remains experimental and incomplete. Closures dispatch at runtime among compile-time-known targets; action-created closures carry per-instance environments allocated from a syscall-grown `brk` heap in 4 KiB pages, with no fixed 128-object cap. Integer, float, NUL-terminated text, record-reference, map-reference, and collection-reference captures are supported; indexed captured-collection reads and same-kind writes are covered, while closure values and other capture kinds remain unsupported. Closure actions can read and update record fields using literal names when the field kind was established earlier; text-field writes remain rejected because variable display lengths are not tracked. Map actions support `MapHas`, `MapGet`, and same-kind `MapSet` with literal keys whose kinds are known; text-value writes remain rejected because variable display lengths are not tracked. Arbitrary runtime field names and map keys remain unsupported inside closure actions. Action returns may merge statically known closure targets across branches when every return path is known; mixed closure/scalar paths are rejected. Allocated pages remain live until process exit; reclamation, broader control-flow cases, and dynamically created targets remain open. Main-program record fields support runtime selection among statically known literal names when selected values have one known kind. Tasks remain statically bounded and are not a parallel scheduler.
 
@@ -62,7 +62,7 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 | [#36](https://github.com/Shibukedang27/Kuro/pull/36) | Compose native compiler source without Python | Open; 8/8 checks passing |
 | [#37](https://github.com/Shibukedang27/Kuro/pull/37) | Link Linux native images without a dynamic loader | Open; 8/8 checks passing |
 | [#38](https://github.com/Shibukedang27/Kuro/pull/38) | Verify Python-free stage-one compiler bootstrap | Open; 8/8 checks passing |
-| [#39](https://github.com/Shibukedang27/Kuro/pull/39) | Prove exact Python-free stage-two compiler self-rebuild | Open; CI status tracked on GitHub |
+| [#39](https://github.com/Shibukedang27/Kuro/pull/39) | Prove exact Python-free stage-two compiler self-rebuild | Open; current candidate includes macOS ARM64 suffix fix; 8/8 revalidation pending |
 
 The PR descriptions contain the detailed intent, implementation, test outcomes, and explicit limits for each batch. The dependency chain is deliberate: review and merge in dependency order if accepting the changes.
 

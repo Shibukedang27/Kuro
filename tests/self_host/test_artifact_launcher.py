@@ -163,6 +163,18 @@ def test_native_artifact_launcher_preserves_large_input_and_runs_suffix_opcode(t
     assert typed_text.stdout == "1\n"
 
     payload = "Q" * 70000 + "tail-END"
+    loader_only_input = (
+        "kuro.bytecode/1\n"
+        "BC_INPUT\nFirst\nBC_LENGTH\nFirst\nBC_PRINT\n"
+        "kuro.input/1\n" + payload
+    )
+    loader_only = subprocess.run(
+        [str(executable)], input=loader_only_input, capture_output=True,
+        text=True, timeout=60,
+    )
+    assert loader_only.returncode == 0, f"large loader extraction: {loader_only.stderr}"
+    assert loader_only.stdout == f"{len(payload)}\n"
+
     framed = (
         "kuro.bytecode/1\n"
         "BC_INPUT\nFirst\nBC_LENGTH\nFirst\nBC_PRINT\n"

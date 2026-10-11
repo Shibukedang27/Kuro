@@ -149,6 +149,11 @@ def supported_native_targets() -> tuple[str, ...]:
 def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
     """Lower the straight-line IR/control-flow subset to real arm64 code."""
     instructions = ir.main
+    artifact_suffix_needed = any(item.op == "ARTIFACT_SUFFIX" for item in instructions) or any(
+        item.op == "ARTIFACT_SUFFIX"
+        for function in ir.functions.values()
+        for item in function.body
+    )
     collection_names = {
         item.args[0]
         for item in instructions
@@ -502,21 +507,9 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
             source, offset = item.args
             if source not in main_statically_text:
                 raise NativeBackendError("native ARTIFACT_SUFFIX requires a statically known Text source")
-            suffix_error = f"L_kuro_suffix_error_{len(lines)}"
-            suffix_done = f"L_kuro_suffix_done_{len(lines)}"
             load(source, "x0")
             load(offset, "x1")
-            lines.extend([
-                "    cmp x1, #0", f"    b.lt {suffix_error}",
-                "    sub sp, sp, #48", "    str x0, [sp]", "    str x1, [sp, #8]",
-                "    bl _strlen", "    ldr x1, [sp, #8]", "    cmp x1, x0", f"    b.hi {suffix_error}",
-                "    sub x2, x0, x1", "    str x2, [sp, #16]", "    add x0, x2, #1", "    bl _malloc",
-                f"    cbz x0, {suffix_error}", "    str x0, [sp, #24]",
-                "    ldr x0, [sp, #24]", "    ldr x1, [sp]", "    ldr x2, [sp, #8]", "    add x1, x1, x2",
-                "    ldr x2, [sp, #16]", "    bl _memcpy", "    ldr x0, [sp, #24]", "    ldr x2, [sp, #16]",
-                "    strb wzr, [x0, x2]", "    add sp, sp, #48", f"    b {suffix_done}",
-                f"{suffix_error}:", "    mov w0, #1", "    bl _exit", "    brk #0", f"{suffix_done}:",
-            ])
+            lines.append("    bl _kuro_artifact_suffix")
             store(item.dest)
             kinds[item.dest] = "text"
         elif op == "SET":
@@ -819,8 +812,68 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
         "    ldp x19, x20, [sp], #16",
         "    ldp x29, x30, [sp], #16",
         "    ret",
-        ".section __TEXT,__cstring",
     ])
+    if artifact_suffix_needed:
+        lines.extend([
+            ".section __TEXT,__text",
+            "_kuro_artifact_suffix:",
+            "    stp x29, x30, [sp, #-16]!",
+            "    sub sp, sp, #48",
+            "    str x0, [sp]",
+            "    str x1, [sp, #8]",
+            "    cmp x1, #0",
+            "    b.lt L_kuro_artifact_suffix_error",
+            "    bl _strlen",
+            "    ldr x1, [sp, #8]",
+            "    cmp x1, x0",
+            "    b.hi L_kuro_artifact_suffix_error",
+            "    sub x2, x0, x1",
+            "    str x2, [sp, #16]",
+            "    add x3, x2, #1",
+            "    adrp x4, _kuro_text_heap_cursor@PAGE",
+            "    add x4, x4, _kuro_text_heap_cursor@PAGEOFF",
+            "    ldr x5, [x4]",
+            "    str x5, [sp, #32]",
+            f"    mov x6, #{NATIVE_TEXT_HEAP_CAPACITY}",
+            "    cmp x5, x6",
+            "    b.hi L_kuro_artifact_suffix_error",
+            "    sub x6, x6, x5",
+            "    cmp x3, x6",
+            "    b.hi L_kuro_artifact_suffix_error",
+            "    add x5, x5, x3",
+            "    str x5, [sp, #40]",
+            "    adrp x0, _kuro_text_heap@PAGE",
+            "    add x0, x0, _kuro_text_heap@PAGEOFF",
+            "    ldr x5, [sp, #32]",
+            "    add x0, x0, x5",
+            "    str x0, [sp, #24]",
+            "    ldr x1, [sp]",
+            "    ldr x3, [sp, #8]",
+            "    add x1, x1, x3",
+            "    ldr x2, [sp, #16]",
+            "    mov x3, #0",
+            "L_kuro_artifact_suffix_copy_loop:",
+            "    cmp x3, x2",
+            "    b.hs L_kuro_artifact_suffix_copy_done",
+            "    ldrb w4, [x1, x3]",
+            "    strb w4, [x0, x3]",
+            "    add x3, x3, #1",
+            "    b L_kuro_artifact_suffix_copy_loop",
+            "L_kuro_artifact_suffix_copy_done:",
+            "    strb wzr, [x0, x3]",
+            "    ldr x5, [sp, #40]",
+            "    adrp x4, _kuro_text_heap_cursor@PAGE",
+            "    add x4, x4, _kuro_text_heap_cursor@PAGEOFF",
+            "    str x5, [x4]",
+            "    add sp, sp, #48",
+            "    ldp x29, x30, [sp], #16",
+            "    ret",
+            "L_kuro_artifact_suffix_error:",
+            "    mov w0, #1",
+            "    bl _exit",
+            "    brk #0",
+        ])
+    lines.append(".section __TEXT,__cstring")
     for function in ir.functions.values():
         function_sections.append(_emit_dynamic_function(
             function, collection_buffers, collection_lengths, global_labels,
@@ -890,6 +943,9 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
         lines.append(".zerofill __DATA,__bss,_kuro_char_heap_cursor,8,3")
         lines.append(".zerofill __DATA,__bss,_kuro_int_buffer,32,3")
         lines.append(f".zerofill __DATA,__bss,{input_buffer},{NATIVE_INPUT_CAPACITY},4")
+    if artifact_suffix_needed:
+        lines.append(f".zerofill __DATA,__bss,_kuro_text_heap,{NATIVE_TEXT_HEAP_CAPACITY},4")
+        lines.append(".zerofill __DATA,__bss,_kuro_text_heap_cursor,8,3")
     return "\n".join(lines) + "\n"
 
 
@@ -1042,21 +1098,9 @@ def _emit_dynamic_function(
             source, offset = item.args
             if source not in function_statically_text:
                 raise NativeBackendError("native ARTIFACT_SUFFIX requires a statically known Text source")
-            suffix_error = f"L_kuro_fn_{function.name}_suffix_error_{item.dest}"
-            suffix_done = f"L_kuro_fn_{function.name}_suffix_done_{item.dest}"
             load(source, "x0")
             load(offset, "x1")
-            lines.extend([
-                "    cmp x1, #0", f"    b.lt {suffix_error}",
-                "    sub sp, sp, #48", "    str x0, [sp]", "    str x1, [sp, #8]",
-                "    bl _strlen", "    ldr x1, [sp, #8]", "    cmp x1, x0", f"    b.hi {suffix_error}",
-                "    sub x2, x0, x1", "    str x2, [sp, #16]", "    add x0, x2, #1", "    bl _malloc",
-                f"    cbz x0, {suffix_error}", "    str x0, [sp, #24]",
-                "    ldr x0, [sp, #24]", "    ldr x1, [sp]", "    ldr x2, [sp, #8]", "    add x1, x1, x2",
-                "    ldr x2, [sp, #16]", "    bl _memcpy", "    ldr x0, [sp, #24]", "    ldr x2, [sp, #16]",
-                "    strb wzr, [x0, x2]", "    add sp, sp, #48", f"    b {suffix_done}",
-                f"{suffix_error}:", "    mov w0, #1", "    bl _exit", "    brk #0", f"{suffix_done}:",
-            ])
+            lines.append("    bl _kuro_artifact_suffix")
             store(item.dest)
             kinds[item.dest] = "text"
         elif op == "SET":
