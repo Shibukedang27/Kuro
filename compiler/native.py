@@ -1339,6 +1339,16 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 return local_kinds.get(item.args[0], kinds.get(item.args[0], "unknown"))
         return "unknown"
 
+    def remember_action_argument_kinds(name: str, arguments: tuple[str, ...]) -> None:
+        function = ir.functions.get(name)
+        if function is None:
+            return
+        hints = function_parameter_kinds.setdefault(name, {})
+        for parameter, argument in zip(function.params, arguments):
+            kind = kinds.get(argument, "unknown")
+            previous = hints.get(parameter)
+            hints[parameter] = kind if previous is None or previous == kind else "unknown"
+
     collection_names = {
         instruction.args[0]
         for instruction in items
@@ -1452,8 +1462,19 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             if instruction.op == "CALL" and instruction.args and instruction.args[0] == "MakeRecord" and instruction.dest
         )
     }
+    task_argument_labels = {
+        instruction.dest: f".Lkuro_task_arg_{index}"
+        for index, instruction in enumerate(
+            instruction for instruction in items
+            if instruction.op == "CALL" and instruction.args and instruction.args[0] == "Spawn" and instruction.dest
+        )
+    }
     map_alias: dict[str, str] = {}
     closure_actions: dict[str, str] = {}
+    task_actions: dict[str, str] = {}
+    task_argument_refs: dict[str, str] = {}
+    task_argument_values: dict[str, str] = {}
+    function_parameter_kinds: dict[str, dict[str, str]] = {}
     map_key_slots: dict[str, int] = {}
     record_field_slots: dict[str, int] = {}
     record_field_kinds: dict[str, str] = {}
@@ -1534,6 +1555,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 tagged_alias[instruction.dest] = tagged_alias[instruction.args[0]]
             if instruction.args[0] in closure_actions:
                 closure_actions[instruction.dest] = closure_actions[instruction.args[0]]
+            if instruction.args[0] in task_actions:
+                task_actions[instruction.dest] = task_actions[instruction.args[0]]
+                task_argument_refs[instruction.dest] = task_argument_refs[instruction.args[0]]
+                task_argument_values[instruction.dest] = task_argument_values[instruction.args[0]]
             if instruction.args[0] in known_text:
                 known_text[instruction.dest] = known_text[instruction.args[0]]
             if instruction.args[0] in text_lengths:
@@ -1542,6 +1567,12 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 text_length_refs[instruction.dest] = text_length_refs[instruction.args[0]]
         elif op == "STORE_LIST":
             name, values = instruction.args
+            if not (len(values) == 1 and values[0] in closure_actions):
+                closure_actions.pop(name, None)
+            if not (len(values) == 1 and values[0] in task_actions):
+                task_actions.pop(name, None)
+                task_argument_refs.pop(name, None)
+                task_argument_values.pop(name, None)
             if name in collection_buffers:
                 if len(values) > NATIVE_COLLECTION_CAPACITY:
                     raise NativeBackendError(f"x86_64-linux collection exceeds fixed capacity of {NATIVE_COLLECTION_CAPACITY}")
@@ -1565,6 +1596,12 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 load(values[0]); store(name)
                 closure_actions[name] = closure_actions[values[0]]
                 kinds[name] = "closure"
+            elif len(values) == 1 and values[0] in task_actions:
+                load(values[0]); store(name)
+                task_actions[name] = task_actions[values[0]]
+                task_argument_refs[name] = task_argument_refs[values[0]]
+                task_argument_values[name] = task_argument_values[values[0]]
+                kinds[name] = "task"
             elif len(values) == 1:
                 load(values[0]); store(name)
                 kinds[name] = kinds.get(values[0], "unknown")
@@ -1593,6 +1630,14 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 closure_actions[name] = closure_actions[value]
             elif name in closure_actions:
                 del closure_actions[name]
+            if value in task_actions:
+                task_actions[name] = task_actions[value]
+                task_argument_refs[name] = task_argument_refs[value]
+                task_argument_values[name] = task_argument_values[value]
+            else:
+                task_actions.pop(name, None)
+                task_argument_refs.pop(name, None)
+                task_argument_values.pop(name, None)
             if value in known_text:
                 known_text[name] = known_text[value]
             elif name in known_text:
@@ -1961,12 +2006,40 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 action_arguments = tuple(arguments[1:])
                 if len(action_arguments) != len(ir.functions[action].params):
                     raise NativeBackendError(f"x86_64-linux Invoke of {action!r} has the wrong number of arguments")
+                remember_action_argument_kinds(action, action_arguments)
                 registers = ("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9")
                 for index, argument in enumerate(action_arguments):
                     load(argument, registers[index])
                 lines.append(f"    call .Lkuro_fn_{action}")
                 store(instruction.dest)
                 kinds[instruction.dest] = action_return_kind(action, action_arguments)
+            elif call_name == "Spawn":
+                if len(arguments) != 2 or arguments[0] not in closure_actions:
+                    raise NativeBackendError("x86_64-linux Spawn requires a statically known closure and one argument")
+                action = closure_actions[arguments[0]]
+                if len(ir.functions[action].params) != 1:
+                    raise NativeBackendError("x86_64-linux Spawn supports actions with exactly one parameter")
+                remember_action_argument_kinds(action, (arguments[1],))
+                label = task_argument_labels.get(instruction.dest)
+                if label is None:
+                    raise NativeBackendError("x86_64-linux Spawn requires a destination")
+                load(arguments[1], "%rax")
+                lines.append(f"    mov %rax, {label}(%rip)")
+                lines.append(f"    lea {label}(%rip), %rax")
+                store(instruction.dest)
+                kinds[instruction.dest] = "task"
+                task_actions[instruction.dest] = action
+                task_argument_refs[instruction.dest] = label
+                task_argument_values[instruction.dest] = arguments[1]
+            elif call_name == "Await":
+                if len(arguments) != 1 or arguments[0] not in task_actions:
+                    raise NativeBackendError("x86_64-linux Await requires a statically known task")
+                action = task_actions[arguments[0]]
+                label = task_argument_refs[arguments[0]]
+                lines.append(f"    mov {label}(%rip), %rdi")
+                lines.append(f"    call .Lkuro_fn_{action}")
+                store(instruction.dest)
+                kinds[instruction.dest] = action_return_kind(action, (task_argument_values[arguments[0]],))
             elif call_name == "MakeEnum":
                 if len(arguments) != 2 or any(argument not in known_text for argument in arguments):
                     raise NativeBackendError("x86_64-linux MakeEnum requires known type and variant names")
@@ -2059,6 +2132,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
             elif call_name in ir.functions:
                 if len(arguments) > 6:
                     raise NativeBackendError("x86_64-linux action call supports at most six arguments")
+                remember_action_argument_kinds(call_name, tuple(arguments))
                 for index, argument in enumerate(arguments):
                     load(argument, f"%{('rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9')[index]}")
                 lines.append(f"    call .Lkuro_fn_{call_name}")
@@ -2178,13 +2252,19 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         fn_slots = {name: -(index + 1) * 8 for index, name in enumerate(sorted(fn_names))}
         fn_frame = ((len(fn_slots) * 8 + 15) // 16) * 16 or 16
         fn_labels = {item.dest: f".Lkuro_fn_{function.name}_{item.dest}" for item in function.body if item.op == "LABEL"}
-        fn_kinds: dict[str, str] = {name: inferred_symbol_kind(name) for name in function.params}
+        parameter_hints = function_parameter_kinds.get(function.name, {})
+        fn_kinds: dict[str, str] = {
+            name: parameter_hints.get(name, inferred_symbol_kind(name))
+            for name in function.params
+        }
         # The Kuro VM deliberately stores dynamically typed values in generic
         # names such as ``*_Value`` and ``_``.  For the native lowering pass,
         # collect hard numeric-use constraints before emitting instructions so
         # a numeric VM branch is not mistaken for text merely because of its
         # variable name.
-        fn_numeric_names: set[str] = set()
+        fn_numeric_names: set[str] = {
+            name for name in function.params if parameter_hints.get(name) == "number"
+        }
         for constraint in function.body:
             if constraint.op in {"ADD", "BINOP"}:
                 if constraint.op == "ADD":
@@ -2686,6 +2766,8 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         lines.extend([f"    .p2align 3", f"{label}: .zero 8192"])
     for label in record_dest_labels.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 512"])
+    for label in task_argument_labels.values():
+        lines.extend([f"    .p2align 3", f"{label}: .zero 8"])
     for label in tagged_dest_labels.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 16"])
     lines.extend([".Lkuro_bss_end:", ".section .rodata", ".Lkuro_rodata_begin:"])
