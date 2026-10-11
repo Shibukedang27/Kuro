@@ -15,9 +15,9 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 
 ## Current state
 
-- **All PRs #2–#19 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
-- **GitHub CI:** PRs #2–#19 each have 8/8 successful checks as of this update.
-- **Local Linux x86-64 full suite on the current stacked branch:** 630 passed, 1 failed, 19 skipped. The remaining failure is `tests/compiler/test_native.py::test_native_backend_runtime_decodes_decimal_constants`; decimal decoding in the Linux native backend is the next implementation target.
+- **All PRs #2–#20 are open and unmerged.** `main` is unchanged; these branches are submitted for inspection and review, not silently integrated.
+- **GitHub CI:** PRs #2–#20 each have 8/8 successful checks as of this update.
+- **Local Linux x86-64 full suite on the current stacked branch:** 631 passed, 19 skipped, 0 failed.
 - The Kuro-authored compiler and launcher already provide Python-free execution of compiled bytecode, but Python remains in the bootstrap/image-construction and development path. Native image construction still invokes system assembler/linker tools.
 - Linux x86-64 native support remains experimental and incomplete. The newer closure/task path is statically bounded; it is not a general dynamic closure environment or parallel task scheduler.
 
@@ -43,6 +43,7 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 | [#17](https://github.com/Shibukedang27/Kuro/pull/17) | Lower bounded records in the Linux native backend | Open; 8/8 checks passing |
 | [#18](https://github.com/Shibukedang27/Kuro/pull/18) | Support known closures in the Linux native backend | Open; 8/8 checks passing |
 | [#19](https://github.com/Shibukedang27/Kuro/pull/19) | Support deterministic tasks in the Linux native backend | Open; 8/8 checks passing |
+| [#20](https://github.com/Shibukedang27/Kuro/pull/20) | Preserve decimal constants in Linux native runtime output | Open; 8/8 checks passing |
 
 The PR descriptions contain the detailed intent, implementation, test outcomes, and explicit limits for each batch. The dependency chain is deliberate: review and merge in dependency order if accepting the changes.
 
@@ -50,7 +51,7 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 
 ### 1. Close the native/runtime parity gaps
 
-- Fix Linux native decimal constant decoding and expand regression coverage to decimal arithmetic, formatting, and round-trip behavior.
+- PR #20 preserves the numeric value and literal spelling for an unchanged decimal constant printed by the Linux native runtime. General formatting for computed floats and decimal values stored/reloaded through user variables remains open; expand parity coverage across arithmetic, formatting, and round trips.
 - Continue differential conformance testing across the hosted compiler, Kuro-authored bytecode compiler/VM, launcher, and native backends; each mismatch should become a minimal regression test and a focused PR.
 - Replace bounded per-callsite task storage with semantics that remain correct under loops and multiple task instances; determine and implement the intended scheduler behavior.
 - Expand closure support beyond statically known actions where the language semantics require dynamic targets or captured environments.
@@ -84,4 +85,4 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 
 ## Next concrete step
 
-Fix the Linux native decimal-constant decoding failure, add targeted tests, run the complete local suite and remote CI, and publish the result as the next focused PR. Then update this page with the new status and continue through the roadmap rather than treating the current PR stack as completion.
+Implement native formatting for computed and assignment/reloaded float values, with tests that verify both the numeric value and exact output rather than only a source-literal display sidecar. Then continue differential native/runtime conformance and update this page with each pushed result; this PR stack is not completion of the independence goal.
