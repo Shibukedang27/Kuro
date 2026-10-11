@@ -38,6 +38,31 @@ def test_package_manager_detects_stale_or_tampered_lockfile(tmp_path):
         raise AssertionError("stale lockfile was accepted")
 
 
+def test_package_manager_rejects_dependency_name_mismatch(tmp_path):
+    dependency = tmp_path / "actual"
+    dependency.mkdir()
+    (dependency / "main.kuro").write_text('Print "dependency".', encoding="utf-8")
+    (dependency / "kuro.package").write_text(
+        'name = "actual"\nversion = "1.0.0"\nentry = "main.kuro"\n',
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "kuro.package"
+    manifest.write_text(
+        'name = "app"\nversion = "0.1.0"\nentry = "main.kuro"\n'
+        '[dependencies]\nalias = "actual"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "main.kuro").write_text('Print "app".', encoding="utf-8")
+
+    try:
+        resolve_manifest(manifest)
+    except ValueError as error:
+        assert "alias" in str(error)
+        assert "actual" in str(error)
+    else:
+        raise AssertionError("dependency alias/name mismatch was accepted")
+
+
 def test_package_manager_rejects_missing_entry(tmp_path):
     manifest = tmp_path / "kuro.package"
     manifest.write_text('name = "app"\nversion = "0.1.0"\nentry = "main.kuro"\n')

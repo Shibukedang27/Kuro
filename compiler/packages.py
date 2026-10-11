@@ -53,6 +53,7 @@ def read_manifest(path: str | Path) -> PackageManifest:
 
 
 def resolve_manifest(path: str | Path) -> list[tuple[str, str]]:
+    """Resolve local package-directory dependencies keyed by manifest name."""
     root = Path(path).resolve()
     seen: set[Path] = set()
     active: set[Path] = set()
@@ -86,6 +87,11 @@ def resolve_manifest(path: str | Path) -> list[tuple[str, str]]:
                 raise ValueError(f"dependency {name!r} escapes package root: {relative}")
             if not dep_manifest.is_file():
                 raise ValueError(f"dependency {name!r} not found at {relative}")
+            dependency = read_manifest(dep_manifest)
+            if dependency.name != name:
+                raise ValueError(
+                    f"dependency {name!r} points to package {dependency.name!r}"
+                )
             visit(dep_manifest)
         active.remove(manifest_path)
         seen.add(manifest_path)
