@@ -307,6 +307,10 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path):
         ),
         (["BC_CONST", "Kuro Linux", "BC_PRINT"], "Kuro Linux"),
         (
+            ["BC_CONST", r"line\nnext", "BC_PRINT"],
+            "line\nnext",
+        ),
+        (
             [
                 "BC_CONST", "0", "BC_STORE_LIST", "N", "BC_WHILE_BEGIN",
                 "BC_LOADVAR", "N", "BC_CONST", "3", "BC_CMP", "lt", "BC_WHILE_TEST",
