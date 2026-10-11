@@ -1,3 +1,4 @@
+import platform
 import re
 import subprocess
 import pytest
@@ -66,6 +67,26 @@ def test_kuro_artifact_launcher_executes_multi_value_assignment():
     assert env["ArtifactFailed"] == 0
     assert env["RuntimeExitCode"] == 0
     assert output == "a\nb\nc\n3\n"
+
+
+@pytest.mark.skipif(platform.system() not in {"Darwin", "Linux"}, reason="requires a supported native backend")
+def test_native_artifact_launcher_executes_multi_value_reassignment(tmp_path):
+    from compiler.self_host import build_native_artifact_launcher
+
+    executable = tmp_path / "kuro-bytecode"
+    build_native_artifact_launcher(executable)
+    payload = (
+        "kuro.bytecode/1\n"
+        "BC_MULTI_BEGIN\nBC_CONST\nold1\nBC_CONST\nold2\nBC_STORE_MULTI\nItems\n"
+        "BC_MULTI_BEGIN\nBC_CONST\na\nBC_CONST\nb\nBC_CONST\nc\nBC_STORE_MULTI\nItems\n"
+        "BC_LOADVAR\nItems\nBC_PRINT\nBC_LENGTH\nItems\nBC_PRINT\n"
+    )
+    result = subprocess.run(
+        [str(executable)], input=payload, capture_output=True, text=True, timeout=20
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "a\nb\nc\n3\n"
 
 
 def test_kuro_artifact_launcher_rejects_wrong_magic():
