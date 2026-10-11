@@ -65,3 +65,9 @@ jobs:
         run: >-
           python -m pytest -q tests/compiler/test_native.py
           -k "linux_backend or x86_64_backend or native_cli"
+
+      - name: Link and run Linux native codegen and VM smoke tests
+        run: >-
+          python -m pytest -q
+          tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_links_and_runs
+          tests/self_host/test_artifact_launcher.py::test_native_artifact_launcher_executes_multi_value_reassignment

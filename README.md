@@ -96,11 +96,14 @@ Python; the Python frontend is currently retained only for bootstrap image
 construction and development commands.
 
 The macOS x86-64 compiler and bytecode launcher also pass a full self-compile
-and second-stage execution test under Rosetta. Linux x86-64 images cross-build
-as ELF, but Linux execution is not yet verified. The Kuro-authored generator
-can also be built to emit x86-64 macOS or Linux assembly independently of the
-CPU running its image. The checked-in `kuro-native codegen` image still emits
-macOS arm64; the x86-64 targets require a separately built generator image.
+and second-stage execution test under Rosetta. The Ubuntu CI workflow now links
+and runs Kuro-generated Linux x86-64 native code for arithmetic and loop
+control flow, and exercises a native bytecode launcher with multi-value
+collection reassignment. These are smoke tests, not full Linux language or
+self-hosting conformance. The Kuro-authored generator can also be built to emit
+x86-64 macOS or Linux assembly independently of the CPU running its image. The
+checked-in `kuro-native codegen` image still emits macOS arm64; the x86-64
+targets require a separately built generator image.
 
 The checked-in production launcher exposes a complete Python-free
 source-to-bytecode-to-execution path:
