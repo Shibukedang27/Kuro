@@ -266,11 +266,11 @@ def test_native_backend_executes_recursive_actions(tmp_path):
 
 
 def test_native_backend_handles_constant_collections_and_indexing(tmp_path):
-    result = compile_source('Names = "A", "B", "C";\nSet Names 1 to "X";\nPrint Names.')
+    result = compile_source('Names = "A", "B", "C";\nSet Names 1 to "Long";\nPrint Names.')
     assert result.ok
     executable = tmp_path / "collection"
     build_native(result.ir, executable)
-    assert subprocess.run([str(executable)], capture_output=True, text=True, check=True).stdout == "A\nX\nC\n"
+    assert subprocess.run([str(executable)], capture_output=True, text=True, check=True).stdout == "A\nLong\nC\n"
 
 
 def test_native_backend_executes_dynamic_boolean_combinations(tmp_path):

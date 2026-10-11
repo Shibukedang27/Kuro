@@ -1990,8 +1990,12 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 load(name, "%rsi")
                 if name in text_length_refs:
                     lines.append(f"    mov {text_length_refs[name]}(%rip), %rdx")
+                elif text_lengths.get(name, 0) > 0:
+                    lines.append(f"    mov ${text_lengths[name]}, %rdx")
                 else:
-                    lines.append(f"    mov ${text_lengths.get(name, 0)}, %rdx")
+                    lines.extend([
+                        "    mov %rsi, %rax", "    call _kuro_strlen", "    mov %rax, %rdx",
+                    ])
                 lines.extend([
                     "    mov $1, %rax", "    mov $1, %rdi", "    syscall",
                     "    lea .Lkuro_newline(%rip), %rsi", "    mov $1, %rdx",
@@ -2001,14 +2005,17 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 load(name); lines.append("    call _kuro_print_int")
             elif kind == "collection":
                 if collection_kinds.get(collection_name) == "text":
+                    # Linux syscall clobbers %rcx, so reload the collection
+                    # length at each loop head and measure each NUL-terminated
+                    # text item instead of trusting stale length metadata.
                     lines.extend([
-                        f"    mov {collection_lengths[collection_name]}(%rip), %rcx",
                         "    xor %r8d, %r8d",
                         f"    lea {collection_buffers[collection_name]}(%rip), %r9",
-                        f"    lea {collection_item_lengths[collection_name]}(%rip), %r10",
                         ".Lkuro_print_text_collection:",
+                        f"    mov {collection_lengths[collection_name]}(%rip), %rcx",
                         "    cmp %rcx, %r8", "    jae .Lkuro_print_collection_done",
-                        "    mov (%r9,%r8,8), %rsi", "    mov (%r10,%r8,8), %rdx",
+                        "    mov (%r9,%r8,8), %rsi",
+                        "    mov %rsi, %rax", "    call _kuro_strlen", "    mov %rax, %rdx",
                         "    mov $1, %rax", "    mov $1, %rdi", "    syscall",
                         "    lea .Lkuro_newline(%rip), %rsi", "    mov $1, %rdx",
                         "    mov $1, %rax", "    mov $1, %rdi", "    syscall",
