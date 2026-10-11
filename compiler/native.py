@@ -1494,6 +1494,118 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     }
     tagged_kinds: dict[str, str] = {}
     tagged_alias: dict[str, str] = {}
+    closure_construction_actions: dict[int, str] = {}
+    static_text_values: dict[str, str] = {}
+    for instruction_index, instruction in enumerate(items):
+        if instruction.op == "CONST" and instruction.dest:
+            value = instruction.args[0]
+            if isinstance(value, str):
+                static_text_values[instruction.dest] = value
+            else:
+                static_text_values.pop(instruction.dest, None)
+        elif instruction.op == "LOADVAR" and instruction.dest:
+            source = instruction.args[0]
+            if source in static_text_values:
+                static_text_values[instruction.dest] = static_text_values[source]
+            else:
+                static_text_values.pop(instruction.dest, None)
+        elif instruction.op == "STORE_LIST":
+            name, values = instruction.args
+            if len(values) == 1 and values[0] in static_text_values:
+                static_text_values[name] = static_text_values[values[0]]
+            else:
+                static_text_values.pop(name, None)
+        elif instruction.op == "UPDATE":
+            name, value = instruction.args
+            if value in static_text_values:
+                static_text_values[name] = static_text_values[value]
+            else:
+                static_text_values.pop(name, None)
+        elif instruction.op == "CALL":
+            call_name, *arguments = instruction.args
+            if (
+                call_name == "MakeClosure"
+                and len(arguments) == 1
+                and arguments[0] in static_text_values
+                and static_text_values[arguments[0]] in ir.functions
+            ):
+                closure_construction_actions[instruction_index] = static_text_values[arguments[0]]
+            if instruction.dest:
+                static_text_values.pop(instruction.dest, None)
+
+    closure_label_indices = {
+        instruction.dest: index
+        for index, instruction in enumerate(items)
+        if instruction.op == "LABEL" and instruction.dest
+    }
+    closure_successors: list[tuple[int, ...]] = []
+    for index, instruction in enumerate(items):
+        next_index = index + 1
+        if instruction.op == "JUMP":
+            target = closure_label_indices.get(instruction.args[0])
+            closure_successors.append((target,) if target is not None else ())
+        elif instruction.op == "JUMPF":
+            target = closure_label_indices.get(instruction.args[0])
+            successors = [next_index] if next_index < len(items) else []
+            if target is not None:
+                successors.append(target)
+            closure_successors.append(tuple(successors))
+        else:
+            closure_successors.append((next_index,) if next_index < len(items) else ())
+
+    closure_targets_before: list[dict[str, set[str]] | None] = [None] * len(items)
+    if items:
+        closure_targets_before[0] = {}
+        pending = [0]
+        while pending:
+            index = pending.pop()
+            incoming = closure_targets_before[index]
+            if incoming is None:
+                continue
+            state = {name: set(targets) for name, targets in incoming.items()}
+            instruction = items[index]
+            if instruction.op == "CONST" and instruction.dest:
+                state.pop(instruction.dest, None)
+            elif instruction.op == "LOADVAR" and instruction.dest:
+                source = instruction.args[0]
+                if state.get(source):
+                    state[instruction.dest] = set(state[source])
+                else:
+                    state.pop(instruction.dest, None)
+            elif instruction.op == "STORE_LIST":
+                name, values = instruction.args
+                if len(values) == 1 and state.get(values[0]):
+                    state[name] = set(state[values[0]])
+                else:
+                    state.pop(name, None)
+            elif instruction.op == "UPDATE":
+                name, value = instruction.args
+                if state.get(value):
+                    state[name] = set(state[value])
+                else:
+                    state.pop(name, None)
+            elif instruction.op == "CALL" and instruction.dest:
+                target = closure_construction_actions.get(index)
+                if target:
+                    state[instruction.dest] = {target}
+                else:
+                    state.pop(instruction.dest, None)
+            elif instruction.dest:
+                state.pop(instruction.dest, None)
+            for successor in closure_successors[index]:
+                current = closure_targets_before[successor]
+                if current is None:
+                    closure_targets_before[successor] = {
+                        name: set(targets) for name, targets in state.items()
+                    }
+                    pending.append(successor)
+                    continue
+                merged = {name: set(targets) for name, targets in current.items()}
+                for name, targets in state.items():
+                    merged.setdefault(name, set()).update(targets)
+                if merged != current:
+                    closure_targets_before[successor] = merged
+                    pending.append(successor)
     lines = [
         ".section .text", ".globl _start", ".globl main", "_start:",
         "    call main", "    mov %eax, %edi", "    mov $60, %eax", "    syscall",
@@ -1521,7 +1633,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         lines.append(f"    mov {register}, {slots[name]}(%rbp)")
 
     input_sequence = 0
-    for instruction in items:
+    for instruction_index, instruction in enumerate(items):
         op = instruction.op
         if op == "CONST":
             value = instruction.args[0]
@@ -2016,19 +2128,35 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 kinds[instruction.dest] = "closure"
                 closure_actions[instruction.dest] = action
             elif call_name == "Invoke":
-                if not arguments or arguments[0] not in closure_actions or len(arguments) > 7:
-                    raise NativeBackendError("x86_64-linux Invoke requires a statically known closure and at most six arguments")
-                action = closure_actions[arguments[0]]
+                if not arguments or len(arguments) > 7:
+                    raise NativeBackendError("x86_64-linux Invoke requires a closure and at most six arguments")
                 action_arguments = tuple(arguments[1:])
-                if len(action_arguments) != len(ir.functions[action].params):
-                    raise NativeBackendError(f"x86_64-linux Invoke of {action!r} has the wrong number of arguments")
-                remember_action_argument_kinds(action, action_arguments)
+                incoming_closure_targets = closure_targets_before[instruction_index] or {}
+                candidate_actions = set(incoming_closure_targets.get(arguments[0], set()))
+                if not candidate_actions and arguments[0] in closure_actions:
+                    candidate_actions.add(closure_actions[arguments[0]])
+                if not candidate_actions:
+                    raise NativeBackendError("x86_64-linux Invoke requires closures with statically known targets")
+                for candidate in candidate_actions:
+                    function = ir.functions.get(candidate)
+                    if function is None or len(action_arguments) != len(function.params):
+                        raise NativeBackendError(
+                            f"x86_64-linux Invoke target {candidate!r} has an incompatible argument count"
+                        )
+                    remember_action_argument_kinds(candidate, action_arguments)
+                return_kinds = {
+                    action_return_kind(candidate, action_arguments)
+                    for candidate in candidate_actions
+                }
+                if len(return_kinds) != 1:
+                    raise NativeBackendError("x86_64-linux Invoke targets must have the same return kind")
                 registers = ("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9")
+                load(arguments[0], "%r11")
                 for index, argument in enumerate(action_arguments):
                     load(argument, registers[index])
-                lines.append(f"    call .Lkuro_fn_{action}")
+                lines.append("    call *%r11")
                 store(instruction.dest)
-                kinds[instruction.dest] = action_return_kind(action, action_arguments)
+                kinds[instruction.dest] = next(iter(return_kinds))
             elif call_name == "Spawn":
                 if len(arguments) != 2 or arguments[0] not in closure_actions:
                     raise NativeBackendError("x86_64-linux Spawn requires a statically known closure and one argument")

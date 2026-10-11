@@ -508,6 +508,25 @@ def test_native_backend_supports_closure_invoke_abi(tmp_path):
     assert run.stdout == "Kuro native\n"
 
 
+@requires_linux_x86_64
+def test_native_backend_dispatches_to_runtime_selected_closure(tmp_path):
+    result = compile_source(
+        "First = 0; Second = 0; Selected = 0; Choice = 1;\n"
+        "Action Ten Value; Return Value + 10; Done.\n"
+        "Action Twenty Value; Return Value + 20; Done.\n"
+        'Call MakeClosure "Ten"; Update First to @_;\n'
+        'Call MakeClosure "Twenty"; Update Second to @_;\n'
+        "If Choice is equal to 1; Update Selected to First;\n"
+        "Else; Update Selected to Second; Done.\n"
+        "Call Invoke Selected, 5; Print @_."
+    )
+    assert result.ok
+    executable = tmp_path / "dynamic-closure"
+    build_native(result.ir, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "15\n"
+
+
 def test_native_backend_supports_record_field_abi(tmp_path):
     result = compile_source(
         'Store = 0;\nCall MakeRecord "User";\nUpdate Store to @_;\n'
