@@ -38,7 +38,7 @@ def test_driver_publishes_final_bytecode_artifact():
     assert env["CompilerFailed"] == 0
     assert env["CompilerInstructionCount"] == len(env["CompilerOutput"])
     assert env["CompilerOutput"] == [
-        "BC_CONST", "Kuro", "BC_STORE_LIST", "Name",
+        "BC_CONST_TEXT", "Kuro", "BC_STORE_LIST", "Name",
         "BC_LOADVAR", "Name", "BC_PRINT",
     ]
 

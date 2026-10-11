@@ -14,7 +14,7 @@ MACOS_ARM64_HOST = (
 def test_kuro_authored_driver_compiles_source():
     env = compile_with_kuro_driver('Print "self hosted".')
     assert env["CompilerFailed"] == 0
-    assert env["CompilerOutput"][:2] == ["BC_CONST", "self hosted"]
+    assert env["CompilerOutput"][:2] == ["BC_CONST_TEXT", "self hosted"]
 
 
 def test_kuro_authored_driver_compiles_itself():

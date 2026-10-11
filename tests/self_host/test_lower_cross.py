@@ -57,7 +57,7 @@ def test_kuro_lowering_emits_print_ir_for_basic_programs(source):
     ir, failed = lower_source(source)
     assert failed in (None, 0)
     assert ir[-1] == "PRINT"
-    assert ir[0] in ("CONST", "LOADVAR")
+    assert ir[0] in ("CONST", "CONST_TEXT", "LOADVAR")
 
 
 def test_kuro_lowering_handles_assignment_then_variable_read():
@@ -70,7 +70,7 @@ def test_kuro_lowering_handles_multi_value_assignment():
     ir, failed = lower_source('Names = "A", "B", "C";')
     assert failed in (None, 0)
     assert ir == [
-        "MULTI_BEGIN", "CONST", "A", "CONST", "B", "CONST", "C",
+        "MULTI_BEGIN", "CONST_TEXT", "A", "CONST_TEXT", "B", "CONST_TEXT", "C",
         "STORE_MULTI", "Names",
     ]
 
@@ -112,7 +112,7 @@ def test_kuro_lowering_continues_boolean_tail_after_character_class():
     assert failed in (None, 0)
     assert ir == [
         "LOADVAR", "Ch", "ISCLASS", "alpha",
-        "LOADVAR", "Ch", "CONST", "_", "CMP", "eq", "BOOL", "OR",
+        "LOADVAR", "Ch", "CONST_TEXT", "_", "CMP", "eq", "BOOL", "OR",
         "IF_BEGIN", "LOADVAR", "Ch", "PRINT", "ELSE_BEGIN", "IF_END",
     ]
 
@@ -140,7 +140,14 @@ def test_kuro_lowering_handles_action_return_and_call():
         "FUNC_BEGIN", "Add", "PARAM", "A", "NONE", "PARAM", "B", "NONE",
         "LOADVAR", "A", "LOADVAR", "B", "BINOP", "+", "RETURN", "FUNC_END",
         "CALL_BEGIN", "Add", "CONST", "3", "CONST", "4", "CALL_END",
+        "STORE_LIST", "_",
     ]
+
+
+def test_kuro_lowering_emits_private_artifact_suffix_operation():
+    ir, failed = lower_source('Call __KuroArtifactSuffix "prefix-tail", 7;')
+    assert failed in (None, 0)
+    assert ir == ["CONST_TEXT", "prefix-tail", "CONST", "7", "ARTIFACT_SUFFIX", "STORE_LIST", "_"]
 
 
 def test_kuro_lowering_handles_typed_action_parameter():
@@ -155,18 +162,18 @@ def test_kuro_lowering_handles_complex_set_and_call_arguments():
     )
     assert failed in (None, 0)
     assert ir == [
-        "CONST", "Kuro", "STORE_LIST", "Name",
+        "CONST_TEXT", "Kuro", "STORE_LIST", "Name",
         "CONST", "1", "CONST", "1", "BINOP", "+",
-        "CONST", "X", "CONST", "Y", "BINOP", "+", "SET", "Name",
+        "CONST_TEXT", "X", "CONST_TEXT", "Y", "BINOP", "+", "SET", "Name",
     ]
 
     ir, failed = lower_source(
         "Action Add A, B;\nReturn A + B;\nDone.\nCall Add 1 + 2, 3 * 4;"
     )
     assert failed in (None, 0)
-    assert ir[-15:] == [
+    assert ir[-17:] == [
         "CALL_BEGIN", "Add", "CONST", "1", "CONST", "2", "BINOP", "+",
-        "CONST", "3", "CONST", "4", "BINOP", "*", "CALL_END",
+        "CONST", "3", "CONST", "4", "BINOP", "*", "CALL_END", "STORE_LIST", "_",
     ]
 
 
@@ -175,10 +182,10 @@ def test_kuro_lowering_handles_complex_set_and_call_arguments():
     [
         ("Take user Name;", ["INPUT", "Name"]),
         ("Take user Name and Age;", ["INPUT", "Name", "INPUT", "Age"]),
-        ("Name = \"Kuro\";\nGet Name;", ["CONST", "Kuro", "STORE_LIST", "Name", "GET", "Name", "0"]),
-        ("Name = \"Kuro\";\nGet Name 0;", ["CONST", "Kuro", "STORE_LIST", "Name", "CONST", "0", "GET", "Name", "1"]),
-        ("Name = \"Kuro\";\nLength Name;", ["CONST", "Kuro", "STORE_LIST", "Name", "LENGTH", "Name"]),
-        ("Name = \"Kuro\";\nSet Name 0 to \"X\";", ["CONST", "Kuro", "STORE_LIST", "Name", "CONST", "0", "CONST", "X", "SET", "Name"]),
+        ("Name = \"Kuro\";\nGet Name;", ["CONST_TEXT", "Kuro", "STORE_LIST", "Name", "GET", "Name", "0", "STORE_LIST", "_"]),
+        ("Name = \"Kuro\";\nGet Name 0;", ["CONST_TEXT", "Kuro", "STORE_LIST", "Name", "CONST", "0", "GET", "Name", "1", "STORE_LIST", "_"]),
+        ("Name = \"Kuro\";\nLength Name;", ["CONST_TEXT", "Kuro", "STORE_LIST", "Name", "LENGTH", "Name", "STORE_LIST", "_"]),
+        ("Name = \"Kuro\";\nSet Name 0 to \"X\";", ["CONST_TEXT", "Kuro", "STORE_LIST", "Name", "CONST", "0", "CONST_TEXT", "X", "SET", "Name"]),
         ("Compare R 1 is equal to 1;", ["CONST", "1", "CONST", "1", "CMP", "eq", "STORE_LIST", "R"]),
     ],
 )
@@ -196,4 +203,4 @@ def test_kuro_lowering_matches_parser_ast_contract():
     assert canon_program(program) == ["PROGRAM", "PRINT", "LIT_STR", "hello", "END_EXPR", "END_BLOCK"]
     ir, failed = lower_source(source)
     assert failed in (None, 0)
-    assert ir == ["CONST", "hello", "PRINT"]
+    assert ir == ["CONST_TEXT", "hello", "PRINT"]

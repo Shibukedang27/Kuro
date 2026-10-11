@@ -16,9 +16,9 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 ## Current state
 
 - **All PRs #2–#38 are open and unmerged.** `main` is unchanged; the stack is submitted for inspection and review, not silently integrated.
-- **GitHub CI:** PRs #2–#37 have 8/8 successful checks. PR #38 is running its matrix with no failures observed so far.
-- **Full-suite checkpoint:** 656 passed, 19 skipped, 0 failed on the earlier PR #34 stack. Subsequent closure-focused, compiler-driver, and restricted-PATH smoke tests have passed; a full suite has not yet been rerun on the latest stack.
-- Linux CI builds static native production images, then blocks Python and host toolchains from `PATH` while testing `doctor`, source run/compile, bytecode execution, codegen, and (in PR #38) a stage-1 compiler bootstrap probe. This verifies use of prebuilt images; clean-checkout image bootstrap remains Python-hosted, and native image construction still invokes the system assembler/linker.
+- **GitHub CI:** PRs #2–#38 have 8/8 successful checks.
+- **Full-suite checkpoint:** 685 passed, 19 skipped, 0 failed on the current `feat/text-tail-bootstrap` candidate (2026-10-11).
+- Linux CI builds static native production images, then blocks Python and host toolchains from `PATH` while testing `doctor`, source run/compile, bytecode execution, and codegen. PR #38 adds the stage-1 compiler bootstrap probe; the current `feat/text-tail-bootstrap` candidate extends this to a stage-2 full-source rebuild whose bytecode matches stage 1 exactly. Clean-checkout image bootstrap remains Python-hosted, and native image construction still invokes the system assembler/linker.
 - Linux x86-64 native support remains experimental and incomplete. Closures dispatch at runtime among compile-time-known targets; action-created closures carry per-instance environments allocated from a syscall-grown `brk` heap in 4 KiB pages, with no fixed 128-object cap. Integer, float, NUL-terminated text, record-reference, map-reference, and collection-reference captures are supported; indexed captured-collection reads and same-kind writes are covered, while closure values and other capture kinds remain unsupported. Closure actions can read and update record fields using literal names when the field kind was established earlier; text-field writes remain rejected because variable display lengths are not tracked. Map actions support `MapHas`, `MapGet`, and same-kind `MapSet` with literal keys whose kinds are known; text-value writes remain rejected because variable display lengths are not tracked. Arbitrary runtime field names and map keys remain unsupported inside closure actions. Action returns may merge statically known closure targets across branches when every return path is known; mixed closure/scalar paths are rejected. Allocated pages remain live until process exit; reclamation, broader control-flow cases, and dynamically created targets remain open. Main-program record fields support runtime selection among statically known literal names when selected values have one known kind. Tasks remain statically bounded and are not a parallel scheduler.
 
 ## Published work
@@ -61,7 +61,7 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 | [#35](https://github.com/Shibukedang27/Kuro/pull/35) | Capture collections in Linux native closures | Open; 8/8 checks passing |
 | [#36](https://github.com/Shibukedang27/Kuro/pull/36) | Compose native compiler source without Python | Open; 8/8 checks passing |
 | [#37](https://github.com/Shibukedang27/Kuro/pull/37) | Link Linux native images without a dynamic loader | Open; 8/8 checks passing |
-| [#38](https://github.com/Shibukedang27/Kuro/pull/38) | Verify Python-free stage-one compiler bootstrap | Open; CI running |
+| [#38](https://github.com/Shibukedang27/Kuro/pull/38) | Verify Python-free stage-one compiler bootstrap | Open; 8/8 checks passing |
 
 The PR descriptions contain the detailed intent, implementation, test outcomes, and explicit limits for each batch. The dependency chain is deliberate: review and merge in dependency order if accepting the changes.
 
@@ -79,8 +79,8 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 ### 2. Remove Python from the required build and use path
 
 - Inventory every Python dependency in bootstrap, compiler, packaging, tests, release scripts, and developer commands.
-- PR #36 adds a POSIX shell/awk compiler-source composer. PR #38 extends the Python-blocked smoke gate: the native stage-0 compiler compiles the full self-host compiler source to bytecode, then that stage-1 compiler compiles a small probe whose bytecode must match stage 0 exactly. This is a verified bootstrap rung, not yet a full stage-2 self-rebuild or clean-checkout bootstrap; the seed images are still constructed with Python and host tools.
-- Before proving full stage-2 self-compilation on the compiler's >70 KiB source, replace the artifact loader's byte-by-byte immutable text concatenation with a one-pass scalar-text suffix operation. A collection-backed experiment was rejected because it changed `BC_INPUT`'s established Text semantics and is not part of the submitted change.
+- PR #36 adds a POSIX shell/awk compiler-source composer. PR #38 verifies the stage-1 bootstrap probe. The current PR #39 candidate extends the restricted-PATH smoke gate through a stage-2 recompile of the full compiler source, requiring byte-for-byte equality with stage 1.
+- The full-source input bottleneck is removed with a private `__KuroArtifactSuffix` operation that copies the framed input suffix in linear time while preserving `BC_INPUT`'s Text semantics. Stack-balance fixes in the self-hosted lowerer, explicit `BC_CONST_TEXT` tagging, and correct reserved-marker escaping are also required for exact stage-2 reproduction.
 - Establish a clean-checkout bootstrap sequence that starts from checked-in Kuro source and reproducible seed artifacts, then builds the compiler/runtime using Kuro itself. Extend the Python-blocked gate from prebuilt-image use to seed construction that does not invoke Python.
 - Keep the frozen reference interpreter as an optional oracle if desired; it must not be a required build dependency.
 
@@ -104,4 +104,4 @@ The PR descriptions contain the detailed intent, implementation, test outcomes, 
 
 ## Next concrete step
 
-Next, implement a one-pass scalar Text suffix for framed bytecode input and verify that stage 1 can recompile the full compiler source, not only a probe. Then move seed-image construction out of Python and remove the remaining host assembler/linker dependency. In parallel, continue closure parity for loop/nested-action returns, reclamation/accounting, closure-valued captures, and non-literal record/map access; scientific notation and extreme binary64 formatting also remain open. The current PR stack is not completion of the independence goal.
+Next, move seed-image construction out of Python and verify a clean-checkout bootstrap from reproducible, repository-owned seeds; the current smoke test still starts from prebuilt native images. Then remove the remaining host assembler/linker dependency. In parallel, continue closure parity for loop/nested-action returns, reclamation/accounting, closure-valued captures, and non-literal record/map access; scientific notation and extreme binary64 formatting also remain open. The current PR stack is not completion of the independence goal.

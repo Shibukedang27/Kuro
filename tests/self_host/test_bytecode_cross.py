@@ -27,6 +27,12 @@ def test_bytecode_encoder_consumes_operands_by_opcode_contract():
     assert out == ["BC_CONST", "7", "BC_STORE_LIST", "N", "BC_PRINT"]
 
 
+def test_bytecode_encoder_preserves_numeric_looking_text_constants():
+    out, failed = encode(["CONST_TEXT", "1", "CONST", "1", "PRINT"])
+    assert failed in (None, 0)
+    assert out == ["BC_CONST_TEXT", "1", "BC_CONST", "1", "BC_PRINT"]
+
+
 def test_bytecode_encoder_emits_stack_bounded_multi_value_store():
     out, failed = encode([
         "MULTI_BEGIN",
@@ -69,3 +75,9 @@ def test_bytecode_encoder_handles_data_and_declaration_instructions():
         "BC_CMP", "lt", "BC_ISCLASS", "digit", "BC_STORE_LIST", "Answer", "BC_GET", "N", "0",
         "BC_LENGTH", "N", "BC_SET", "N", "BC_INPUT", "N",
     ]
+
+
+def test_bytecode_encoder_emits_private_artifact_suffix_opcode():
+    out, failed = encode(["CONST", "prefix-tail", "CONST", "7", "ARTIFACT_SUFFIX"])
+    assert failed in (None, 0)
+    assert out == ["BC_CONST", "prefix-tail", "BC_CONST", "7", "BC_ARTIFACT_SUFFIX"]

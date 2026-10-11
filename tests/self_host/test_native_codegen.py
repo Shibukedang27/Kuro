@@ -39,6 +39,14 @@ def test_kuro_native_codegen_emits_length_for_multichar_literal():
     assert '.asciz "hello"' in env["NativeOut"]
 
 
+def test_kuro_native_codegen_preserves_numeric_looking_typed_text():
+    env = run_codegen('"BC_CONST_TEXT", "1", "BC_PRINT"')
+
+    assert env["NativeFailed"] == 0
+    assert "mov x2, #1" in env["NativeOut"]
+    assert '.asciz "1"' in env["NativeOut"]
+
+
 def test_kuro_native_codegen_rejects_unsupported_literal_length():
     env = run_literal_codegen("a" * 1000)
 

@@ -129,6 +129,8 @@ VALID_SNIPPETS = [
     "Action A;\nZ = 1;\nReturn Z;\nDone.\nCall A;\nPrint Z.",
     "Action First;\nShared = 5;\nReturn Shared;\nDone.\nAction Second;\nReturn Shared;\nDone.\nCall First;\nCall Second;",
     'N = "a" + "b";\nPrint N.',
+    'Source is Text;\nCall __KuroArtifactSuffix Source, 2;',
+    'Action Tail Source: Text, Offset: Integers;\nCall __KuroArtifactSuffix Source, Offset;\nReturn @_;\nDone.\nCall Tail "abc", 1;',
 ]
 
 INVALID_SNIPPETS = [
@@ -144,6 +146,9 @@ INVALID_SNIPPETS = [
     'Name is Text;\nName = "hi";\nAdd 1 to Name;',              # E3002
     'N is Text;\nN = "x";\nIf N is greater than 5;\nPrint N.\nDone.',  # E3006
     'Action Add A: Integers, B: Integers;\nReturn A + B;\nDone.\nCall Add "x", "y";',  # E3007
+    'Call __KuroArtifactSuffix 7, 0;',                        # E3017
+    'Source = @_;\nCall __KuroArtifactSuffix Source, 0;',     # E3017 for a defined but untyped value
+    'Source is Text;\nCall __KuroArtifactSuffix Source, 2.5;', # E3010
     'Repeat "three";\nPrint Index.\nDone.',                      # E3008
     "N is Integers;\nN = 5;\nLength N;",                          # E3009
     'Names = "A", "B";\nGet Names "x";',                          # E3010

@@ -41,6 +41,12 @@ BUILTIN_ACTIONS = {
     "MakeChannel": 0, "Send": 2, "Receive": 1, "ChannelHas": 1,
 }
 
+INTERNAL_INTRINSICS = {
+    # Private bootstrap-only operation; intentionally absent from the public
+    # builtin action registry and standard-library surface.
+    "__KuroArtifactSuffix": 2,
+}
+
 
 @dataclass
 class Scope:
@@ -126,6 +132,13 @@ class Resolver:
                     if inferred:
                         self.symbols.types[st.name] = inferred
             elif isinstance(st, ActionDecl):
+                if st.name in INTERNAL_INTRINSICS:
+                    self.diags.error(
+                        "E4002",
+                        f"action name {st.name!r} is reserved for compiler/runtime use",
+                        st.span,
+                    )
+                    continue
                 if st.name in self.symbols.actions:
                     self.diags.error("E4002", f"duplicate action {st.name!r}", st.span)
                     continue
@@ -280,7 +293,15 @@ class Resolver:
             return
         if isinstance(st, CallStmt):
             sig = self.symbols.actions.get(st.name)
-            if sig is None:
+            if st.name in INTERNAL_INTRINSICS:
+                expected = INTERNAL_INTRINSICS[st.name]
+                if len(st.args) != expected:
+                    self.diags.error(
+                        "E4004",
+                        f"internal intrinsic {st.name!r} expects {expected} argument(s), got {len(st.args)}",
+                        st.span,
+                    )
+            elif sig is None:
                 expected = BUILTIN_ACTIONS.get(st.name)
                 if expected is None:
                     self.diags.error("E4003", f"unknown action {st.name!r}", st.span)

@@ -24,8 +24,13 @@ Action LowerAtom;
     If LowerAtom_Tag is equal to "LIT_STR" or LowerAtom_Tag is equal to "LIT_INT" or LowerAtom_Tag is equal to "LIT_DEC";
         LowerAtom_VPos = LowerPos + 1;
         Get AstOut LowerAtom_VPos;
-        Append "CONST" to IROut;
-        Append @_ to IROut;
+        LowerAtom_Value = @_;
+        If LowerAtom_Tag is equal to "LIT_STR";
+            Append "CONST_TEXT" to IROut;
+        Else;
+            Append "CONST" to IROut;
+        Done.
+        Append LowerAtom_Value to IROut;
         LowerPos = LowerPos + 2;
     Else;
         If LowerAtom_Tag is equal to "VAR";
@@ -57,8 +62,13 @@ Action LowerValueTail;
     If LowerValueTail_Tag is equal to "LIT_STR" or LowerValueTail_Tag is equal to "LIT_INT" or LowerValueTail_Tag is equal to "LIT_DEC";
         LowerValueTail_VPos = LowerPos + 1;
         Get AstOut LowerValueTail_VPos;
-        Append "CONST" to IROut;
-        Append @_ to IROut;
+        LowerValueTail_Value = @_;
+        If LowerValueTail_Tag is equal to "LIT_STR";
+            Append "CONST_TEXT" to IROut;
+        Else;
+            Append "CONST" to IROut;
+        Done.
+        Append LowerValueTail_Value to IROut;
         LowerPos = LowerPos + 2;
         Call LowerValueTail;
     Else;
@@ -284,6 +294,8 @@ Action LowerGet;
         Append LowerGet_Target to IROut;
         Append "0" to IROut;
     Done.
+    Append "STORE_LIST" to IROut;
+    Append "_" to IROut;
 Done.
 
 Action LowerLength;
@@ -292,6 +304,8 @@ Action LowerLength;
     Append "LENGTH" to IROut;
     Append @_ to IROut;
     LowerPos = LowerPos + 2;
+    Append "STORE_LIST" to IROut;
+    Append "_" to IROut;
 Done.
 
 Action LowerDecl;
@@ -357,10 +371,17 @@ Action LowerCall;
     Get AstOut LowerCall_NamePos;
     LowerCall_Name = @_;
     LowerPos = LowerPos + 2;
-    Append "CALL_BEGIN" to IROut;
-    Append LowerCall_Name to IROut;
-    Call LowerCallArgs;
-    Append "CALL_END" to IROut;
+    If LowerCall_Name is equal to "__KuroArtifactSuffix";
+        Call LowerCallArgs;
+        Append "ARTIFACT_SUFFIX" to IROut;
+    Else;
+        Append "CALL_BEGIN" to IROut;
+        Append LowerCall_Name to IROut;
+        Call LowerCallArgs;
+        Append "CALL_END" to IROut;
+    Done.
+    Append "STORE_LIST" to IROut;
+    Append "_" to IROut;
 Done.
 
 Action LowerParams;

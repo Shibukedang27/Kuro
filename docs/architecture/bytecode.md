@@ -9,7 +9,8 @@ are consumed according to the table below.
 
 | Opcode | Operands |
 | --- | --- |
-| `BC_CONST` | value |
+| `BC_CONST` | legacy untyped value; numeric spelling is inferred |
+| `BC_CONST_TEXT` | text value; never interpreted as numeric |
 | `BC_LOADVAR` | variable name |
 | `BC_STORE_LIST` | variable name |
 | `BC_MULTI_BEGIN` | — |
@@ -30,6 +31,11 @@ are consumed according to the table below.
 | `BC_FUNC_END`, `BC_RETURN` | none |
 | `BC_CALL_BEGIN` | function name |
 | `BC_CALL_END` | none |
+
+New self-hosted compiler output uses `BC_CONST_TEXT` for every string literal,
+including text such as `"1"` that resembles a number. `BC_CONST` remains
+accepted for existing streams and retains its historical numeric-spelling
+inference.
 
 The encoding is intentionally stack-oriented: value-producing operations push
 onto the VM stack, mutation and output operations consume stack values, and

@@ -89,6 +89,94 @@ def test_native_artifact_launcher_executes_multi_value_reassignment(tmp_path):
     assert result.stdout == "a\nb\nc\n3\n"
 
 
+def test_kuro_artifact_launcher_executes_private_suffix_opcode():
+    env, output = run_artifact(
+        "kuro.bytecode/1\n"
+        "BC_CONST\nKuro-native\nBC_CONST\n5\n"
+        "BC_ARTIFACT_SUFFIX\nBC_PRINT\n"
+    )
+
+    assert env["ArtifactFailed"] == 0
+    assert env["RuntimeExitCode"] == 0
+    assert output == "native\n"
+
+
+def test_kuro_artifact_launcher_preserves_numeric_looking_text_constants():
+    env, output = run_artifact(
+        "kuro.bytecode/1\n"
+        "BC_CONST_TEXT\n1\nBC_STORE_LIST\nTextValue\n"
+        "BC_LENGTH\nTextValue\nBC_PRINT\n"
+    )
+
+    assert env["ArtifactFailed"] == 0
+    assert env["RuntimeExitCode"] == 0
+    assert output == "1\n"
+
+
+def test_kuro_artifact_launcher_preserves_large_framed_input_exactly():
+    payload = "Q" * 70000 + "tail-END"
+    env, output = run_artifact(
+        "kuro.bytecode/1\n"
+        "BC_INPUT\nFirst\nBC_LENGTH\nFirst\nBC_PRINT\n"
+        "BC_LOADVAR\nFirst\nBC_CONST\n70000\nBC_ARTIFACT_SUFFIX\nBC_PRINT\n"
+        "BC_INPUT\nLater\nBC_LOADVAR\nLater\nBC_PRINT\n"
+        "kuro.input/1\n" + payload
+    )
+
+    assert env["ArtifactFailed"] == 0
+    assert env["RuntimeExitCode"] == 0
+    assert env["VMInput"] == payload
+    assert output == f"{len(payload)}\ntail-END\n\n"
+
+
+@pytest.mark.skipif(platform.system() not in {"Darwin", "Linux"}, reason="requires a supported native backend")
+def test_native_artifact_launcher_preserves_large_input_and_runs_suffix_opcode(tmp_path):
+    from compiler.self_host import build_native_artifact_launcher
+
+    executable = tmp_path / "kuro-bytecode"
+    build_native_artifact_launcher(executable)
+
+    small = subprocess.run(
+        [str(executable)],
+        input=(
+            "kuro.bytecode/1\nBC_CONST\nKuro-native\nBC_CONST\n5\n"
+            "BC_ARTIFACT_SUFFIX\nBC_PRINT\n"
+        ),
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert small.returncode == 0, small.stderr
+    assert small.stdout == "native\n"
+
+    typed_text = subprocess.run(
+        [str(executable)],
+        input=(
+            "kuro.bytecode/1\nBC_CONST_TEXT\n1\nBC_STORE_LIST\nTextValue\n"
+            "BC_LENGTH\nTextValue\nBC_PRINT\n"
+        ),
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert typed_text.returncode == 0, typed_text.stderr
+    assert typed_text.stdout == "1\n"
+
+    payload = "Q" * 70000 + "tail-END"
+    framed = (
+        "kuro.bytecode/1\n"
+        "BC_INPUT\nFirst\nBC_LENGTH\nFirst\nBC_PRINT\n"
+        "BC_LOADVAR\nFirst\nBC_CONST\n70000\nBC_ARTIFACT_SUFFIX\nBC_PRINT\n"
+        "BC_INPUT\nLater\nBC_LOADVAR\nLater\nBC_PRINT\n"
+        "kuro.input/1\n" + payload
+    )
+    large = subprocess.run(
+        [str(executable)], input=framed, capture_output=True, text=True, timeout=60
+    )
+    assert large.returncode == 0, large.stderr
+    assert large.stdout == f"{len(payload)}\ntail-END\n\n"
+
+
 def test_kuro_artifact_launcher_rejects_wrong_magic():
     env, output = run_artifact("not-kuro\nBC_CONST\n5\nBC_PRINT\n")
 
@@ -123,6 +211,19 @@ def test_kuro_artifact_launcher_decodes_escaped_values(encoded, expected):
     assert env["ArtifactFailed"] == 0
     assert env["RuntimeExitCode"] == 0
     assert output == expected
+
+
+def test_native_compiler_entry_encodes_marker_literal_as_standalone_escape():
+    entry = (ROOT / "self_host" / "native_compiler_entry.kuro").read_text(encoding="utf-8")
+    source = (
+        'CompilerFailed = 0;\n'
+        'BytecodeOut = "BC_CONST_TEXT", "kuro.input/1";\n'
+        + entry
+    )
+    result = run_source(source)
+
+    assert result.ok, result.compile.diags.render_all() if not result.compile.ok else result.runtime_error
+    assert result.stdout == "kuro.bytecode/1\nBC_CONST_TEXT\n\\i\n"
 
 
 def test_kuro_artifact_launcher_rejects_unknown_escape():
@@ -171,6 +272,13 @@ def test_kuro_artifact_launcher_gives_later_inputs_empty_text():
 @pytest.mark.parametrize("body", ["BC_CONST\n", "BC_GET\nName\n", "BC_UNKNOWN\n"])
 def test_loader_rejects_invalid_instructions_before_execution(body):
     env, output = run_artifact("kuro.bytecode/1\n" + body)
+    assert env["ArtifactFailed"] == 1
+    assert env["RuntimeExitCode"] == 1
+    assert output == ""
+
+
+def test_loader_rejects_truncated_typed_text_constant():
+    env, output = run_artifact("kuro.bytecode/1\nBC_CONST_TEXT\n")
     assert env["ArtifactFailed"] == 1
     assert env["RuntimeExitCode"] == 1
     assert output == ""

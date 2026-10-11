@@ -59,6 +59,17 @@ class EnumValue:
         return f"{self.type_name}.{self.variant}"
 
 
+def _artifact_suffix(source: object, offset: object) -> str:
+    """Return the bytecode-loader payload suffix without exposing text slicing."""
+    if not isinstance(source, str):
+        raise TypeError("artifact suffix source must be Text")
+    if type(offset) is not int:
+        raise TypeError("artifact suffix offset must be Integers")
+    if not 0 <= offset <= len(source):
+        raise IndexError("artifact suffix offset out of range")
+    return source[offset:]
+
+
 def builtin_call(name: str, args: list[object]):
     if name == "MakeChannel" and not args:
         from .concurrency import Channel

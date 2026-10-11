@@ -138,6 +138,7 @@ SNIPPETS = [
     "Action Add A, B;\nReturn A + B;\nDone.",
     "Action Add A;\nReturn A;\nDone.\nAction Add B;\nReturn B;\nDone.",  # duplicate action
     "Action Add(A, B);\nReturn A + B;\nDone.",   # legacy parens
+    "Action __KuroArtifactSuffix Source, Offset;\nDone.",  # reserved runtime action name -> E4002
     # nested Decl/Action are semantically inert at the TOP-LEVEL pass -
     # they must NOT be collected (docs/architecture/self-hosted-semantics.md §3a/3b)
     "If 1 is equal to 1;\nAge is Integers;\nDone.",

@@ -28,7 +28,7 @@ import sys
 
 from .diagnostics import Span
 from .ir import IRFunction, IRProgram
-from .values import ClosureValue, builtin_call
+from .values import ClosureValue, _artifact_suffix, builtin_call
 from .concurrency import Scheduler
 from .values import TaskValue
 
@@ -300,6 +300,12 @@ class Interpreter:
                     self.env.pop(name, None)
                 else:
                     self.env[name] = val
+            elif op == "ARTIFACT_SUFFIX":
+                source_tmp, offset_tmp = instr.args
+                try:
+                    temps[instr.dest] = _artifact_suffix(temps[source_tmp], temps[offset_tmp])
+                except (IndexError, TypeError) as error:
+                    raise KuroRuntimeException("E6001", str(error), span) from error
             elif op == "CALL":
                 name, *arg_tmps = instr.args
                 args = [temps[t] for t in arg_tmps]

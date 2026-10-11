@@ -932,6 +932,127 @@ def test_native_backend_accepts_compiler_sized_stdin(tmp_path):
     assert run.stdout == "71000\n"
 
 
+def test_native_backend_artifact_suffix_copies_text_and_rejects_bad_offsets(tmp_path):
+    valid = compile_source('Call __KuroArtifactSuffix "prefix-tail", 7;\nPrint @_.')
+    assert valid.ok, valid.diags.render_all()
+    valid_executable = tmp_path / "suffix-valid"
+    build_native(valid.ir, valid_executable)
+    run = subprocess.run(
+        [str(valid_executable)], capture_output=True, text=True, check=False
+    )
+    assert run.returncode == 0, run.stderr
+    assert run.stdout == "tail\n"
+
+    for offset in (-1, 12):
+        invalid = compile_source(
+            f'Call __KuroArtifactSuffix "prefix-tail", {offset};\nPrint @_.'
+        )
+        assert invalid.ok, invalid.diags.render_all()
+        executable = tmp_path / f"suffix-invalid-{offset}"
+        build_native(invalid.ir, executable)
+        rejected = subprocess.run(
+            [str(executable)], capture_output=True, text=True, check=False
+        )
+        assert rejected.returncode == 1
+        assert rejected.stdout == ""
+
+
+def test_native_backend_rejects_suffix_source_without_known_text_kind():
+    from compiler.ir import IRFunction, IRProgram, Instr
+
+    program = IRProgram(
+        main=[
+            Instr("CONST", (7,), "t0"),
+            Instr("CONST", (0,), "t1"),
+            Instr("ARTIFACT_SUFFIX", ("t0", "t1"), "t2"),
+        ]
+    )
+    with pytest.raises(NativeBackendError, match="statically known Text source"):
+        emit_x86_64_linux(program)
+
+    function = IRFunction(
+        "UseSuffix",
+        [],
+        [
+            Instr("CONST", (7,), "t0"),
+            Instr("CONST", (0,), "t1"),
+            Instr("ARTIFACT_SUFFIX", ("t0", "t1"), "t2"),
+        ],
+    )
+    action_program = IRProgram(functions={"UseSuffix": function})
+    with pytest.raises(NativeBackendError, match="statically known Text source"):
+        emit_x86_64_linux(action_program)
+
+
+def test_macos_arm64_suffix_requires_proven_text_sources():
+    from compiler.ir import IRFunction, IRProgram, Instr
+    from compiler.native import emit_macos_arm64
+
+    returns_integer = IRFunction(
+        "ReturnsInteger", [],
+        [Instr("CONST", (7,), "t0"), Instr("RETURN", ("t0",))],
+    )
+    untyped_result = IRProgram(
+        main=[
+            Instr("CALL", ("ReturnsInteger",), "TextResult"),
+            Instr("CONST", (0,), "t1"),
+            Instr("ARTIFACT_SUFFIX", ("TextResult", "t1"), "t2"),
+        ],
+        functions={"ReturnsInteger": returns_integer},
+    )
+    with pytest.raises(NativeBackendError, match="statically known Text source"):
+        emit_macos_arm64(untyped_result)
+
+    def action_program(action):
+        return IRProgram(
+            main=[
+                Instr("CONST", ("prefix-tail",), "t0"),
+                Instr("CONST", (7,), "t1"),
+                Instr("CALL", (action.name, "t0", "t1"), "t2"),
+            ],
+            functions={action.name: action},
+        )
+
+    untyped_action = IRFunction(
+        "UseSuffix", ["TextSource", "Offset"],
+        [
+            Instr("ARTIFACT_SUFFIX", ("TextSource", "Offset"), "t0"),
+            Instr("RETURN", ("t0",)),
+        ],
+    )
+    with pytest.raises(NativeBackendError, match="statically known Text source"):
+        emit_macos_arm64(action_program(untyped_action))
+
+    typed_action = IRFunction(
+        "UseSuffix", ["Source", "Offset"],
+        [
+            Instr("ARTIFACT_SUFFIX", ("Source", "Offset"), "t0"),
+            Instr("RETURN", ("t0",)),
+        ],
+        parameter_types={"Source": "Text", "Offset": "Integers"},
+    )
+    assembly = emit_macos_arm64(action_program(typed_action))
+    assert "bl _strlen" in assembly
+    assert "bl _memcpy" in assembly
+
+
+@requires_linux_x86_64
+def test_native_backend_accepts_text_suffix_source_in_typed_action(tmp_path):
+    source = (
+        "Action Tail Source: Text, Offset: Integers;\n"
+        "Call __KuroArtifactSuffix Source, Offset;\n"
+        "Return @_;\nDone.\n"
+        'Call Tail "prefix-tail", 7;\nPrint @_.'
+    )
+    result = compile_source(source)
+    assert result.ok, result.diags.render_all()
+    executable = tmp_path / "suffix-action"
+    build_native(result.ir, executable, target="x86_64-linux")
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=False)
+    assert run.returncode == 0, run.stderr
+    assert run.stdout == "tail\n"
+
+
 def test_native_compiler_image_compiles_arbitrary_source_from_stdin(tmp_path):
     from compiler.self_host import (
         build_native_artifact_launcher,
@@ -960,7 +1081,7 @@ def test_native_compiler_image_compiles_arbitrary_source_from_stdin(tmp_path):
         )
         assert accepted.returncode == 0
         assert accepted.stdout.splitlines() == [
-            "kuro.bytecode/1", "BC_CONST", encoded, "BC_PRINT"
+            "kuro.bytecode/1", "BC_CONST_TEXT", encoded, "BC_PRINT"
         ]
 
     self_build = subprocess.run(
