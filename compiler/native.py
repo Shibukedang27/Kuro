@@ -1369,6 +1369,13 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     local_kinds[item.dest] = record_field_kinds.get(field, "unknown") if field is not None else "unknown"
                 elif call_name == "RecordSet" and len(call_arguments) == 3:
                     local_kinds[item.dest] = "record"
+                elif call_name == "MapGet" and len(call_arguments) == 2:
+                    key = local_texts.get(call_arguments[1])
+                    local_kinds[item.dest] = map_value_kinds.get(key, "unknown") if key is not None else "unknown"
+                elif call_name == "MapSet" and len(call_arguments) == 3:
+                    local_kinds[item.dest] = "map"
+                elif call_name == "MapHas" and len(call_arguments) == 2:
+                    local_kinds[item.dest] = "number"
             elif item.op == "RETURN":
                 return local_kinds.get(item.args[0], kinds.get(item.args[0], "unknown"))
         return "unknown"
@@ -3319,6 +3326,72 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 fn_store(item.dest); fn_kinds[item.dest] = "number"
             elif fn_op == "CALL":
                 name, *arguments = item.args
+                if name in {"MapGet", "MapSet", "MapHas"}:
+                    expected_count = 3 if name == "MapSet" else 2
+                    if len(arguments) != expected_count:
+                        expected_arguments = (
+                            "a map, key, and value"
+                            if name == "MapSet"
+                            else "a map and key"
+                        )
+                        raise NativeBackendError(
+                            f"x86_64-linux action {name} requires {expected_arguments}"
+                        )
+                    if fn_kinds.get(arguments[0]) != "map":
+                        raise NativeBackendError(
+                            f"x86_64-linux action {name} currently requires a statically known map reference"
+                        )
+                    key = fn_known_text.get(arguments[1])
+                    if key is None:
+                        raise NativeBackendError(
+                            f"x86_64-linux action {name} requires a statically known literal text key"
+                        )
+                    slot = map_key_slots.setdefault(key, len(map_key_slots))
+                    if slot >= 512:
+                        raise NativeBackendError("x86_64-linux map exceeds fixed capacity of 512 keys")
+                    value_offset = slot * 8
+                    presence_offset = 4096 + slot * 8
+                    if name == "MapHas":
+                        fn_load(arguments[0], "%rax")
+                        lines.extend([
+                            f"    cmpq $0, {presence_offset}(%rax)",
+                            "    setne %al",
+                            "    movzbq %al, %rax",
+                        ])
+                        fn_store(item.dest)
+                        fn_kinds[item.dest] = "number"
+                    elif name == "MapGet":
+                        value_kind = map_value_kinds.get(key, "unknown")
+                        if value_kind == "unknown":
+                            raise NativeBackendError(
+                                "x86_64-linux action MapGet requires a key with a previously known value kind"
+                            )
+                        fn_load(arguments[0], "%rax")
+                        lines.append(f"    mov {value_offset}(%rax), %rax")
+                        fn_store(item.dest)
+                        fn_kinds[item.dest] = value_kind
+                        if value_kind == "text" and key in map_value_lengths:
+                            fn_text_lengths[item.dest] = map_value_lengths[key]
+                    else:
+                        expected_kind = map_value_kinds.get(key, "unknown")
+                        value_kind = fn_kinds.get(arguments[2], "unknown")
+                        if expected_kind == "unknown" or value_kind != expected_kind:
+                            raise NativeBackendError(
+                                "x86_64-linux action MapSet value kind must match the key's statically known kind"
+                            )
+                        if expected_kind == "text":
+                            raise NativeBackendError(
+                                "x86_64-linux action MapSet does not yet support text values with variable display lengths"
+                            )
+                        fn_load(arguments[2], "%rdx")
+                        fn_load(arguments[0], "%rax")
+                        lines.extend([
+                            f"    mov %rdx, {value_offset}(%rax)",
+                            f"    movq $1, {presence_offset}(%rax)",
+                        ])
+                        fn_store(item.dest)
+                        fn_kinds[item.dest] = "map"
+                    continue
                 if name in {"RecordGet", "RecordSet"}:
                     expected_count = 2 if name == "RecordGet" else 3
                     if len(arguments) != expected_count:
@@ -3381,9 +3454,9 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     capture_slots = function_capture_slots.get(target, {})
                     for capture_name in capture_slots:
                         capture_kind = fn_kinds.get(capture_name, "unknown")
-                        if capture_kind not in {"number", "float", "text", "record"}:
+                        if capture_kind not in {"number", "float", "text", "record", "map"}:
                             raise NativeBackendError(
-                                "x86_64-linux action-created closures currently support statically known numeric, text, or record-reference captures only"
+                                "x86_64-linux action-created closures currently support statically known numeric, text, record, or map captures only"
                             )
                         target_capture_kind = function_capture_kinds.get(target, {}).get(
                             capture_name, "unknown"

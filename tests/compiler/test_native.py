@@ -688,17 +688,42 @@ def test_native_backend_captures_and_updates_record_via_closure(tmp_path):
     assert run.stdout == "42\n42\n"
 
 
-def test_native_backend_rejects_map_closure_capture():
+@requires_linux_x86_64
+def test_native_backend_captures_and_updates_map_via_closure(tmp_path):
     result = compile_source(
-        'Store = 0; Holder = 0;\n'
+        'Store = 0; Mutator = 0;\n'
         'Call MakeMap; Update Store to @_;\n'
-        'Action MakeHolder Captured;\n'
-        'Action GetMap Dummy; Return Captured; Done.\n'
-        'Call MakeClosure "GetMap"; Return @_; Done.\n'
-        'Call MakeHolder Store; Update Holder to @_;\n'
+        'Call MapSet Store, "answer", 40;\n'
+        'Action MakeBumper UserMap;\n'
+        'Action Bump Delta; Current = 0;\n'
+        'Call MapHas UserMap, "answer"; Print @_.\n'
+        'Call MapGet UserMap, "answer"; Update Current to @_;\n'
+        'Add Delta to Current;\n'
+        'Call MapSet UserMap, "answer", Current; Return Current; Done.\n'
+        'Call MakeClosure "Bump"; Return @_; Done.\n'
+        'Call MakeBumper Store; Update Mutator to @_;\n'
+        'Call Invoke Mutator, 2; Print @_.\n'
+        'Call MapGet Store, "answer"; Print @_.\n'
     )
     assert result.ok
-    with pytest.raises(NativeBackendError, match="numeric, text, or record-reference captures only"):
+    executable = tmp_path / "captured-map-update"
+    build_native(result.ir, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "1\n42\n42\n"
+
+
+def test_native_backend_rejects_closure_value_capture():
+    result = compile_source(
+        'Stored = 0; Holder = 0;\n'
+        'Action Work Value; Return Value; Done.\n'
+        'Action MakeHolder Captured;\n'
+        'Action GetClosure Dummy; Return Captured; Done.\n'
+        'Call MakeClosure "GetClosure"; Return @_; Done.\n'
+        'Call MakeClosure "Work"; Update Stored to @_;\n'
+        'Call MakeHolder Stored; Update Holder to @_;\n'
+    )
+    assert result.ok
+    with pytest.raises(NativeBackendError, match="numeric, text, record, or map captures only"):
         emit_x86_64_linux(result.ir)
 
 
@@ -713,7 +738,7 @@ def test_native_backend_rejects_mixed_numeric_capture_kinds():
         'Call Invoke First, 2.5; Print @_.\n'
     )
     assert result.ok
-    with pytest.raises(NativeBackendError, match="numeric, text, or record-reference captures only"):
+    with pytest.raises(NativeBackendError, match="numeric, text, record, or map captures only"):
         emit_x86_64_linux(result.ir)
 
 
