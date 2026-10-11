@@ -270,3 +270,21 @@ def test_native_artifact_launcher_returns_runtime_status(tmp_path):
         )
         assert rejected.returncode == 1
         assert rejected.stdout == ""
+
+
+@pytest.mark.skipif(platform.system() not in {"Darwin", "Linux"}, reason="requires a supported native backend")
+def test_native_artifact_launcher_decodes_escaped_values(tmp_path):
+    from compiler.self_host import build_native_artifact_launcher
+
+    executable = tmp_path / "kuro-bytecode"
+    build_native_artifact_launcher(executable)
+    result = subprocess.run(
+        [str(executable)],
+        input="kuro.bytecode/1\nBC_CONST\nline\\nnext\nBC_PRINT\n",
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "line\nnext\n"
