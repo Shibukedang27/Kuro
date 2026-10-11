@@ -72,8 +72,8 @@ jobs:
           tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_links_and_runs
           tests/self_host/test_artifact_launcher.py::test_native_artifact_launcher_executes_multi_value_reassignment
 
-      - name: Build Linux native production images
-        run: make native PYTHON=python NATIVE_TARGET=x86_64-linux
+      - name: Build Linux native production images (hosted bootstrap seed)
+        run: make native-hosted-bootstrap PYTHON=python NATIVE_TARGET=x86_64-linux
 
       - name: Verify production images with Python and toolchains blocked
         run: sh tests/self_host/python_free_native_smoke.sh
