@@ -545,6 +545,23 @@ def test_native_backend_captures_one_escaping_numeric_value(tmp_path):
 
 
 @requires_linux_x86_64
+def test_native_backend_captures_and_computes_with_float_value(tmp_path):
+    result = compile_source(
+        'Adder = 0;\n'
+        'Action MakeAdder Base;\n'
+        'Action AddBase Value;\nReturn Base + Value;\nDone.\n'
+        'Call MakeClosure "AddBase";\nReturn @_;\nDone.\n'
+        'Call MakeAdder 1.25; Update Adder to @_;\n'
+        'Call Invoke Adder, 2.5; Print @_.\n'
+    )
+    assert result.ok
+    executable = tmp_path / "captured-float-closure"
+    build_native(result.ir, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == "3.75\n"
+
+
+@requires_linux_x86_64
 def test_native_backend_supports_independent_captured_closure_instances(tmp_path):
     result = compile_source(
         'First = 0; Second = 0;\n'
@@ -584,7 +601,7 @@ def test_native_backend_exits_when_closure_heap_is_exhausted(tmp_path):
     assert run.stdout == ""
 
 
-def test_native_backend_rejects_non_integer_closure_capture():
+def test_native_backend_rejects_non_numeric_closure_capture():
     result = compile_source(
         'Greeting = 0;\n'
         'Action MakeGreeting Prefix;\n'
@@ -594,7 +611,22 @@ def test_native_backend_rejects_non_integer_closure_capture():
         'Call Invoke Greeting, "language"; Print @_.\n'
     )
     assert result.ok
-    with pytest.raises(NativeBackendError, match="integer captures only"):
+    with pytest.raises(NativeBackendError, match="numeric captures only"):
+        emit_x86_64_linux(result.ir)
+
+
+def test_native_backend_rejects_mixed_numeric_capture_kinds():
+    result = compile_source(
+        'First = 0; Second = 0;\n'
+        'Action MakeAdder Base;\n'
+        'Action AddBase Value;\nReturn Base + Value;\nDone.\n'
+        'Call MakeClosure "AddBase";\nReturn @_;\nDone.\n'
+        'Call MakeAdder 1.25; Update First to @_;\n'
+        'Call MakeAdder 10; Update Second to @_;\n'
+        'Call Invoke First, 2.5; Print @_.\n'
+    )
+    assert result.ok
+    with pytest.raises(NativeBackendError, match="statically known numeric captures only"):
         emit_x86_64_linux(result.ir)
 
 
