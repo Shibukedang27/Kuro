@@ -442,6 +442,71 @@ def test_kuro_native_codegen_compiles_action_parameter_writeback(target, tmp_pat
         assert object_file.stat().st_size > 0
 
 
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_updates_action_parameter_and_local_slots(target, tmp_path):
+    tokens = [
+        "BC_FUNC_BEGIN", "Mutate", "BC_PARAM", "A", "Integers",
+        "BC_LOADVAR", "A", "BC_STORE_LIST", "Local", "BC_CONST", "1", "BC_ADD", "Local",
+        "BC_CONST", "42", "BC_UPDATE", "A", "BC_LOADVAR", "Local", "BC_LOADVAR", "A",
+        "BC_BINOP", "+", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Mutate", "BC_CONST",
+        "41", "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        assert "add 1032(%rsp), %rax\n" in env["NativeOut"]
+        assert "mov %rax, 1032(%rsp)\n" in env["NativeOut"]
+        assert "mov %rax, 1024(%rsp)\n" in env["NativeOut"]
+    else:
+        assert "ldr x1, [sp, #1032]\n    add x0, x1, x0\n" in env["NativeOut"]
+        assert "str x0, [sp, #1032]\n" in env["NativeOut"]
+        assert "str x0, [sp, #1024]\n" in env["NativeOut"]
+        assembly = tmp_path / "action-update-add-arm64.s"
+        object_file = tmp_path / "action-update-add-arm64.o"
+        assembly.write_text(env["NativeOut"], encoding="utf-8")
+        subprocess.run(
+            ["clang", "-target", "arm64-apple-macos11", "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert object_file.stat().st_size > 0
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+@pytest.mark.parametrize("opcode", ["BC_ADD", "BC_UPDATE"])
+def test_kuro_native_codegen_initializes_action_local_from_update_or_add(opcode, target, tmp_path):
+    tokens = [
+        "BC_FUNC_BEGIN", "Seed", "BC_CONST", "41", opcode, "N", "BC_LOADVAR", "N", "BC_RETURN",
+        "BC_FUNC_END", "BC_CALL_BEGIN", "Seed", "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR",
+        "_", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        assert "mov %rax, 1024(%rsp)\n" in env["NativeOut"]
+        if opcode == "BC_ADD":
+            assert "add 1024(%rsp), %rax\n" not in env["NativeOut"]
+    else:
+        assert "str x0, [sp, #1024]\n" in env["NativeOut"]
+        if opcode == "BC_ADD":
+            assert "ldr x1, [sp, #1024]\n" not in env["NativeOut"]
+        assembly = tmp_path / f"action-{opcode.lower()}-local-arm64.s"
+        object_file = tmp_path / f"action-{opcode.lower()}-local-arm64.o"
+        assembly.write_text(env["NativeOut"], encoding="utf-8")
+        subprocess.run(
+            ["clang", "-target", "arm64-apple-macos11", "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert object_file.stat().st_size > 0
+
+
 def test_kuro_native_codegen_rejects_undeclared_action_local_read():
     tokens = [
         "BC_FUNC_BEGIN", "Local", "BC_LOADVAR", "N", "BC_RETURN", "BC_FUNC_END",
@@ -819,6 +884,28 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
                     "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
                 ],
                 "83\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Increase", "BC_PARAM", "A", "Integers", "BC_LOADVAR", "A",
+                    "BC_STORE_LIST", "Local", "BC_CONST", "1", "BC_ADD", "Local", "BC_LOADVAR", "Local",
+                    "BC_RETURN", "BC_FUNC_END", "BC_FUNC_BEGIN", "Replace", "BC_PARAM", "B", "Integers",
+                    "BC_CONST", "73", "BC_UPDATE", "B", "BC_LOADVAR", "B", "BC_RETURN", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "Increase", "BC_CONST", "41", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_LOADVAR", "_", "BC_PRINT", "BC_CALL_BEGIN", "Replace", "BC_CONST", "41",
+                    "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "42\n73\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "SeedAdd", "BC_CONST", "41", "BC_ADD", "Count", "BC_LOADVAR", "Count",
+                    "BC_RETURN", "BC_FUNC_END", "BC_FUNC_BEGIN", "SeedUpdate", "BC_CONST", "73", "BC_UPDATE",
+                    "Answer", "BC_LOADVAR", "Answer", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "SeedAdd",
+                    "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT", "BC_CALL_BEGIN",
+                    "SeedUpdate", "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "41\n73\n",
             ),
         ],
     )
