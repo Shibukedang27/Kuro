@@ -18,6 +18,26 @@ class NativeBackendError(ValueError):
     pass
 
 
+def _x87_extended_power10_bytes(power: int) -> bytes:
+    """Return the rounded x87 binary80 encoding of the positive integer 10**power."""
+    if not 0 <= power <= 341:
+        raise ValueError("x87 power-of-ten table supports exponents 0 through 341")
+    value = 10**power
+    binary_exponent = value.bit_length() - 1
+    numerator = value << 63
+    denominator = 1 << binary_exponent
+    significand, remainder = divmod(numerator, denominator)
+    if remainder * 2 > denominator or (
+        remainder * 2 == denominator and significand & 1
+    ):
+        significand += 1
+    if significand == 1 << 64:
+        significand >>= 1
+        binary_exponent += 1
+    biased_exponent = binary_exponent + 16383
+    return significand.to_bytes(8, "little") + biased_exponent.to_bytes(2, "little")
+
+
 def _native_kind_for_type(type_name: str | None) -> str | None:
     if type_name == "Text":
         return "text"
@@ -3865,9 +3885,31 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         ".Lkuro_strlen_done:", "    ret",
     ])
     lines.extend([
-        "_kuro_print_float:", "    push %rbp", "    mov %rsp, %rbp", "    sub $96, %rsp",
+        "_kuro_print_float:", "    push %rbp", "    mov %rsp, %rbp", "    sub $112, %rsp",
         "    mov %rax, %r11", "    sar $63, %r11", "    mov %r11, -88(%rbp)",
-        "    btr $63, %rax", "    mov %rax, -96(%rbp)", "    movq %rax, %xmm0", "    cvttsd2si %xmm0, %rax",
+        "    btr $63, %rax", "    mov %rax, -96(%rbp)", "    mov %rax, -104(%rbp)", "    movq $0, -40(%rbp)", "    movq $0, -48(%rbp)",
+        "    mov %rax, %r10", "    movabs $0x7ff0000000000000, %r9", "    and %r9, %r10", "    cmp %r9, %r10", "    je .Lkuro_print_float_nonfinite",
+        "    test %rax, %rax", "    jz .Lkuro_print_float_fixed", "    movq %rax, %xmm0",
+        "    ucomisd .Lkuro_float_scientific_min(%rip), %xmm0", "    jb .Lkuro_print_float_scientific",
+        "    ucomisd .Lkuro_float_scientific_max(%rip), %xmm0", "    jae .Lkuro_print_float_scientific", "    jmp .Lkuro_print_float_fixed",
+        ".Lkuro_print_float_nonfinite:", "    mov %rax, %r10", "    movabs $0x000fffffffffffff, %r9", "    and %r9, %r10", "    test %r10, %r10", "    jnz .Lkuro_print_float_nan",
+        "    cmpq $0, -88(%rbp)", "    jne .Lkuro_print_float_negative_infinity", "    lea .Lkuro_float_inf_text(%rip), %rsi", "    mov $4, %rdx", "    jmp .Lkuro_print_float_special_write",
+        ".Lkuro_print_float_negative_infinity:", "    lea .Lkuro_float_negative_inf_text(%rip), %rsi", "    mov $5, %rdx", "    jmp .Lkuro_print_float_special_write",
+        ".Lkuro_print_float_nan:", "    lea .Lkuro_float_nan_text(%rip), %rsi", "    mov $4, %rdx",
+        ".Lkuro_print_float_special_write:", "    mov $1, %rax", "    mov $1, %rdi", "    syscall", "    leave", "    ret",
+        ".Lkuro_print_float_scientific:", "    movq $1, -40(%rbp)", "    movq -96(%rbp), %xmm0", "    xor %r10d, %r10d",
+        ".Lkuro_float_exp_find:", "    ucomisd .Lkuro_float_ten(%rip), %xmm0", "    jae .Lkuro_float_exp_large",
+        "    ucomisd .Lkuro_float_one(%rip), %xmm0", "    jb .Lkuro_float_exp_small", "    jmp .Lkuro_float_exp_found",
+        ".Lkuro_float_exp_large:", "    divsd .Lkuro_float_ten(%rip), %xmm0", "    inc %r10", "    jmp .Lkuro_float_exp_find",
+        ".Lkuro_float_exp_small:", "    mulsd .Lkuro_float_ten(%rip), %xmm0", "    dec %r10", "    jmp .Lkuro_float_exp_find",
+        ".Lkuro_float_exp_found:", "    mov %r10, -48(%rbp)", "    fldl -96(%rbp)", "    lea .Lkuro_float_pow10_ext(%rip), %r8",
+        "    test %r10, %r10", "    js .Lkuro_float_scale_small", "    mov %r10, %r9", "    imul $10, %r9, %r9", "    fldt (%r8,%r9)", "    fdivrp %st, %st(1)", "    jmp .Lkuro_float_scale_done",
+        ".Lkuro_float_scale_small:", "    neg %r10", "    mov %r10, %r9", "    imul $10, %r9, %r9", "    fldt (%r8,%r9)", "    fmulp %st, %st(1)",
+        ".Lkuro_float_scale_done:", "    fstpl -96(%rbp)", "    movq -96(%rbp), %xmm0",
+        "    ucomisd .Lkuro_float_one(%rip), %xmm0", "    jb .Lkuro_float_adjust_low", "    ucomisd .Lkuro_float_ten(%rip), %xmm0", "    jae .Lkuro_float_adjust_high", "    jmp .Lkuro_print_float_fixed",
+        ".Lkuro_float_adjust_low:", "    mulsd .Lkuro_float_ten(%rip), %xmm0", "    movq %xmm0, -96(%rbp)", "    decq -48(%rbp)", "    jmp .Lkuro_print_float_fixed",
+        ".Lkuro_float_adjust_high:", "    divsd .Lkuro_float_ten(%rip), %xmm0", "    movq %xmm0, -96(%rbp)", "    incq -48(%rbp)",
+        ".Lkuro_print_float_fixed:", "    movq -96(%rbp), %xmm0", "    cvttsd2si %xmm0, %rax",
         "    mov %rax, -72(%rbp)", "    mov %rax, -56(%rbp)", "    cvtsi2sd %rax, %xmm1", "    subsd %xmm1, %xmm0",
         "    mulsd .Lkuro_float_scale(%rip), %xmm0", "    addsd .Lkuro_float_round(%rip), %xmm0",
         "    cvttsd2si %xmm0, %rax", "    movabs $100000000000000000, %r9",
@@ -3880,18 +3922,58 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         "    movq %xmm0, %rax", "    cmp -96(%rbp), %rax", "    jne .Lkuro_print_float_use17",
         "    mov -56(%rbp), %rax", "    mov %rax, -72(%rbp)", "    mov -64(%rbp), %rax", "    movabs $10000000000000000, %r9",
         "    cmp %r9, %rax", "    jne .Lkuro_print_float_16_no_carry", "    incq -72(%rbp)", "    xor %eax, %eax",
-        ".Lkuro_print_float_16_no_carry:", "    mov %rax, -80(%rbp)", "    mov $16, %r10", "    jmp .Lkuro_print_float_format_fraction",
-        ".Lkuro_print_float_use17:", "    mov $17, %r10",
+        ".Lkuro_print_float_16_no_carry:", "    mov %rax, -80(%rbp)", "    mov $16, %r10", "    cmpq $0, -40(%rbp)", "    jne .Lkuro_print_float_scientific_check", "    jmp .Lkuro_print_float_format_fraction",
+        ".Lkuro_print_float_use17:", "    mov $17, %r10", "    cmpq $0, -40(%rbp)", "    jne .Lkuro_print_float_scientific_check", "    jmp .Lkuro_print_float_format_fraction",
+        ".Lkuro_print_float_scientific_check:", "    mov %r10, -24(%rbp)", "    mov %r10, %r11", "    mov $1, %r9",
+        ".Lkuro_float_candidate_scale:", "    test %r11d, %r11d", "    jz .Lkuro_float_candidate_scale_done", "    imul $10, %r9, %r9", "    dec %r11", "    jmp .Lkuro_float_candidate_scale",
+        ".Lkuro_float_candidate_scale_done:", "    mov %r9, -32(%rbp)", "    mov -72(%rbp), %rax", "    imul %r9, %rax", "    add -80(%rbp), %rax", "    mov %rax, -64(%rbp)",
+        "    mov -48(%rbp), %r10", "    sub -24(%rbp), %r10", "    fildll -64(%rbp)", "    lea .Lkuro_float_pow10_ext(%rip), %r8", "    test %r10, %r10", "    js .Lkuro_float_candidate_small",
+        "    mov %r10, %r9", "    imul $10, %r9, %r9", "    fldt (%r8,%r9)", "    fmulp %st, %st(1)", "    jmp .Lkuro_float_candidate_scaled",
+        ".Lkuro_float_candidate_small:", "    neg %r10", "    mov %r10, %r9", "    imul $10, %r9, %r9", "    fldt (%r8,%r9)", "    fdivrp %st, %st(1)",
+        ".Lkuro_float_candidate_scaled:", "    fstpl -112(%rbp)", "    mov -112(%rbp), %rax", "    cmp -104(%rbp), %rax", "    jne .Lkuro_print_float_scientific_precise", "    mov -24(%rbp), %r10", "    jmp .Lkuro_print_float_scientific_shorten_start",
+        ".Lkuro_print_float_scientific_precise:", "    fldl -104(%rbp)", "    lea .Lkuro_float_pow10_ext(%rip), %r8", "    mov -48(%rbp), %r10", "    test %r10, %r10", "    js .Lkuro_float_digits_small",
+        "    mov %r10, %r9", "    imul $10, %r9, %r9", "    fldt (%r8,%r9)", "    fdivrp %st, %st(1)", "    jmp .Lkuro_float_digits_scaled",
+        ".Lkuro_float_digits_small:", "    neg %r10", "    mov %r10, %r9", "    imul $10, %r9, %r9", "    fldt (%r8,%r9)", "    fmulp %st, %st(1)",
+        ".Lkuro_float_digits_scaled:", "    fldt 160(%r8)", "    fmulp %st, %st(1)", "    fistpll -64(%rbp)",
+        "    mov -64(%rbp), %rax", "    movabs $10000000000000000, %r9", "    xor %edx, %edx", "    div %r9", "    cmp $10, %rax", "    jae .Lkuro_float_digits_carry",
+        "    mov %rax, -72(%rbp)", "    mov %rdx, -80(%rbp)", "    mov $16, %r10", "    jmp .Lkuro_print_float_scientific_shorten_start",
+        ".Lkuro_float_digits_carry:", "    mov -64(%rbp), %rax", "    xor %edx, %edx", "    mov $10, %r9", "    div %r9", "    mov %rax, -64(%rbp)", "    movq $1, -72(%rbp)", "    movq $0, -80(%rbp)", "    incq -48(%rbp)", "    mov $16, %r10", "    jmp .Lkuro_print_float_scientific_shorten_start",
+        ".Lkuro_print_float_scientific_shorten_start:", "    cmpq $10, -72(%rbp)", "    jne .Lkuro_float_shorten_normalized", "    mov -64(%rbp), %rax", "    xor %edx, %edx", "    mov $10, %r9", "    div %r9", "    mov %rax, -64(%rbp)", "    movq $1, -72(%rbp)", "    movq $0, -80(%rbp)", "    incq -48(%rbp)",
+        ".Lkuro_float_shorten_normalized:", "    mov %r10, -16(%rbp)", "    mov $10, %rax", "    mov %rax, -32(%rbp)", "    decq %r10", "    mov %r10, -24(%rbp)",
+        ".Lkuro_float_shorten_try:", "    cmpq $0, -24(%rbp)", "    jl .Lkuro_float_shorten_keep", "    mov -64(%rbp), %rax", "    xor %edx, %edx", "    divq -32(%rbp)", "    mov %rax, -56(%rbp)",
+        "    fildll -56(%rbp)", "    lea .Lkuro_float_pow10_ext(%rip), %r8", "    mov -48(%rbp), %r10", "    sub -24(%rbp), %r10", "    test %r10, %r10", "    js .Lkuro_float_shorten_lower_small",
+        "    mov %r10, %r9", "    imul $10, %r9, %r9", "    fldt (%r8,%r9)", "    fmulp %st, %st(1)", "    jmp .Lkuro_float_shorten_lower_scaled",
+        ".Lkuro_float_shorten_lower_small:", "    neg %r10", "    mov %r10, %r9", "    imul $10, %r9, %r9", "    fldt (%r8,%r9)", "    fdivrp %st, %st(1)",
+        ".Lkuro_float_shorten_lower_scaled:", "    fstpl -112(%rbp)", "    mov -112(%rbp), %rax", "    cmp -104(%rbp), %rax", "    je .Lkuro_float_shorten_accept",
+        "    addq $1, -56(%rbp)", "    fildll -56(%rbp)", "    lea .Lkuro_float_pow10_ext(%rip), %r8", "    mov -48(%rbp), %r10", "    sub -24(%rbp), %r10", "    test %r10, %r10", "    js .Lkuro_float_shorten_upper_small",
+        "    mov %r10, %r9", "    imul $10, %r9, %r9", "    fldt (%r8,%r9)", "    fmulp %st, %st(1)", "    jmp .Lkuro_float_shorten_upper_scaled",
+        ".Lkuro_float_shorten_upper_small:", "    neg %r10", "    mov %r10, %r9", "    imul $10, %r9, %r9", "    fldt (%r8,%r9)", "    fdivrp %st, %st(1)",
+        ".Lkuro_float_shorten_upper_scaled:", "    fstpl -112(%rbp)", "    mov -112(%rbp), %rax", "    cmp -104(%rbp), %rax", "    je .Lkuro_float_shorten_accept",
+        "    mov -32(%rbp), %rax", "    imul $10, %rax, %rax", "    mov %rax, -32(%rbp)", "    decq -24(%rbp)", "    jmp .Lkuro_float_shorten_try",
+        ".Lkuro_float_shorten_accept:", "    mov $1, %r9", "    mov -24(%rbp), %r11",
+        ".Lkuro_float_shorten_output_scale:", "    test %r11d, %r11d", "    jz .Lkuro_float_shorten_output_ready", "    imul $10, %r9, %r9", "    dec %r11", "    jmp .Lkuro_float_shorten_output_scale",
+        ".Lkuro_float_shorten_output_ready:", "    mov -56(%rbp), %rax", "    xor %edx, %edx", "    div %r9", "    cmp $10, %rax", "    jae .Lkuro_float_shorten_output_carry",
+        "    mov %rax, -72(%rbp)", "    mov %rdx, -80(%rbp)", "    mov -24(%rbp), %r10", "    jmp .Lkuro_print_float_format_fraction",
+        ".Lkuro_float_shorten_output_carry:", "    movq $1, -72(%rbp)", "    movq $0, -80(%rbp)", "    incq -48(%rbp)", "    mov -24(%rbp), %r10", "    jmp .Lkuro_print_float_format_fraction",
+        ".Lkuro_float_shorten_keep:", "    mov -16(%rbp), %r10", "    jmp .Lkuro_print_float_format_fraction",
         ".Lkuro_print_float_format_fraction:", "    lea -1(%rbp), %rsi", "    movb $10, (%rsi)", "    mov $1, %rcx",
-        "    mov -80(%rbp), %rax", "    test %rax, %rax", "    jnz .Lkuro_print_float_trim_start",
-        "    mov $1, %r10", "    jmp .Lkuro_print_float_trim_done",
+        "    cmpq $0, -40(%rbp)", "    je .Lkuro_print_float_no_exponent", "    mov -48(%rbp), %rax", "    test %rax, %rax", "    jns .Lkuro_print_float_exp_positive",
+        "    neg %rax", "    mov $45, %r8d", "    jmp .Lkuro_print_float_exp_sign_ready", ".Lkuro_print_float_exp_positive:", "    mov $43, %r8d",
+        ".Lkuro_print_float_exp_sign_ready:", "    xor %r11d, %r11d", "    mov $10, %r9",
+        ".Lkuro_print_float_exp_digits:", "    xor %edx, %edx", "    div %r9", "    add $48, %dl", "    dec %rsi", "    mov %dl, (%rsi)", "    inc %rcx", "    inc %r11", "    test %rax, %rax", "    jnz .Lkuro_print_float_exp_digits",
+        "    cmp $1, %r11", "    jne .Lkuro_print_float_exp_sign", "    dec %rsi", "    movb $48, (%rsi)", "    inc %rcx",
+        ".Lkuro_print_float_exp_sign:", "    dec %rsi", "    mov %r8b, (%rsi)", "    inc %rcx", "    dec %rsi", "    movb $101, (%rsi)", "    inc %rcx",
+        ".Lkuro_print_float_no_exponent:", "    mov -80(%rbp), %rax", "    test %rax, %rax", "    jnz .Lkuro_print_float_trim_start",
+        "    cmpq $0, -40(%rbp)", "    je .Lkuro_print_float_fixed_zero_fraction", "    xor %r10d, %r10d", "    jmp .Lkuro_print_float_trim_done",
+        ".Lkuro_print_float_fixed_zero_fraction:", "    mov $1, %r10", "    jmp .Lkuro_print_float_trim_done",
         ".Lkuro_print_float_trim_start:", "    mov $10, %r9",
         ".Lkuro_print_float_trim:", "    xor %edx, %edx", "    div %r9", "    test %rdx, %rdx",
         "    jne .Lkuro_print_float_trim_done", "    mov %rax, -80(%rbp)", "    dec %r10", "    jmp .Lkuro_print_float_trim",
-        ".Lkuro_print_float_trim_done:", "    mov -80(%rbp), %rax", "    mov $10, %r9",
+        ".Lkuro_print_float_trim_done:", "    mov -80(%rbp), %rax", "    mov $10, %r9", "    test %r10, %r10", "    jz .Lkuro_print_float_fraction_done",
         ".Lkuro_print_float_fraction:", "    xor %edx, %edx", "    div %r9", "    add $48, %dl",
         "    dec %rsi", "    mov %dl, (%rsi)", "    inc %rcx", "    dec %r10", "    jnz .Lkuro_print_float_fraction",
-        "    dec %rsi", "    movb $46, (%rsi)", "    inc %rcx",
+        ".Lkuro_print_float_fraction_done:", "    cmpq $0, -40(%rbp)", "    je .Lkuro_print_float_emit_dot", "    cmpq $0, -80(%rbp)", "    je .Lkuro_print_float_integer",
+        ".Lkuro_print_float_emit_dot:", "    dec %rsi", "    movb $46, (%rsi)", "    inc %rcx",
         ".Lkuro_print_float_integer:", "    mov -72(%rbp), %rax", "    mov $10, %r9",
         ".Lkuro_print_float_integer_loop:", "    xor %edx, %edx", "    div %r9", "    add $48, %dl",
         "    dec %rsi", "    mov %dl, (%rsi)", "    inc %rcx", "    test %rax, %rax", "    jnz .Lkuro_print_float_integer_loop",
@@ -3972,11 +4054,22 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
         lines.append(f"{label}: .byte {', '.join(str(byte) for byte in encoded)}")
     for label, value in float_data:
         lines.append(f"{label}: .double {value!r}")
+    lines.extend(["    .p2align 1", ".Lkuro_float_pow10_ext:"])
+    for power in range(342):
+        encoded_power = _x87_extended_power10_bytes(power)
+        lines.append("    .byte " + ", ".join(str(byte) for byte in encoded_power))
     lines.extend([
         "    .p2align 3",
         ".Lkuro_float_scale: .double 100000000000000000.0",
         ".Lkuro_float_scale16: .double 10000000000000000.0",
+        ".Lkuro_float_scientific_min: .double 0.0001",
+        ".Lkuro_float_scientific_max: .double 10000000000000000.0",
+        ".Lkuro_float_one: .double 1.0",
+        ".Lkuro_float_ten: .double 10.0",
         ".Lkuro_float_round: .double 0.5",
+        ".Lkuro_float_inf_text: .ascii \"inf\\n\"",
+        ".Lkuro_float_negative_inf_text: .ascii \"-inf\\n\"",
+        ".Lkuro_float_nan_text: .ascii \"nan\\n\"",
         ".Lkuro_newline: .byte 10", ".Lkuro_rodata_end:",
     ])
     return "\n".join(lines) + "\n"
