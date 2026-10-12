@@ -249,8 +249,11 @@ NativeVariableNames is Text;
 NativeVariableName is Text;
 NativeCurrentParamName0 is Text;
 NativeCurrentParamName1 is Text;
-NativeFunctionLocalName is Text;
-NativeFunctionLocalDefined = 0;
+NativeFunctionLocalNames is Text;
+NativeCurrentLocalName is Text;
+NativeFunctionLocalNameCount = 0;
+NativeCurrentFunctionLocalStart = 0;
+NativeCurrentFunctionLocalCount = 0;
 NativeVariableCount = 0;
 NativeIfLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeIfElseSeen = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -294,6 +297,24 @@ Action NativeFindFunctionParamSlot Name: Text, Index: Integers;
         Else;
             NativeNextParamIndex = Index + 1;
             Call NativeFindFunctionParamSlot Name, NativeNextParamIndex;
+            Return @_;
+        Done.
+    Else;
+        Return -1;
+    Done.
+Done.
+
+Action NativeFindFunctionLocalSlot Name: Text, Index: Integers;
+    If Index is less than NativeCurrentFunctionLocalCount;
+        NativeFunctionLocalNamePosition = NativeCurrentFunctionLocalStart + Index;
+        Get NativeFunctionLocalNames NativeFunctionLocalNamePosition;
+        NativeCurrentLocalName = @_;
+        Call NativeTextNamesEqual Name, NativeCurrentLocalName;
+        If @_ is equal to 1;
+            Return Index;
+        Else;
+            NativeNextLocalIndex = Index + 1;
+            Call NativeFindFunctionLocalSlot Name, NativeNextLocalIndex;
             Return @_;
         Done.
     Else;
@@ -568,8 +589,8 @@ Action EmitStraightIntegerProgram;
     NativeReturned = 0;
     NativeVariableCount = 0;
     If NativeFunctionMode is equal to 1;
-        NativeFunctionLocalName = "";
-        NativeFunctionLocalDefined = 0;
+        NativeCurrentFunctionLocalStart = NativeFunctionLocalNameCount;
+        NativeCurrentFunctionLocalCount = 0;
     Done.
     NativeIfDepth = 0;
     NativeIfCounter = 0;
@@ -1005,14 +1026,16 @@ Action EmitStraightIntegerProgram;
                     Call NativeFindFunctionParamSlot NativeVariableName, 0;
                     NativeVariableSlot = @_;
                     If NativeVariableSlot is less than 0;
-                        If NativeFunctionLocalDefined is equal to 0;
-                            NativeFunctionLocalName = NativeVariableName;
-                            NativeFunctionLocalDefined = 1;
-                            NativeVariableSlot = NativeCurrentFunctionParamCount;
+                        Call NativeFindFunctionLocalSlot NativeVariableName, 0;
+                        NativeFunctionLocalSlot = @_;
+                        If NativeFunctionLocalSlot is greater than or equal to 0;
+                            NativeVariableSlot = NativeCurrentFunctionParamCount + NativeFunctionLocalSlot;
                         Else;
-                            Call NativeTextNamesEqual NativeVariableName, NativeFunctionLocalName;
-                            If @_ is equal to 1;
-                                NativeVariableSlot = NativeCurrentFunctionParamCount;
+                            If NativeCurrentFunctionLocalCount is less than 32 and NativeFunctionLocalNameCount is less than 1024;
+                                NativeVariableSlot = NativeCurrentFunctionParamCount + NativeCurrentFunctionLocalCount;
+                                Append NativeVariableName to NativeFunctionLocalNames;
+                                Add 1 to NativeCurrentFunctionLocalCount;
+                                Add 1 to NativeFunctionLocalNameCount;
                             Else;
                                 NativeFailed = 1;
                             Done.
@@ -1048,13 +1071,10 @@ Action EmitStraightIntegerProgram;
                     Call NativeFindFunctionParamSlot NativeVariableName, 0;
                     NativeVariableSlot = @_;
                     If NativeVariableSlot is less than 0;
-                        If NativeFunctionLocalDefined is equal to 1;
-                            Call NativeTextNamesEqual NativeVariableName, NativeFunctionLocalName;
-                            If @_ is equal to 1;
-                                NativeVariableSlot = NativeCurrentFunctionParamCount;
-                            Else;
-                                NativeVariableSlot = -1;
-                            Done.
+                        Call NativeFindFunctionLocalSlot NativeVariableName, 0;
+                        NativeFunctionLocalSlot = @_;
+                        If NativeFunctionLocalSlot is greater than or equal to 0;
+                            NativeVariableSlot = NativeCurrentFunctionParamCount + NativeFunctionLocalSlot;
                         Else;
                             NativeVariableSlot = -1;
                         Done.
@@ -1295,6 +1315,8 @@ Action NativeBuildFunctions;
     NativeFunctionMode = 0;
 Done.
 
+NativeFunctionLocalNames = "";
+NativeFunctionLocalNameCount = 1;
 Call NativePrepareProgram;
 If NativeFailed is equal to 0;
     Call NativeBuildFunctions;
