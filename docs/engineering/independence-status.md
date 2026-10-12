@@ -68,7 +68,7 @@ The earlier planning estimate was approximately **7–10 months full-time-equiva
 | [#42](https://github.com/Shibukedang27/Kuro/pull/42) | Add zero-argument integer-returning Actions to Kuro native codegen | Open; hosted tests, ARM64 cross-assembly, compiled Linux execution; 8/8 checks passing |
 | [#43](https://github.com/Shibukedang27/Kuro/pull/43) | Support fully returning If/Else branches in integer Actions in Kuro native codegen | Open; 9 hosted tests, ARM64 cross-assembly, compiled Linux integration, and 8/8 checks passing |
 | [#44](https://github.com/Shibukedang27/Kuro/pull/44) | Add scientific notation and binary64 round-trip formatting to Linux native output | Open; 707 passed, 19 skipped; native tests 78 passed, 1 skipped; implementation commit `8e9affc` passed 8/8 checks |
-| [#45](https://github.com/Shibukedang27/Kuro/pull/45) | Support two-integer-parameter Actions in Kuro native codegen | 714 passed, 19 skipped; native-codegen tests 43 passed, 17 skipped; CI pending |
+| [#45](https://github.com/Shibukedang27/Kuro/pull/45) | Support two-integer-parameter Actions in Kuro native codegen | Open; 714 passed, 19 skipped; native-codegen tests 43 passed, 17 skipped; 8/8 checks passing |
 
 The PR descriptions contain the detailed intent, implementation, test outcomes, and explicit limits for each batch. The dependency chain is deliberate: review and merge in dependency order if accepting the changes.
 
