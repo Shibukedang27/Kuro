@@ -331,10 +331,12 @@ NativeFunctionParam2Names is Text;
 NativeFunctionBodyStarts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeFunctionBodyEnds = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeFunctionParameterCounts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeFunctionReturnCounts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeFunctionCount = 0;
 NativeFunctionMode = 0;
 NativeCurrentFunctionIndex = 0;
 NativeCurrentFunctionParamCount = 0;
+NativeCurrentFunctionReturnCount = 0;
 NativeCurrentBodyStart = 0;
 NativeCurrentBodyEnd = 0;
 NativeAllFunctionsOut = "";
@@ -604,6 +606,7 @@ Action NativePrepareProgram;
                 If NativePrepareIfDepth is not equal to 0;
                     NativeFailed = 1;
                 Done.
+                If NativePrepareReturnCount is not equal to 0;
                 If NativePrepareReturnCount is equal to 1;
                     If NativePrepareLastBodyReturn is equal to 0;
                         NativeFailed = 1;
@@ -662,10 +665,12 @@ Action NativePrepareProgram;
                         Done.
                     Done.
                 Done.
+                Done.
                 If NativeFailed is equal to 0;
                     Set NativeFunctionBodyStarts NativeFunctionCount to NativePrepareBodyStart;
                     Set NativeFunctionBodyEnds NativeFunctionCount to NativePrepareBodyEnd;
                     Set NativeFunctionParameterCounts NativeFunctionCount to NativePrepareParamCount;
+                    Set NativeFunctionReturnCounts NativeFunctionCount to NativePrepareReturnCount;
                     Append NativePrepareParamName0 to NativeFunctionParam0Names;
                     Append NativePrepareParamName1 to NativeFunctionParam1Names;
                     Append NativePrepareParamName2 to NativeFunctionParam2Names;
@@ -1414,6 +1419,13 @@ Action EmitStraightIntegerProgram;
     Done.
     If NativeFailed is equal to 0;
         If NativeFunctionMode is equal to 1;
+            If NativeCurrentFunctionReturnCount is equal to 0;
+                If NativeX86 is equal to 1;
+                    NativeOut = NativeOut + "    xor %eax, %eax\n    add $2048, %rsp\n    pop %rbp\n    ret\n";
+                Else;
+                    NativeOut = NativeOut + "    mov x0, #0\n    add sp, sp, #2048\n    ldp x29, x30, [sp], #16\n    ret\n";
+                Done.
+            Done.
             NativeAllFunctionsOut = NativeAllFunctionsOut + NativeOut;
         Else;
             If NativeX86 is equal to 1;
@@ -1444,6 +1456,8 @@ Action NativeBuildFunctions;
         NativeCurrentBodyEnd = @_;
         Get NativeFunctionParameterCounts NativeBuildFunctionIndex;
         NativeCurrentFunctionParamCount = @_;
+        Get NativeFunctionReturnCounts NativeBuildFunctionIndex;
+        NativeCurrentFunctionReturnCount = @_;
         NativeCurrentFunctionIndex = NativeBuildFunctionIndex;
         NativeFunctionMode = 1;
         Call EmitStraightIntegerProgram;
