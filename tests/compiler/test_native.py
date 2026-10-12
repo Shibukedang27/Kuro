@@ -1,11 +1,14 @@
+import math
 import platform
 import subprocess
+import sys
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
 from compiler.native import NativeBackendError, build_native, emit_x86_64_linux, emit_x86_64_macos
-from compiler.pipeline import compile_source
+from compiler.pipeline import compile_source, run_source
 
 
 requires_linux_x86_64 = pytest.mark.skipif(
@@ -465,6 +468,53 @@ def test_native_backend_formats_computed_floats_and_mixed_division(tmp_path):
     build_native(result.ir, executable)
     run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
     assert run.stdout == "3.75\n2.75\n6.0\n0.3333333333333333\n0.30000000000000004\n"
+
+
+@requires_linux_x86_64
+def test_native_backend_formats_scientific_float_values_like_interpreter(tmp_path):
+    source = (
+        "Print 0.00001.\n"
+        "Print 0.00000000000000001.\n"
+        "Print 10000000000000000.0.\n"
+        "Print 10000000000000000000.0.\n"
+        "Print 12345000000000000000.0.\n"
+        "Print 1.0 / 100000.0."
+    )
+    expected = run_source(source).stdout
+    assert expected == "1e-05\n1e-17\n1e+16\n1e+19\n1.2345e+19\n1e-05\n"
+    result = compile_source(source)
+    assert result.ok
+    executable = tmp_path / "scientific-floats"
+    build_native(result.ir, executable)
+    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert run.stdout == expected
+
+
+@requires_linux_x86_64
+def test_native_backend_scientific_extremes_round_trip(tmp_path):
+    values = (5e-324, 1e-323, -5e-324, 9.8064869e50, 7.17224133e100, sys.float_info.max)
+
+    def literal(value):
+        token = format(Decimal(repr(value)), "f")
+        return token if "." in token else token + ".0"
+
+    maximum = literal(sys.float_info.max)
+    source = "\n".join(f"Print {literal(value)}." for value in values)
+    source += f"\nMaximum = {maximum}; Infinite = Maximum * 2.0; Print Infinite. Print Infinite - Infinite."
+    expected = run_source(source).stdout.splitlines()
+    result = compile_source(source)
+    assert result.ok
+    executable = tmp_path / "scientific-extremes"
+    build_native(result.ir, executable)
+    actual = subprocess.run([str(executable)], capture_output=True, text=True, check=True).stdout.splitlines()
+    assert len(actual) == len(expected)
+    for expected_text, actual_text in zip(expected, actual):
+        expected_value = float(expected_text)
+        actual_value = float(actual_text)
+        if math.isnan(expected_value):
+            assert math.isnan(actual_value)
+        else:
+            assert actual_value == expected_value
 
 
 @requires_linux_x86_64
