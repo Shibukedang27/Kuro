@@ -1106,15 +1106,39 @@ Action EmitStraightIntegerProgram;
 
         If NativeStraightOp is equal to "BC_UPDATE" or NativeStraightOp is equal to "BC_ADD";
             NativeStraightKnown = 1;
-            If NativeFunctionMode is equal to 0 and NativeStraightPos is less than NativeStraightEnd and NativeStackDepth is greater than 0;
+            If NativeStraightPos is less than NativeStraightEnd and NativeStackDepth is greater than 0;
                 Get BytecodeOut NativeStraightPos;
                 NativeVariableName = @_;
                 Add 1 to NativeStraightPos;
-                Call NativeFindVariable NativeVariableName, 0;
-                NativeVariableSlot = @_;
-                If NativeVariableSlot is less than 0;
-                    NativeFailed = 1;
+                NativeVariableWasNew = 0;
+                If NativeFunctionMode is equal to 1;
+                    Call NativeFindFunctionParamSlot NativeVariableName, 0;
+                    NativeVariableSlot = @_;
+                    If NativeVariableSlot is less than 0;
+                        Call NativeFindFunctionLocalSlot NativeVariableName, 0;
+                        NativeFunctionLocalSlot = @_;
+                        If NativeFunctionLocalSlot is greater than or equal to 0;
+                            NativeVariableSlot = NativeCurrentFunctionParamCount + NativeFunctionLocalSlot;
+                        Else;
+                            If NativeCurrentFunctionLocalCount is less than 32 and NativeFunctionLocalNameCount is less than 1024;
+                                NativeVariableSlot = NativeCurrentFunctionParamCount + NativeCurrentFunctionLocalCount;
+                                Append NativeVariableName to NativeFunctionLocalNames;
+                                Add 1 to NativeCurrentFunctionLocalCount;
+                                Add 1 to NativeFunctionLocalNameCount;
+                                NativeVariableWasNew = 1;
+                            Else;
+                                NativeFailed = 1;
+                            Done.
+                        Done.
+                    Done.
                 Else;
+                    Call NativeFindVariable NativeVariableName, 0;
+                    NativeVariableSlot = @_;
+                    If NativeVariableSlot is less than 0;
+                        NativeFailed = 1;
+                    Done.
+                Done.
+                If NativeFailed is equal to 0;
                     NativeStackOffset = NativeStackDepth * 8 - 8;
                     NativeVariableOffset = 1024 + NativeVariableSlot * 8;
                     Call NativeLengthToText NativeStackOffset;
@@ -1123,13 +1147,13 @@ Action EmitStraightIntegerProgram;
                     NativeVariableOffsetText = @_;
                     If NativeX86 is equal to 1;
                         NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n";
-                        If NativeStraightOp is equal to "BC_ADD";
+                        If NativeStraightOp is equal to "BC_ADD" and NativeVariableWasNew is equal to 0;
                             NativeOut = NativeOut + "    add " + NativeVariableOffsetText + "(%rsp), %rax\n";
                         Done.
                         NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
                     Else;
                         NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n";
-                        If NativeStraightOp is equal to "BC_ADD";
+                        If NativeStraightOp is equal to "BC_ADD" and NativeVariableWasNew is equal to 0;
                             NativeOut = NativeOut + "    ldr x1, [sp, #" + NativeVariableOffsetText + "]\n    add x0, x1, x0\n";
                         Done.
                         NativeOut = NativeOut + "    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
