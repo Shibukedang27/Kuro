@@ -286,6 +286,7 @@ NativeMainBytecode is Text;
 NativeFunctionNames is Text;
 NativeFunctionParam0Names is Text;
 NativeFunctionParam1Names is Text;
+NativeFunctionParam2Names is Text;
 NativeFunctionBodyStarts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeFunctionBodyEnds = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeFunctionParameterCounts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -364,6 +365,7 @@ Action NativePrepareProgram;
                 NativePrepareParamCount = 0;
                 NativePrepareParamName0 = "";
                 NativePrepareParamName1 = "";
+                NativePrepareParamName2 = "";
                 NativePrepareBodyStart = NativePrepareParamPos;
                 Get BytecodeOut NativePrepareParamPos;
                 If @_ is equal to "BC_PARAM";
@@ -394,7 +396,23 @@ Action NativePrepareProgram;
                             If NativePrepareBodyStart is less than NativePrepareLength;
                                 Get BytecodeOut NativePrepareBodyStart;
                                 If @_ is equal to "BC_PARAM";
-                                    NativeFailed = 1;
+                                    NativePrepareThirdParamPos = NativePrepareBodyStart;
+                                    NativePrepareThirdParamNamePos = NativePrepareThirdParamPos + 1;
+                                    Get BytecodeOut NativePrepareThirdParamNamePos;
+                                    NativePrepareParamName2 = @_;
+                                    NativePrepareThirdParamTypePos = NativePrepareThirdParamPos + 2;
+                                    Get BytecodeOut NativePrepareThirdParamTypePos;
+                                    If @_ is not equal to "Integers";
+                                        NativeFailed = 1;
+                                    Done.
+                                    NativePrepareParamCount = 3;
+                                    NativePrepareBodyStart = NativePrepareThirdParamPos + 3;
+                                    If NativePrepareBodyStart is less than NativePrepareLength;
+                                        Get BytecodeOut NativePrepareBodyStart;
+                                        If @_ is equal to "BC_PARAM";
+                                            NativeFailed = 1;
+                                        Done.
+                                    Done.
                                 Done.
                             Done.
                         Done.
@@ -496,6 +514,7 @@ Action NativePrepareProgram;
                     Set NativeFunctionParameterCounts NativeFunctionCount to NativePrepareParamCount;
                     Append NativePrepareParamName0 to NativeFunctionParam0Names;
                     Append NativePrepareParamName1 to NativeFunctionParam1Names;
+                    Append NativePrepareParamName2 to NativeFunctionParam2Names;
                     Add 1 to NativeFunctionCount;
                     NativePreparePos = NativePrepareBodyEnd + 1;
                 Done.
@@ -553,6 +572,10 @@ Action EmitStraightIntegerProgram;
             Else;
                 If NativeCurrentFunctionParamCount is equal to 2;
                     NativeOut = NativeOut + "    mov %rdi, 1024(%rsp)\n    mov %rsi, 1032(%rsp)\n";
+                Else;
+                    If NativeCurrentFunctionParamCount is equal to 3;
+                        NativeOut = NativeOut + "    mov %rdi, 1024(%rsp)\n    mov %rsi, 1032(%rsp)\n    mov %rdx, 1040(%rsp)\n";
+                    Done.
                 Done.
             Done.
         Else;
@@ -562,6 +585,10 @@ Action EmitStraightIntegerProgram;
             Else;
                 If NativeCurrentFunctionParamCount is equal to 2;
                     NativeOut = NativeOut + "    str x0, [sp, #1024]\n    str x1, [sp, #1032]\n";
+                Else;
+                    If NativeCurrentFunctionParamCount is equal to 3;
+                        NativeOut = NativeOut + "    str x0, [sp, #1024]\n    str x1, [sp, #1032]\n    str x2, [sp, #1040]\n";
+                    Done.
                 Done.
             Done.
         Done.
@@ -997,7 +1024,35 @@ Action EmitStraightIntegerProgram;
                                 Done.
                             Done.
                         Else;
-                            NativeVariableSlot = -1;
+                            If NativeCurrentFunctionParamCount is equal to 3;
+                                NativeParam0NamePosition = NativeCurrentBodyStart - 8;
+                                Get BytecodeOut NativeParam0NamePosition;
+                                NativeCurrentParamName0 = @_;
+                                Call NativeTextNamesEqual NativeVariableName, NativeCurrentParamName0;
+                                If @_ is equal to 1;
+                                    NativeVariableSlot = 0;
+                                Else;
+                                    NativeParam1NamePosition = NativeCurrentBodyStart - 5;
+                                    Get BytecodeOut NativeParam1NamePosition;
+                                    NativeCurrentParamName1 = @_;
+                                    Call NativeTextNamesEqual NativeVariableName, NativeCurrentParamName1;
+                                    If @_ is equal to 1;
+                                        NativeVariableSlot = 1;
+                                    Else;
+                                        NativeParam2NamePosition = NativeCurrentBodyStart - 2;
+                                        Get BytecodeOut NativeParam2NamePosition;
+                                        NativeCurrentParamName2 = @_;
+                                        Call NativeTextNamesEqual NativeVariableName, NativeCurrentParamName2;
+                                        If @_ is equal to 1;
+                                            NativeVariableSlot = 2;
+                                        Else;
+                                            NativeVariableSlot = -1;
+                                        Done.
+                                    Done.
+                                Done.
+                            Else;
+                                NativeVariableSlot = -1;
+                            Done.
                         Done.
                     Done.
                 Else;
@@ -1108,6 +1163,16 @@ Action EmitStraightIntegerProgram;
                                 Call NativeLengthToText NativeCallSecondArgumentOffset;
                                 NativeCallSecondArgumentOffsetText = @_;
                                 NativeOut = NativeOut + "    mov " + NativeCallArgumentOffsetText + "(%rsp), %rdi\n    mov " + NativeCallSecondArgumentOffsetText + "(%rsp), %rsi\n";
+                            Else;
+                                If NativeCallParameterCount is equal to 3;
+                                    NativeCallSecondArgumentOffset = NativeCallArgumentOffset + 8;
+                                    NativeCallThirdArgumentOffset = NativeCallArgumentOffset + 16;
+                                    Call NativeLengthToText NativeCallSecondArgumentOffset;
+                                    NativeCallSecondArgumentOffsetText = @_;
+                                    Call NativeLengthToText NativeCallThirdArgumentOffset;
+                                    NativeCallThirdArgumentOffsetText = @_;
+                                    NativeOut = NativeOut + "    mov " + NativeCallArgumentOffsetText + "(%rsp), %rdi\n    mov " + NativeCallSecondArgumentOffsetText + "(%rsp), %rsi\n    mov " + NativeCallThirdArgumentOffsetText + "(%rsp), %rdx\n";
+                                Done.
                             Done.
                         Done.
                         NativeOut = NativeOut + "    call .Lkuro_fn_" + NativeFunctionLabelText + "\n    mov %rax, " + NativeCallArgumentOffsetText + "(%rsp)\n";
@@ -1120,6 +1185,16 @@ Action EmitStraightIntegerProgram;
                                 Call NativeLengthToText NativeCallSecondArgumentOffset;
                                 NativeCallSecondArgumentOffsetText = @_;
                                 NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeCallArgumentOffsetText + "]\n    ldr x1, [sp, #" + NativeCallSecondArgumentOffsetText + "]\n";
+                            Else;
+                                If NativeCallParameterCount is equal to 3;
+                                    NativeCallSecondArgumentOffset = NativeCallArgumentOffset + 8;
+                                    NativeCallThirdArgumentOffset = NativeCallArgumentOffset + 16;
+                                    Call NativeLengthToText NativeCallSecondArgumentOffset;
+                                    NativeCallSecondArgumentOffsetText = @_;
+                                    Call NativeLengthToText NativeCallThirdArgumentOffset;
+                                    NativeCallThirdArgumentOffsetText = @_;
+                                    NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeCallArgumentOffsetText + "]\n    ldr x1, [sp, #" + NativeCallSecondArgumentOffsetText + "]\n    ldr x2, [sp, #" + NativeCallThirdArgumentOffsetText + "]\n";
+                                Done.
                             Done.
                         Done.
                         NativeOut = NativeOut + "    bl L_kuro_fn_" + NativeFunctionLabelText + "\n    str x0, [sp, #" + NativeCallArgumentOffsetText + "]\n";
