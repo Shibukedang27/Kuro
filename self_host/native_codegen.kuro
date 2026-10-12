@@ -273,12 +273,13 @@ Done.
 NativeProgramBytecode is Text;
 NativeMainBytecode is Text;
 NativeFunctionNames is Text;
-NativeFunctionParameterNames is Text;
 NativeFunctionBodyStarts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeFunctionBodyEnds = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeFunctionParameterCounts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeFunctionCount = 0;
 NativeFunctionMode = 0;
 NativeCurrentFunctionIndex = 0;
+NativeCurrentFunctionParamCount = 0;
 NativeCurrentBodyStart = 0;
 NativeCurrentBodyEnd = 0;
 NativeAllFunctionsOut = "";
@@ -325,7 +326,6 @@ Done.
 
 Action NativePrepareProgram;
     NativePreparePos = 0;
-    NativePrepareBodyDone = 0;
     Length BytecodeOut;
     NativePrepareLength = @_;
     While NativePreparePos is less than NativePrepareLength and NativeFailed is equal to 0;
@@ -343,64 +343,63 @@ Action NativePrepareProgram;
                 NativePrepareParamPos = NativePreparePos + 2;
                 Get BytecodeOut NativePrepareParamPos;
                 If @_ is equal to "BC_PARAM";
-                    NativePrepareParamNamePos = NativePrepareParamPos + 1;
-                    Get BytecodeOut NativePrepareParamNamePos;
-                    NativePrepareParamName = @_;
                     NativePrepareParamTypePos = NativePrepareParamPos + 2;
                     Get BytecodeOut NativePrepareParamTypePos;
                     If @_ is not equal to "Integers";
                         NativeFailed = 1;
                     Done.
-                    Append NativePrepareName to NativeFunctionNames;
-                    Append NativePrepareParamName to NativeFunctionParameterNames;
+                    NativePrepareParamCount = 1;
                     NativePrepareBodyStart = NativePrepareParamPos + 3;
-                    NativePrepareBodyPos = NativePrepareBodyStart;
-                    NativePrepareBodyDone = 0;
-                    NativePrepareReturnCount = 0;
-                    NativePrepareLastBodyReturn = 0;
-                    While NativePrepareBodyPos is less than NativePrepareLength and NativePrepareBodyDone is equal to 0 and NativeFailed is equal to 0;
-                        Get BytecodeOut NativePrepareBodyPos;
-                        NativePrepareBodyOp = @_;
-                        If NativePrepareBodyOp is equal to "BC_FUNC_END";
-                            NativePrepareBodyDone = 1;
-                            NativePrepareBodyEnd = NativePrepareBodyPos;
+                Else;
+                    NativePrepareParamCount = 0;
+                    NativePrepareBodyStart = NativePrepareParamPos;
+                Done.
+                Append NativePrepareName to NativeFunctionNames;
+                NativePrepareBodyPos = NativePrepareBodyStart;
+                NativePrepareBodyDone = 0;
+                NativePrepareReturnCount = 0;
+                NativePrepareLastBodyReturn = 0;
+                While NativePrepareBodyPos is less than NativePrepareLength and NativePrepareBodyDone is equal to 0 and NativeFailed is equal to 0;
+                    Get BytecodeOut NativePrepareBodyPos;
+                    NativePrepareBodyOp = @_;
+                    If NativePrepareBodyOp is equal to "BC_FUNC_END";
+                        NativePrepareBodyDone = 1;
+                        NativePrepareBodyEnd = NativePrepareBodyPos;
+                    Else;
+                        If NativePrepareBodyOp is equal to "BC_FUNC_BEGIN";
+                            NativeFailed = 1;
                         Else;
-                            If NativePrepareBodyOp is equal to "BC_FUNC_BEGIN";
+                            If NativePrepareBodyOp is equal to "BC_RETURN";
+                                Add 1 to NativePrepareReturnCount;
+                                NativePrepareLastBodyReturn = 1;
+                            Else;
+                                NativePrepareLastBodyReturn = 0;
+                            Done.
+                            Call NativeOpcodeArity NativePrepareBodyOp;
+                            NativePrepareOperandCount = @_;
+                            If NativeOpcodeKnown is equal to 0;
                                 NativeFailed = 1;
                             Else;
-                                If NativePrepareBodyOp is equal to "BC_RETURN";
-                                    Add 1 to NativePrepareReturnCount;
-                                    NativePrepareLastBodyReturn = 1;
-                                Else;
-                                    NativePrepareLastBodyReturn = 0;
-                                Done.
-                                Call NativeOpcodeArity NativePrepareBodyOp;
-                                NativePrepareOperandCount = @_;
-                                If NativeOpcodeKnown is equal to 0;
-                                    NativeFailed = 1;
-                                Else;
-                                    NativePrepareBodyPos = NativePrepareBodyPos + NativePrepareOperandCount + 1;
-                                Done.
+                                NativePrepareBodyPos = NativePrepareBodyPos + NativePrepareOperandCount + 1;
                             Done.
                         Done.
                     Done.
-                    If NativePrepareBodyDone is equal to 0;
-                        NativeFailed = 1;
-                    Done.
-                    If NativePrepareReturnCount is not equal to 1;
-                        NativeFailed = 1;
-                    Done.
-                    If NativePrepareLastBodyReturn is equal to 0;
-                        NativeFailed = 1;
-                    Done.
-                    If NativeFailed is equal to 0;
-                        Set NativeFunctionBodyStarts NativeFunctionCount to NativePrepareBodyStart;
-                        Set NativeFunctionBodyEnds NativeFunctionCount to NativePrepareBodyEnd;
-                        Add 1 to NativeFunctionCount;
-                        NativePreparePos = NativePrepareBodyEnd + 1;
-                    Done.
-                Else;
+                Done.
+                If NativePrepareBodyDone is equal to 0;
                     NativeFailed = 1;
+                Done.
+                If NativePrepareReturnCount is not equal to 1;
+                    NativeFailed = 1;
+                Done.
+                If NativePrepareLastBodyReturn is equal to 0;
+                    NativeFailed = 1;
+                Done.
+                If NativeFailed is equal to 0;
+                    Set NativeFunctionBodyStarts NativeFunctionCount to NativePrepareBodyStart;
+                    Set NativeFunctionBodyEnds NativeFunctionCount to NativePrepareBodyEnd;
+                    Set NativeFunctionParameterCounts NativeFunctionCount to NativePrepareParamCount;
+                    Add 1 to NativeFunctionCount;
+                    NativePreparePos = NativePrepareBodyEnd + 1;
                 Done.
             Else;
                 NativeFailed = 1;
@@ -450,9 +449,15 @@ Action EmitStraightIntegerProgram;
         Call NativeLengthToText NativeCurrentFunctionIndex;
         NativeFunctionLabelText = @_;
         If NativeX86 is equal to 1;
-            NativeOut = ".section .text\n.Lkuro_fn_" + NativeFunctionLabelText + ":\n    push %rbp\n    sub $2048, %rsp\n    mov %rdi, 1024(%rsp)\n";
+            NativeOut = ".section .text\n.Lkuro_fn_" + NativeFunctionLabelText + ":\n    push %rbp\n    sub $2048, %rsp\n";
+            If NativeCurrentFunctionParamCount is equal to 1;
+                NativeOut = NativeOut + "    mov %rdi, 1024(%rsp)\n";
+            Done.
         Else;
-            NativeOut = ".section __TEXT,__text\n.p2align 2\nL_kuro_fn_" + NativeFunctionLabelText + ":\n    stp x29, x30, [sp, #-16]!\n    sub sp, sp, #2048\n    str x0, [sp, #1024]\n";
+            NativeOut = ".section __TEXT,__text\n.p2align 2\nL_kuro_fn_" + NativeFunctionLabelText + ":\n    stp x29, x30, [sp, #-16]!\n    sub sp, sp, #2048\n";
+            If NativeCurrentFunctionParamCount is equal to 1;
+                NativeOut = NativeOut + "    str x0, [sp, #1024]\n";
+            Done.
         Done.
     Done.
     If NativeStraightLength is greater than 64;
@@ -862,7 +867,11 @@ Action EmitStraightIntegerProgram;
                 NativeVariableName = @_;
                 Add 1 to NativeStraightPos;
                 If NativeFunctionMode is equal to 1;
-                    NativeVariableSlot = 0;
+                    If NativeCurrentFunctionParamCount is equal to 1;
+                        NativeVariableSlot = 0;
+                    Else;
+                        NativeVariableSlot = -1;
+                    Done.
                 Else;
                     Call NativeFindVariable NativeVariableName, 0;
                     NativeVariableSlot = @_;
@@ -953,7 +962,9 @@ Action EmitStraightIntegerProgram;
                 NativeCallBaseDepth = @_;
                 Get NativeCallFunctionIndices NativeCallIndex;
                 NativeCallResolvedIndex = @_;
-                NativeExpectedStackDepth = NativeCallBaseDepth + 1;
+                Get NativeFunctionParameterCounts NativeCallResolvedIndex;
+                NativeCallParameterCount = @_;
+                NativeExpectedStackDepth = NativeCallBaseDepth + NativeCallParameterCount;
                 If NativeStackDepth is equal to NativeExpectedStackDepth;
                     NativeCallArgumentOffset = NativeCallBaseDepth * 8;
                     Call NativeLengthToText NativeCallArgumentOffset;
@@ -961,11 +972,17 @@ Action EmitStraightIntegerProgram;
                     Call NativeLengthToText NativeCallResolvedIndex;
                     NativeFunctionLabelText = @_;
                     If NativeX86 is equal to 1;
-                        NativeOut = NativeOut + "    mov " + NativeCallArgumentOffsetText + "(%rsp), %rdi\n    call .Lkuro_fn_" + NativeFunctionLabelText + "\n    mov %rax, " + NativeCallArgumentOffsetText + "(%rsp)\n";
+                        If NativeCallParameterCount is equal to 1;
+                            NativeOut = NativeOut + "    mov " + NativeCallArgumentOffsetText + "(%rsp), %rdi\n";
+                        Done.
+                        NativeOut = NativeOut + "    call .Lkuro_fn_" + NativeFunctionLabelText + "\n    mov %rax, " + NativeCallArgumentOffsetText + "(%rsp)\n";
                     Else;
-                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeCallArgumentOffsetText + "]\n    bl L_kuro_fn_" + NativeFunctionLabelText + "\n    str x0, [sp, #" + NativeCallArgumentOffsetText + "]\n";
+                        If NativeCallParameterCount is equal to 1;
+                            NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeCallArgumentOffsetText + "]\n";
+                        Done.
+                        NativeOut = NativeOut + "    bl L_kuro_fn_" + NativeFunctionLabelText + "\n    str x0, [sp, #" + NativeCallArgumentOffsetText + "]\n";
                     Done.
-                    NativeStackDepth = NativeExpectedStackDepth;
+                    NativeStackDepth = NativeCallBaseDepth + 1;
                     NativeCallDepth = NativeCallIndex;
                 Else;
                     NativeFailed = 1;
@@ -1048,6 +1065,8 @@ Action NativeBuildFunctions;
         NativeCurrentBodyStart = @_;
         Get NativeFunctionBodyEnds NativeBuildFunctionIndex;
         NativeCurrentBodyEnd = @_;
+        Get NativeFunctionParameterCounts NativeBuildFunctionIndex;
+        NativeCurrentFunctionParamCount = @_;
         NativeCurrentFunctionIndex = NativeBuildFunctionIndex;
         NativeFunctionMode = 1;
         Call EmitStraightIntegerProgram;
