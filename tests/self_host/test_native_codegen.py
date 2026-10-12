@@ -208,12 +208,70 @@ def test_kuro_native_codegen_compiles_one_parameter_integer_action(tmp_path):
     assert result.stderr == ""
 
 
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_compiles_two_parameter_integer_action(target, tmp_path):
+    source = (
+        "Action FortyTwo;\n"
+        "Return 42;\n"
+        "Done.\n"
+        "Action Combine A: Integers, B: Integers;\n"
+        "Return A * 10 + B;\n"
+        "Done.\n"
+        "Call Combine 4, 2;\n"
+        "Print @_.\n"
+    )
+    tokens, env = compile_program_to_codegen(source, target=target)
+
+    assert tokens == [
+        "BC_FUNC_BEGIN", "FortyTwo", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END",
+        "BC_FUNC_BEGIN", "Combine", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers",
+        "BC_LOADVAR", "A", "BC_CONST", "10", "BC_BINOP", "*", "BC_LOADVAR", "B",
+        "BC_BINOP", "+", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Combine",
+        "BC_CONST", "4", "BC_CONST", "2", "BC_CALL_END", "BC_STORE_LIST", "_",
+        "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        assert ".Lkuro_fn_1:" in env["NativeOut"]
+        assert "mov %rdi, 1024(%rsp)\n    mov %rsi, 1032(%rsp)\n" in env["NativeOut"]
+        assert "mov 1024(%rsp), %rax" in env["NativeOut"]
+        assert "mov 1032(%rsp), %rax" in env["NativeOut"]
+        assert "mov 0(%rsp), %rdi\n    mov 8(%rsp), %rsi\n" in env["NativeOut"]
+        assert "call .Lkuro_fn_1" in env["NativeOut"]
+    else:
+        assert "L_kuro_fn_1:" in env["NativeOut"]
+        assert "str x0, [sp, #1024]\n    str x1, [sp, #1032]\n" in env["NativeOut"]
+        assert "ldr x0, [sp, #1024]" in env["NativeOut"]
+        assert "ldr x0, [sp, #1032]" in env["NativeOut"]
+        assert "ldr x0, [sp, #0]\n    ldr x1, [sp, #8]\n" in env["NativeOut"]
+        assert "bl L_kuro_fn_1" in env["NativeOut"]
+        assembly = tmp_path / "two-parameter-arm64.s"
+        object_file = tmp_path / "two-parameter-arm64.o"
+        assembly.write_text(env["NativeOut"], encoding="utf-8")
+        subprocess.run(
+            ["clang", "-target", "arm64-apple-macos11", "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert object_file.stat().st_size > 0
+        if MACOS_ARM64_HOST:
+            executable = tmp_path / "two-parameter-arm64"
+            subprocess.run(["clang", str(assembly), "-o", str(executable)], check=True)
+            result = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+            assert result.stdout == "42\n"
+
+
 @pytest.mark.parametrize(
-        "bytecode",
+    "bytecode",
     [
         '"BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Text", "BC_CONST", "1", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc", "BC_CONST", "41", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Integers", "BC_LOADVAR", "N", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "FortyTwo", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "FortyTwo", "BC_CONST", "1", "BC_CALL_END", "BC_PRINT"',
+        '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Text", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CALL_END", "BC_PRINT"',
+        '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_PARAM", "C", "Integers", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CONST", "1", "BC_CALL_END", "BC_PRINT"',
+        '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CALL_END", "BC_PRINT"',
+        '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_LOADVAR", "Missing", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CALL_END", "BC_PRINT"',
     ],
 )
 def test_kuro_native_codegen_rejects_unsupported_action_signatures(bytecode):
@@ -512,6 +570,17 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
                     "BC_LOADVAR", "_", "BC_PRINT",
                 ],
                 "7\n9\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "FortyTwo", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END",
+                    "BC_FUNC_BEGIN", "Combine", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers",
+                    "BC_LOADVAR", "A", "BC_CONST", "10", "BC_BINOP", "*", "BC_LOADVAR", "B",
+                    "BC_BINOP", "+", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Combine",
+                    "BC_CONST", "4", "BC_CONST", "2", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "42\n",
             ),
         ],
     )
