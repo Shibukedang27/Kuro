@@ -348,6 +348,18 @@ NativePrepareInElse = 0;
 NativePrepareThenReturnCount = 0;
 NativePrepareElseReturnCount = 0;
 NativePrepareLastBodyIfEnd = 0;
+NativePrepareIfDepth = 0;
+NativePrepareMaxIfDepth = 0;
+NativePrepareIfElseSeen = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativePrepareIfThenReturns = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativePrepareIfElseReturns = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativePrepareAllPathsReturn = 0;
+NativePrepareFrameIndex = 0;
+NativePrepareFrameThenReturns = 0;
+NativePrepareFrameElseReturns = 0;
+NativePrepareFrameHasElse = 0;
+NativePrepareFrameComplete = 0;
+NativePrepareParentIndex = 0;
 NativeCallDepth = 0;
 NativeCallFunctionIndices = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeCallBaseDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -473,6 +485,9 @@ Action NativePrepareProgram;
                 NativePrepareThenReturnCount = 0;
                 NativePrepareElseReturnCount = 0;
                 NativePrepareLastBodyIfEnd = 0;
+                NativePrepareIfDepth = 0;
+                NativePrepareMaxIfDepth = 0;
+                NativePrepareAllPathsReturn = 0;
                 While NativePrepareBodyPos is less than NativePrepareLength and NativePrepareBodyDone is equal to 0 and NativeFailed is equal to 0;
                     Get BytecodeOut NativePrepareBodyPos;
                     NativePrepareBodyOp = @_;
@@ -486,14 +501,68 @@ Action NativePrepareProgram;
                             NativePrepareLastBodyIfEnd = 0;
                             If NativePrepareBodyOp is equal to "BC_IF_BEGIN";
                                 Add 1 to NativePrepareIfCount;
+                                If NativePrepareIfDepth is less than 16;
+                                    Add 1 to NativePrepareIfDepth;
+                                    If NativePrepareIfDepth is greater than NativePrepareMaxIfDepth;
+                                        NativePrepareMaxIfDepth = NativePrepareIfDepth;
+                                    Done.
+                                    NativePrepareFrameIndex = NativePrepareIfDepth - 1;
+                                    Set NativePrepareIfElseSeen NativePrepareFrameIndex to 0;
+                                    Set NativePrepareIfThenReturns NativePrepareFrameIndex to 0;
+                                    Set NativePrepareIfElseReturns NativePrepareFrameIndex to 0;
+                                Else;
+                                    NativeFailed = 1;
+                                Done.
                                 NativePrepareInElse = 0;
                             Done.
                             If NativePrepareBodyOp is equal to "BC_ELSE_BEGIN";
                                 Add 1 to NativePrepareElseCount;
+                                If NativePrepareIfDepth is greater than 0;
+                                    NativePrepareFrameIndex = NativePrepareIfDepth - 1;
+                                    Get NativePrepareIfElseSeen NativePrepareFrameIndex;
+                                    If @_ is equal to 0;
+                                        Set NativePrepareIfElseSeen NativePrepareFrameIndex to 1;
+                                    Else;
+                                        NativeFailed = 1;
+                                    Done.
+                                Else;
+                                    NativeFailed = 1;
+                                Done.
                                 NativePrepareInElse = 1;
                             Done.
                             If NativePrepareBodyOp is equal to "BC_IF_END";
                                 Add 1 to NativePrepareIfEndCount;
+                                If NativePrepareIfDepth is greater than 0;
+                                    NativePrepareFrameIndex = NativePrepareIfDepth - 1;
+                                    Get NativePrepareIfThenReturns NativePrepareFrameIndex;
+                                    NativePrepareFrameThenReturns = @_;
+                                    Get NativePrepareIfElseReturns NativePrepareFrameIndex;
+                                    NativePrepareFrameElseReturns = @_;
+                                    Get NativePrepareIfElseSeen NativePrepareFrameIndex;
+                                    NativePrepareFrameHasElse = @_;
+                                    NativePrepareFrameComplete = 0;
+                                    If NativePrepareFrameHasElse is equal to 1;
+                                        If NativePrepareFrameThenReturns is equal to 1 and NativePrepareFrameElseReturns is equal to 1;
+                                            NativePrepareFrameComplete = 1;
+                                        Done.
+                                    Done.
+                                    NativePrepareIfDepth = NativePrepareIfDepth - 1;
+                                    If NativePrepareFrameComplete is equal to 1;
+                                        If NativePrepareIfDepth is greater than 0;
+                                            NativePrepareParentIndex = NativePrepareIfDepth - 1;
+                                            Get NativePrepareIfElseSeen NativePrepareParentIndex;
+                                            If @_ is equal to 1;
+                                                Set NativePrepareIfElseReturns NativePrepareParentIndex to 1;
+                                            Else;
+                                                Set NativePrepareIfThenReturns NativePrepareParentIndex to 1;
+                                            Done.
+                                        Else;
+                                            NativePrepareAllPathsReturn = 1;
+                                        Done.
+                                    Done.
+                                Else;
+                                    NativeFailed = 1;
+                                Done.
                                 NativePrepareInElse = 0;
                                 NativePrepareLastBodyIfEnd = 1;
                             Done.
@@ -504,6 +573,17 @@ Action NativePrepareProgram;
                                     Add 1 to NativePrepareElseReturnCount;
                                 Else;
                                     Add 1 to NativePrepareThenReturnCount;
+                                Done.
+                                If NativePrepareIfDepth is greater than 0;
+                                    NativePrepareFrameIndex = NativePrepareIfDepth - 1;
+                                    Get NativePrepareIfElseSeen NativePrepareFrameIndex;
+                                    If @_ is equal to 1;
+                                        Set NativePrepareIfElseReturns NativePrepareFrameIndex to 1;
+                                    Else;
+                                        Set NativePrepareIfThenReturns NativePrepareFrameIndex to 1;
+                                    Done.
+                                Else;
+                                    NativePrepareAllPathsReturn = 1;
                                 Done.
                             Else;
                                 NativePrepareLastBodyReturn = 0;
@@ -519,6 +599,9 @@ Action NativePrepareProgram;
                     Done.
                 Done.
                 If NativePrepareBodyDone is equal to 0;
+                    NativeFailed = 1;
+                Done.
+                If NativePrepareIfDepth is not equal to 0;
                     NativeFailed = 1;
                 Done.
                 If NativePrepareReturnCount is equal to 1;
@@ -545,8 +628,38 @@ Action NativePrepareProgram;
                         If NativePrepareLastBodyIfEnd is equal to 0;
                             NativeFailed = 1;
                         Done.
+                        If NativePrepareAllPathsReturn is equal to 0;
+                            NativeFailed = 1;
+                        Done.
                     Else;
-                        NativeFailed = 1;
+                        If NativePrepareReturnCount is equal to 4;
+                            If NativePrepareIfCount is not equal to 3;
+                                NativeFailed = 1;
+                            Done.
+                            If NativePrepareElseCount is not equal to 3;
+                                NativeFailed = 1;
+                            Done.
+                            If NativePrepareIfEndCount is not equal to 3;
+                                NativeFailed = 1;
+                            Done.
+                            If NativePrepareMaxIfDepth is not equal to 2;
+                                NativeFailed = 1;
+                            Done.
+                            If NativePrepareThenReturnCount is not equal to 2;
+                                NativeFailed = 1;
+                            Done.
+                            If NativePrepareElseReturnCount is not equal to 2;
+                                NativeFailed = 1;
+                            Done.
+                            If NativePrepareLastBodyIfEnd is equal to 0;
+                                NativeFailed = 1;
+                            Done.
+                            If NativePrepareAllPathsReturn is equal to 0;
+                                NativeFailed = 1;
+                            Done.
+                        Else;
+                            NativeFailed = 1;
+                        Done.
                     Done.
                 Done.
                 If NativeFailed is equal to 0;

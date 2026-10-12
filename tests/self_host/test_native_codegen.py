@@ -9,6 +9,23 @@ from compiler.pipeline import run_source
 
 ROOT = Path(__file__).resolve().parents[2]
 CODEGEN = ROOT / "self_host" / "native_codegen.kuro"
+NESTED_CHOICE_ACTION_TOKENS = [
+    "BC_FUNC_BEGIN", "Choose", "BC_PARAM", "Value", "Integers",
+    "BC_LOADVAR", "Value", "BC_CONST", "10", "BC_CMP", "lt", "BC_IF_BEGIN",
+    "BC_LOADVAR", "Value", "BC_CONST", "5", "BC_CMP", "lt", "BC_IF_BEGIN",
+    "BC_CONST", "11", "BC_RETURN", "BC_ELSE_BEGIN", "BC_CONST", "12", "BC_RETURN",
+    "BC_IF_END", "BC_ELSE_BEGIN", "BC_LOADVAR", "Value", "BC_CONST", "20", "BC_CMP",
+    "lt", "BC_IF_BEGIN", "BC_CONST", "13", "BC_RETURN", "BC_ELSE_BEGIN", "BC_CONST",
+    "14", "BC_RETURN", "BC_IF_END", "BC_IF_END", "BC_FUNC_END",
+]
+
+
+def nested_choice_program(argument):
+    return [
+        *NESTED_CHOICE_ACTION_TOKENS,
+        "BC_CALL_BEGIN", "Choose", "BC_CONST", str(argument), "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
 
 MACOS_ARM64_HOST = (
     platform.system() == "Darwin"
@@ -156,11 +173,54 @@ def test_kuro_native_codegen_supports_conditional_integer_action_returns(target)
     assert env["NativeOut"].count("ret\n") >= 2
 
 
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_supports_nested_conditional_integer_action_returns(target):
+    source = (
+        "Action Choose Value: Integers;\n"
+        "If Value is less than 10;\n"
+        "If Value is less than 5;\n"
+        "Return 11;\n"
+        "Else;\n"
+        "Return 12;\n"
+        "Done.\n"
+        "Else;\n"
+        "If Value is less than 20;\n"
+        "Return 13;\n"
+        "Else;\n"
+        "Return 14;\n"
+        "Done.\n"
+        "Done.\n"
+        "Done.\n"
+        "Call Choose 7;\n"
+        "Print @_.\n"
+    )
+    tokens, env = compile_program_to_codegen(source, target=target)
+
+    assert tokens.count("BC_IF_BEGIN") == 3
+    assert tokens.count("BC_RETURN") == 4
+    assert env["NativeFailed"] == 0
+    assert env["NativeOut"].count("ret\n") >= 4
+
+
 def test_kuro_native_codegen_rejects_one_sided_conditional_action_return():
     env = run_codegen(
         '"BC_FUNC_BEGIN", "Broken", "BC_PARAM", "N", "Integers", '
         '"BC_CONST", "1", "BC_IF_BEGIN", "BC_CONST", "7", "BC_RETURN", '
         '"BC_ELSE_BEGIN", "BC_CONST", "9", "BC_IF_END", "BC_FUNC_END"',
+        target="x86_64-linux",
+    )
+
+    assert env["NativeFailed"] == 1
+
+
+def test_kuro_native_codegen_rejects_nested_action_with_fallthrough_path():
+    env = run_codegen(
+        '"BC_FUNC_BEGIN", "Unsafe", "BC_CONST", "1", "BC_IF_BEGIN", '
+        '"BC_CONST", "1", "BC_IF_BEGIN", "BC_CONST", "11", "BC_RETURN", '
+        '"BC_CONST", "12", "BC_RETURN", "BC_ELSE_BEGIN", "BC_CONST", "13", '
+        '"BC_RETURN", "BC_CONST", "14", "BC_RETURN", "BC_IF_END", '
+        '"BC_ELSE_BEGIN", "BC_CONST", "1", "BC_IF_BEGIN", "BC_ELSE_BEGIN", '
+        '"BC_IF_END", "BC_IF_END", "BC_FUNC_END"',
         target="x86_64-linux",
     )
 
@@ -920,6 +980,44 @@ def test_kuro_owned_x86_linux_codegen_links_and_runs(tmp_path, tokens, expected,
         timeout=10,
         check=True,
     )
+    subprocess.run(
+        [
+            "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
+            "-Wl,-e,_start", "-x", "assembler", "-", "-o", str(executable),
+        ],
+        input=generated.stdout,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [str(executable)], capture_output=True, text=True, timeout=5, check=False
+    )
+    assert result.returncode == 0
+    assert result.stdout == expected
+    assert result.stderr == ""
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+@pytest.mark.parametrize(
+    ("argument", "expected"),
+    [(1, "11\n"), (7, "12\n"), (15, "13\n"), (25, "14\n")],
+)
+def test_kuro_owned_x86_linux_codegen_runs_every_nested_action_return_path(
+    tmp_path, argument, expected, x86_linux_codegen
+):
+    generated = subprocess.run(
+        [str(x86_linux_codegen)],
+        input="kuro.bytecode/1\n" + "\n".join(nested_choice_program(argument)) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    executable = tmp_path / "nested-action-linux"
     subprocess.run(
         [
             "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
