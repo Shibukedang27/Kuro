@@ -357,6 +357,49 @@ def test_kuro_native_codegen_compiles_one_integer_action_local(target, tmp_path)
 
 
 @pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_compiles_two_integer_action_locals(target, tmp_path):
+    source = (
+        "Action Mix A: Integers;\n"
+        "Left = A + 1;\n"
+        "Right = Left + 1;\n"
+        "Left = Right + Left;\n"
+        "Return Left + Right;\n"
+        "Done.\n"
+        "Call Mix 40;\n"
+        "Print @_.\n"
+    )
+    tokens, env = compile_program_to_codegen(source, target=target)
+
+    assert tokens == [
+        "BC_FUNC_BEGIN", "Mix", "BC_PARAM", "A", "Integers", "BC_LOADVAR", "A", "BC_CONST", "1",
+        "BC_BINOP", "+", "BC_STORE_LIST", "Left", "BC_LOADVAR", "Left", "BC_CONST", "1",
+        "BC_BINOP", "+", "BC_STORE_LIST", "Right", "BC_LOADVAR", "Right", "BC_LOADVAR", "Left",
+        "BC_BINOP", "+", "BC_STORE_LIST", "Left", "BC_LOADVAR", "Left", "BC_LOADVAR", "Right",
+        "BC_BINOP", "+", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Mix", "BC_CONST", "40",
+        "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        for slot in (1032, 1040):
+            assert f"mov %rax, {slot}(%rsp)\n" in env["NativeOut"]
+            assert f"mov {slot}(%rsp), %rax" in env["NativeOut"]
+    else:
+        for slot in (1032, 1040):
+            assert f"str x0, [sp, #{slot}]\n" in env["NativeOut"]
+            assert f"ldr x0, [sp, #{slot}]" in env["NativeOut"]
+        assembly = tmp_path / "two-action-locals-arm64.s"
+        object_file = tmp_path / "two-action-locals-arm64.o"
+        assembly.write_text(env["NativeOut"], encoding="utf-8")
+        subprocess.run(
+            ["clang", "-target", "arm64-apple-macos11", "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert object_file.stat().st_size > 0
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
 def test_kuro_native_codegen_compiles_action_parameter_writeback(target, tmp_path):
     source = (
         "Action Adjust A: Integers, B: Integers, C: Integers;\n"
@@ -399,21 +442,11 @@ def test_kuro_native_codegen_compiles_action_parameter_writeback(target, tmp_pat
         assert object_file.stat().st_size > 0
 
 
-@pytest.mark.parametrize(
-    "tokens",
-    [
-        [
-            "BC_FUNC_BEGIN", "Local", "BC_CONST", "1", "BC_STORE_LIST", "N",
-            "BC_CONST", "2", "BC_STORE_LIST", "M", "BC_LOADVAR", "M", "BC_RETURN",
-            "BC_FUNC_END", "BC_CALL_BEGIN", "Local", "BC_CALL_END", "BC_PRINT",
-        ],
-        [
-            "BC_FUNC_BEGIN", "Local", "BC_LOADVAR", "N", "BC_RETURN", "BC_FUNC_END",
-            "BC_CALL_BEGIN", "Local", "BC_CALL_END", "BC_PRINT",
-        ],
-    ],
-)
-def test_kuro_native_codegen_rejects_unsupported_action_local_shapes(tokens):
+def test_kuro_native_codegen_rejects_undeclared_action_local_read():
+    tokens = [
+        "BC_FUNC_BEGIN", "Local", "BC_LOADVAR", "N", "BC_RETURN", "BC_FUNC_END",
+        "BC_CALL_BEGIN", "Local", "BC_CALL_END", "BC_PRINT",
+    ]
     bytecode = ", ".join(json.dumps(token) for token in tokens)
     env = run_codegen(bytecode, target="x86_64-linux")
 
@@ -770,12 +803,22 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
                 [
                     "BC_FUNC_BEGIN", "First", "BC_CONST", "40", "BC_STORE_LIST", "N", "BC_LOADVAR", "N",
                     "BC_RETURN", "BC_FUNC_END",
-                    "BC_FUNC_BEGIN", "Second", "BC_CONST", "2", "BC_STORE_LIST", "M", "BC_LOADVAR", "M",
+                    "BC_FUNC_BEGIN", "Second", "BC_CONST", "2", "BC_STORE_LIST", "N", "BC_LOADVAR", "N",
                     "BC_RETURN", "BC_FUNC_END",
                     "BC_CALL_BEGIN", "First", "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
                     "BC_CALL_BEGIN", "Second", "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
                 ],
                 "40\n2\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Mix", "BC_PARAM", "A", "Integers", "BC_LOADVAR", "A", "BC_CONST", "1",
+                    "BC_BINOP", "+", "BC_STORE_LIST", "Left", "BC_LOADVAR", "Left", "BC_CONST", "1",
+                    "BC_BINOP", "+", "BC_STORE_LIST", "Right", "BC_LOADVAR", "Left", "BC_LOADVAR", "Right",
+                    "BC_BINOP", "+", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Mix", "BC_CONST", "40",
+                    "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "83\n",
             ),
         ],
     )
