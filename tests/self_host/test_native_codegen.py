@@ -998,6 +998,10 @@ def test_kuro_owned_x86_linux_codegen_links_and_runs(tmp_path, tokens, expected,
     assert result.stderr == ""
 
 
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
 @pytest.mark.parametrize(
     ("argument", "expected"),
     [(1, "11\n"), (7, "12\n"), (15, "13\n"), (25, "14\n")],
