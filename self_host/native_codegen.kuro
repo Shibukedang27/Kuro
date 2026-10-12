@@ -286,6 +286,13 @@ NativeAllFunctionsOut = "";
 NativeOpcodeKnown = 0;
 NativeOpcodeArityValue = 0;
 NativePrepareLastBodyReturn = 0;
+NativePrepareIfCount = 0;
+NativePrepareElseCount = 0;
+NativePrepareIfEndCount = 0;
+NativePrepareInElse = 0;
+NativePrepareThenReturnCount = 0;
+NativePrepareElseReturnCount = 0;
+NativePrepareLastBodyIfEnd = 0;
 NativeCallDepth = 0;
 NativeCallFunctionIndices = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeCallBaseDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -359,6 +366,13 @@ Action NativePrepareProgram;
                 NativePrepareBodyDone = 0;
                 NativePrepareReturnCount = 0;
                 NativePrepareLastBodyReturn = 0;
+                NativePrepareIfCount = 0;
+                NativePrepareElseCount = 0;
+                NativePrepareIfEndCount = 0;
+                NativePrepareInElse = 0;
+                NativePrepareThenReturnCount = 0;
+                NativePrepareElseReturnCount = 0;
+                NativePrepareLastBodyIfEnd = 0;
                 While NativePrepareBodyPos is less than NativePrepareLength and NativePrepareBodyDone is equal to 0 and NativeFailed is equal to 0;
                     Get BytecodeOut NativePrepareBodyPos;
                     NativePrepareBodyOp = @_;
@@ -369,9 +383,28 @@ Action NativePrepareProgram;
                         If NativePrepareBodyOp is equal to "BC_FUNC_BEGIN";
                             NativeFailed = 1;
                         Else;
+                            NativePrepareLastBodyIfEnd = 0;
+                            If NativePrepareBodyOp is equal to "BC_IF_BEGIN";
+                                Add 1 to NativePrepareIfCount;
+                                NativePrepareInElse = 0;
+                            Done.
+                            If NativePrepareBodyOp is equal to "BC_ELSE_BEGIN";
+                                Add 1 to NativePrepareElseCount;
+                                NativePrepareInElse = 1;
+                            Done.
+                            If NativePrepareBodyOp is equal to "BC_IF_END";
+                                Add 1 to NativePrepareIfEndCount;
+                                NativePrepareInElse = 0;
+                                NativePrepareLastBodyIfEnd = 1;
+                            Done.
                             If NativePrepareBodyOp is equal to "BC_RETURN";
                                 Add 1 to NativePrepareReturnCount;
                                 NativePrepareLastBodyReturn = 1;
+                                If NativePrepareInElse is equal to 1;
+                                    Add 1 to NativePrepareElseReturnCount;
+                                Else;
+                                    Add 1 to NativePrepareThenReturnCount;
+                                Done.
                             Else;
                                 NativePrepareLastBodyReturn = 0;
                             Done.
@@ -388,11 +421,33 @@ Action NativePrepareProgram;
                 If NativePrepareBodyDone is equal to 0;
                     NativeFailed = 1;
                 Done.
-                If NativePrepareReturnCount is not equal to 1;
-                    NativeFailed = 1;
-                Done.
-                If NativePrepareLastBodyReturn is equal to 0;
-                    NativeFailed = 1;
+                If NativePrepareReturnCount is equal to 1;
+                    If NativePrepareLastBodyReturn is equal to 0;
+                        NativeFailed = 1;
+                    Done.
+                Else;
+                    If NativePrepareReturnCount is equal to 2;
+                        If NativePrepareIfCount is not equal to 1;
+                            NativeFailed = 1;
+                        Done.
+                        If NativePrepareElseCount is not equal to 1;
+                            NativeFailed = 1;
+                        Done.
+                        If NativePrepareIfEndCount is not equal to 1;
+                            NativeFailed = 1;
+                        Done.
+                        If NativePrepareThenReturnCount is not equal to 1;
+                            NativeFailed = 1;
+                        Done.
+                        If NativePrepareElseReturnCount is not equal to 1;
+                            NativeFailed = 1;
+                        Done.
+                        If NativePrepareLastBodyIfEnd is equal to 0;
+                            NativeFailed = 1;
+                        Done.
+                    Else;
+                        NativeFailed = 1;
+                    Done.
                 Done.
                 If NativeFailed is equal to 0;
                     Set NativeFunctionBodyStarts NativeFunctionCount to NativePrepareBodyStart;
@@ -1004,7 +1059,6 @@ Action EmitStraightIntegerProgram;
                     NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    add sp, sp, #2048\n    ldp x29, x30, [sp], #16\n    ret\n";
                 Done.
                 NativeStackDepth = 0;
-                NativeReturned = 1;
             Else;
                 NativeFailed = 1;
             Done.

@@ -136,6 +136,37 @@ def test_kuro_native_codegen_compiles_zero_parameter_integer_action(
     assert parameter_store not in env["NativeOut"][function_start:]
 
 
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_supports_conditional_integer_action_returns(target):
+    source = (
+        "Action Choose Value: Integers;\n"
+        "If Value is greater than 0;\n"
+        "Return 7;\n"
+        "Else;\n"
+        "Return 9;\n"
+        "Done.\n"
+        "Done.\n"
+        "Call Choose 1;\n"
+        "Print @_.\n"
+    )
+    tokens, env = compile_program_to_codegen(source, target=target)
+
+    assert tokens.count("BC_RETURN") == 2
+    assert env["NativeFailed"] == 0
+    assert env["NativeOut"].count("ret\n") >= 2
+
+
+def test_kuro_native_codegen_rejects_one_sided_conditional_action_return():
+    env = run_codegen(
+        '"BC_FUNC_BEGIN", "Broken", "BC_PARAM", "N", "Integers", '
+        '"BC_CONST", "1", "BC_IF_BEGIN", "BC_CONST", "7", "BC_RETURN", '
+        '"BC_ELSE_BEGIN", "BC_CONST", "9", "BC_IF_END", "BC_FUNC_END"',
+        target="x86_64-linux",
+    )
+
+    assert env["NativeFailed"] == 1
+
+
 @pytest.mark.skipif(
     platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
     reason="requires a Linux x86-64 execution host",
@@ -467,6 +498,20 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
                     "BC_LOADVAR", "_", "BC_PRINT",
                 ],
                 "42\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Choose", "BC_PARAM", "Value", "Integers",
+                    "BC_LOADVAR", "Value", "BC_CONST", "0", "BC_CMP", "gt", "BC_IF_BEGIN",
+                    "BC_CONST", "7", "BC_RETURN", "BC_ELSE_BEGIN", "BC_CONST", "9",
+                    "BC_RETURN", "BC_IF_END", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "Choose", "BC_CONST", "1", "BC_CALL_END",
+                    "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+                    "BC_CALL_BEGIN", "Choose", "BC_CONST", "0", "BC_CONST", "1",
+                    "BC_BINOP", "-", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "7\n9\n",
             ),
         ],
     )
