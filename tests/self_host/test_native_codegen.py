@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import platform
 import subprocess
 import pytest
@@ -19,8 +20,11 @@ requires_macos_arm64 = pytest.mark.skipif(
 )
 
 
-def run_codegen(bytecode: str):
-    stage = f'BytecodeOut = {bytecode};\n' + CODEGEN.read_text(encoding="utf-8")
+def run_codegen(bytecode: str, target: str = "aarch64-macos"):
+    codegen = CODEGEN.read_text(encoding="utf-8").replace(
+        'NativeTarget = "aarch64-macos";', f'NativeTarget = "{target}";', 1
+    )
+    stage = f'BytecodeOut = {bytecode};\n' + codegen
     result = run_source(stage)
     assert result.ok, result.compile.diags.render_all() if not result.compile.ok else result.runtime_error
     return result.interpreter.env
@@ -29,6 +33,15 @@ def run_codegen(bytecode: str):
 def run_literal_codegen(value: str):
     escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
     return run_codegen(f'"BC_CONST", "{escaped}", "BC_PRINT"')
+
+
+def compile_program_to_codegen(program: str, target: str = "aarch64-macos"):
+    from compiler.self_host import compile_with_kuro_driver
+
+    compiled = compile_with_kuro_driver(program)
+    tokens = [str(token) for token in compiled["CompilerOutput"]]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    return tokens, run_codegen(bytecode, target=target)
 
 
 def test_kuro_native_codegen_emits_length_for_multichar_literal():
@@ -96,6 +109,60 @@ def test_kuro_native_codegen_builds_integer_arithmetic(tmp_path, left, operator,
     assert env["NativeFailed"] == 0
     subprocess.run(["clang", str(assembly), "-o", str(executable)], check=True)
     assert subprocess.run([str(executable)], capture_output=True, text=True, check=True).stdout == expected
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+def test_kuro_native_codegen_compiles_one_parameter_integer_action(tmp_path):
+    source = (
+        "Action Inc N: Integers;\n"
+        "Return N + 1;\n"
+        "Done.\n"
+        "Call Inc 41;\n"
+        "Print @_.\n"
+    )
+    tokens, env = compile_program_to_codegen(source, target="x86_64-linux")
+
+    assert tokens == [
+        "BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Integers",
+        "BC_LOADVAR", "N", "BC_CONST", "1", "BC_BINOP", "+", "BC_RETURN",
+        "BC_FUNC_END", "BC_CALL_BEGIN", "Inc", "BC_CONST", "41", "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    assert env["NativeFailed"] == 0
+    assert ".Lkuro_fn_0:" in env["NativeOut"]
+    assert "call .Lkuro_fn_0" in env["NativeOut"]
+
+    assembly = tmp_path / "action.s"
+    executable = tmp_path / "action"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(
+        [
+            "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
+            "-Wl,-e,_start", "-x", "assembler", str(assembly), "-o", str(executable),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    result = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert result.stdout == "42\n"
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "bytecode",
+    [
+        '"BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Text", "BC_CONST", "1", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc", "BC_CONST", "41", "BC_CALL_END", "BC_PRINT"',
+        '"BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Integers", "BC_LOADVAR", "N", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc", "BC_CALL_END", "BC_PRINT"',
+    ],
+)
+def test_kuro_native_codegen_rejects_unsupported_action_signatures(bytecode):
+    env = run_codegen(bytecode, target="x86_64-linux")
+
+    assert env["NativeFailed"] == 1
 
 
 @pytest.mark.parametrize(
@@ -284,12 +351,18 @@ def test_native_kuro_codegen_image_emits_executable_x86_macos(tmp_path, tokens, 
     ).stdout == expected
 
 
-def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path):
+@pytest.fixture(scope="module")
+def x86_linux_codegen(tmp_path_factory):
     from compiler.self_host import build_native_codegen
 
-    # The generator runs on the local host; its output target is independent.
-    generator = tmp_path / "kuro-codegen-linux"
+    # Build once: the generator runs on the local host; output ABI is independent.
+    generator = tmp_path_factory.mktemp("kuro-codegen-linux") / "kuro-codegen-linux"
     build_native_codegen(generator, output_target="x86_64-linux")
+    return generator
+
+
+def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codegen):
+    generator = x86_linux_codegen
     generated = subprocess.run(
         [str(generator)],
         input="kuro.bytecode/1\nBC_CONST\n6\nBC_CONST\n7\nBC_BINOP\n*\nBC_PRINT\n",
@@ -348,17 +421,24 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path):
                 "BC_CONST", "0", "BC_STORE_LIST", "N", "BC_WHILE_BEGIN",
                 "BC_LOADVAR", "N", "BC_CONST", "3", "BC_CMP", "lt", "BC_WHILE_TEST",
                 "BC_LOADVAR", "N", "BC_PRINT", "BC_CONST", "1", "BC_ADD", "N", "BC_WHILE_END",
-            ],
-            "0\n1\n2\n",
-        ),
-    ],
-)
-def test_kuro_owned_x86_linux_codegen_links_and_runs(tmp_path, tokens, expected):
-    from compiler.self_host import build_native_codegen
-
-    generator = tmp_path / "kuro-codegen-linux"
+                ],
+                "0\n1\n2\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Integers",
+                    "BC_LOADVAR", "N", "BC_CONST", "1", "BC_BINOP", "+",
+                    "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc",
+                    "BC_CONST", "41", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "42\n",
+            ),
+        ],
+    )
+def test_kuro_owned_x86_linux_codegen_links_and_runs(tmp_path, tokens, expected, x86_linux_codegen):
+    generator = x86_linux_codegen
     executable = tmp_path / "kuro-generated-linux"
-    build_native_codegen(generator, output_target="x86_64-linux")
     generated = subprocess.run(
         [str(generator)],
         input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
