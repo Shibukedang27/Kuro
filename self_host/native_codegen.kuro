@@ -249,6 +249,8 @@ NativeVariableNames is Text;
 NativeVariableName is Text;
 NativeCurrentParamName0 is Text;
 NativeCurrentParamName1 is Text;
+NativeFunctionLocalName is Text;
+NativeFunctionLocalDefined = 0;
 NativeVariableCount = 0;
 NativeIfLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeIfElseSeen = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -278,6 +280,24 @@ Action NativeTextNamesEqual Left: Text, Right: Text;
         Return 1;
     Else;
         Return 0;
+    Done.
+Done.
+
+Action NativeFindFunctionParamSlot Name: Text, Index: Integers;
+    If Index is less than NativeCurrentFunctionParamCount;
+        NativeParamNamePosition = NativeCurrentBodyStart - 2 - (NativeCurrentFunctionParamCount - Index - 1) * 3;
+        Get BytecodeOut NativeParamNamePosition;
+        NativeCurrentParamName0 = @_;
+        Call NativeTextNamesEqual Name, NativeCurrentParamName0;
+        If @_ is equal to 1;
+            Return Index;
+        Else;
+            NativeNextParamIndex = Index + 1;
+            Call NativeFindFunctionParamSlot Name, NativeNextParamIndex;
+            Return @_;
+        Done.
+    Else;
+        Return -1;
     Done.
 Done.
 
@@ -547,6 +567,10 @@ Action EmitStraightIntegerProgram;
     NativeCallDepth = 0;
     NativeReturned = 0;
     NativeVariableCount = 0;
+    If NativeFunctionMode is equal to 1;
+        NativeFunctionLocalName = "";
+        NativeFunctionLocalDefined = 0;
+    Done.
     NativeIfDepth = 0;
     NativeIfCounter = 0;
     NativeRepeatDepth = 0;
@@ -961,33 +985,56 @@ Action EmitStraightIntegerProgram;
 
         If NativeStraightOp is equal to "BC_STORE_LIST";
             NativeStraightKnown = 1;
-            If NativeFunctionMode is equal to 0 and NativeStraightPos is less than NativeStraightEnd and NativeStackDepth is greater than 0;
+            If NativeStraightPos is less than NativeStraightEnd and NativeStackDepth is greater than 0;
                 Get BytecodeOut NativeStraightPos;
                 NativeVariableName = @_;
                 Add 1 to NativeStraightPos;
-                Call NativeFindVariable NativeVariableName, 0;
-                NativeVariableSlot = @_;
-                If NativeVariableSlot is less than 0;
-                    If NativeVariableCount is less than 32;
-                        NativeVariableSlot = NativeVariableCount;
-                        Append NativeVariableName to NativeVariableNames;
-                        Add 1 to NativeVariableCount;
-                    Else;
+                If NativeFunctionMode is equal to 0;
+                    Call NativeFindVariable NativeVariableName, 0;
+                    NativeVariableSlot = @_;
+                    If NativeVariableSlot is less than 0;
+                        If NativeVariableCount is less than 32;
+                            NativeVariableSlot = NativeVariableCount;
+                            Append NativeVariableName to NativeVariableNames;
+                            Add 1 to NativeVariableCount;
+                        Else;
+                            NativeFailed = 1;
+                        Done.
+                    Done.
+                Else;
+                    Call NativeFindFunctionParamSlot NativeVariableName, 0;
+                    NativeVariableSlot = @_;
+                    If NativeVariableSlot is greater than or equal to 0;
                         NativeFailed = 1;
+                    Else;
+                        If NativeFunctionLocalDefined is equal to 0;
+                            NativeFunctionLocalName = NativeVariableName;
+                            NativeFunctionLocalDefined = 1;
+                            NativeVariableSlot = NativeCurrentFunctionParamCount;
+                        Else;
+                            Call NativeTextNamesEqual NativeVariableName, NativeFunctionLocalName;
+                            If @_ is equal to 1;
+                                NativeVariableSlot = NativeCurrentFunctionParamCount;
+                            Else;
+                                NativeFailed = 1;
+                            Done.
+                        Done.
                     Done.
                 Done.
-                NativeStackOffset = NativeStackDepth * 8 - 8;
-                NativeVariableOffset = 1024 + NativeVariableSlot * 8;
-                Call NativeLengthToText NativeStackOffset;
-                NativeStackOffsetText = @_;
-                Call NativeLengthToText NativeVariableOffset;
-                NativeVariableOffsetText = @_;
-                If NativeX86 is equal to 1;
-                    NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
-                Else;
-                    NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
+                If NativeFailed is equal to 0;
+                    NativeStackOffset = NativeStackDepth * 8 - 8;
+                    NativeVariableOffset = 1024 + NativeVariableSlot * 8;
+                    Call NativeLengthToText NativeStackOffset;
+                    NativeStackOffsetText = @_;
+                    Call NativeLengthToText NativeVariableOffset;
+                    NativeVariableOffsetText = @_;
+                    If NativeX86 is equal to 1;
+                        NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
+                    Else;
+                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
+                    Done.
+                    NativeStackDepth = NativeStackDepth - 1;
                 Done.
-                NativeStackDepth = NativeStackDepth - 1;
             Else;
                 NativeFailed = 1;
             Done.
@@ -1000,59 +1047,18 @@ Action EmitStraightIntegerProgram;
                 NativeVariableName = @_;
                 Add 1 to NativeStraightPos;
                 If NativeFunctionMode is equal to 1;
-                    If NativeCurrentFunctionParamCount is equal to 1;
-                        NativeVariableSlot = 0;
-                    Else;
-                        If NativeCurrentFunctionParamCount is equal to 2;
-                            # Resolve parameter names from the original function header.
-                            # This avoids depending on parallel mutable text collections.
-                            NativeParam0NamePosition = NativeCurrentBodyStart - 5;
-                            Get BytecodeOut NativeParam0NamePosition;
-                            NativeCurrentParamName0 = @_;
-                            Call NativeTextNamesEqual NativeVariableName, NativeCurrentParamName0;
+                    Call NativeFindFunctionParamSlot NativeVariableName, 0;
+                    NativeVariableSlot = @_;
+                    If NativeVariableSlot is less than 0;
+                        If NativeFunctionLocalDefined is equal to 1;
+                            Call NativeTextNamesEqual NativeVariableName, NativeFunctionLocalName;
                             If @_ is equal to 1;
-                                NativeVariableSlot = 0;
-                            Else;
-                                NativeParam1NamePosition = NativeCurrentBodyStart - 2;
-                                Get BytecodeOut NativeParam1NamePosition;
-                                NativeCurrentParamName1 = @_;
-                                Call NativeTextNamesEqual NativeVariableName, NativeCurrentParamName1;
-                                If @_ is equal to 1;
-                                    NativeVariableSlot = 1;
-                                Else;
-                                    NativeVariableSlot = -1;
-                                Done.
-                            Done.
-                        Else;
-                            If NativeCurrentFunctionParamCount is equal to 3;
-                                NativeParam0NamePosition = NativeCurrentBodyStart - 8;
-                                Get BytecodeOut NativeParam0NamePosition;
-                                NativeCurrentParamName0 = @_;
-                                Call NativeTextNamesEqual NativeVariableName, NativeCurrentParamName0;
-                                If @_ is equal to 1;
-                                    NativeVariableSlot = 0;
-                                Else;
-                                    NativeParam1NamePosition = NativeCurrentBodyStart - 5;
-                                    Get BytecodeOut NativeParam1NamePosition;
-                                    NativeCurrentParamName1 = @_;
-                                    Call NativeTextNamesEqual NativeVariableName, NativeCurrentParamName1;
-                                    If @_ is equal to 1;
-                                        NativeVariableSlot = 1;
-                                    Else;
-                                        NativeParam2NamePosition = NativeCurrentBodyStart - 2;
-                                        Get BytecodeOut NativeParam2NamePosition;
-                                        NativeCurrentParamName2 = @_;
-                                        Call NativeTextNamesEqual NativeVariableName, NativeCurrentParamName2;
-                                        If @_ is equal to 1;
-                                            NativeVariableSlot = 2;
-                                        Else;
-                                            NativeVariableSlot = -1;
-                                        Done.
-                                    Done.
-                                Done.
+                                NativeVariableSlot = NativeCurrentFunctionParamCount;
                             Else;
                                 NativeVariableSlot = -1;
                             Done.
+                        Else;
+                            NativeVariableSlot = -1;
                         Done.
                     Done.
                 Else;
