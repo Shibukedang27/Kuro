@@ -111,6 +111,31 @@ def test_kuro_native_codegen_builds_integer_arithmetic(tmp_path, left, operator,
     assert subprocess.run([str(executable)], capture_output=True, text=True, check=True).stdout == expected
 
 
+@pytest.mark.parametrize(
+    ("target", "function_label", "call_instruction", "parameter_store"),
+    [
+        ("x86_64-linux", ".Lkuro_fn_0:", "call .Lkuro_fn_0", "mov %rdi, 1024(%rsp)"),
+        ("aarch64-macos", "L_kuro_fn_0:", "bl L_kuro_fn_0", "str x0, [sp, #1024]"),
+    ],
+)
+def test_kuro_native_codegen_compiles_zero_parameter_integer_action(
+    target, function_label, call_instruction, parameter_store
+):
+    source = "Action FortyTwo;\nReturn 42;\nDone.\nCall FortyTwo;\nPrint @_.\n"
+    tokens, env = compile_program_to_codegen(source, target=target)
+
+    assert tokens == [
+        "BC_FUNC_BEGIN", "FortyTwo", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END",
+        "BC_CALL_BEGIN", "FortyTwo", "BC_CALL_END", "BC_STORE_LIST", "_",
+        "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    assert env["NativeFailed"] == 0
+    assert function_label in env["NativeOut"]
+    assert call_instruction in env["NativeOut"]
+    function_start = env["NativeOut"].index(function_label)
+    assert parameter_store not in env["NativeOut"][function_start:]
+
+
 @pytest.mark.skipif(
     platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
     reason="requires a Linux x86-64 execution host",
@@ -153,10 +178,11 @@ def test_kuro_native_codegen_compiles_one_parameter_integer_action(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "bytecode",
+        "bytecode",
     [
         '"BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Text", "BC_CONST", "1", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc", "BC_CONST", "41", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Integers", "BC_LOADVAR", "N", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc", "BC_CALL_END", "BC_PRINT"',
+        '"BC_FUNC_BEGIN", "FortyTwo", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "FortyTwo", "BC_CONST", "1", "BC_CALL_END", "BC_PRINT"',
     ],
 )
 def test_kuro_native_codegen_rejects_unsupported_action_signatures(bytecode):
@@ -430,6 +456,14 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
                     "BC_LOADVAR", "N", "BC_CONST", "1", "BC_BINOP", "+",
                     "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc",
                     "BC_CONST", "41", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "42\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "FortyTwo", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "FortyTwo", "BC_CALL_END", "BC_STORE_LIST", "_",
                     "BC_LOADVAR", "_", "BC_PRINT",
                 ],
                 "42\n",
