@@ -356,6 +356,49 @@ def test_kuro_native_codegen_compiles_one_integer_action_local(target, tmp_path)
         assert object_file.stat().st_size > 0
 
 
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_compiles_action_parameter_writeback(target, tmp_path):
+    source = (
+        "Action Adjust A: Integers, B: Integers, C: Integers;\n"
+        "A = A + 1;\n"
+        "B = B + 2;\n"
+        "C = C + 3;\n"
+        "Return A + B + C;\n"
+        "Done.\n"
+        "Call Adjust 1, 2, 3;\n"
+        "Print @_.\n"
+    )
+    tokens, env = compile_program_to_codegen(source, target=target)
+
+    assert tokens == [
+        "BC_FUNC_BEGIN", "Adjust", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers",
+        "BC_PARAM", "C", "Integers", "BC_LOADVAR", "A", "BC_CONST", "1", "BC_BINOP", "+",
+        "BC_STORE_LIST", "A", "BC_LOADVAR", "B", "BC_CONST", "2", "BC_BINOP", "+",
+        "BC_STORE_LIST", "B", "BC_LOADVAR", "C", "BC_CONST", "3", "BC_BINOP", "+",
+        "BC_STORE_LIST", "C", "BC_LOADVAR", "A", "BC_LOADVAR", "B", "BC_BINOP", "+",
+        "BC_LOADVAR", "C", "BC_BINOP", "+", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN",
+        "Adjust", "BC_CONST", "1", "BC_CONST", "2", "BC_CONST", "3", "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        for slot in (1024, 1032, 1040):
+            assert f"mov %rax, {slot}(%rsp)\n" in env["NativeOut"]
+    else:
+        for slot in (1024, 1032, 1040):
+            assert f"str x0, [sp, #{slot}]\n" in env["NativeOut"]
+        assembly = tmp_path / "action-parameter-writeback-arm64.s"
+        object_file = tmp_path / "action-parameter-writeback-arm64.o"
+        assembly.write_text(env["NativeOut"], encoding="utf-8")
+        subprocess.run(
+            ["clang", "-target", "arm64-apple-macos11", "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert object_file.stat().st_size > 0
+
+
 @pytest.mark.parametrize(
     "tokens",
     [
@@ -363,11 +406,6 @@ def test_kuro_native_codegen_compiles_one_integer_action_local(target, tmp_path)
             "BC_FUNC_BEGIN", "Local", "BC_CONST", "1", "BC_STORE_LIST", "N",
             "BC_CONST", "2", "BC_STORE_LIST", "M", "BC_LOADVAR", "M", "BC_RETURN",
             "BC_FUNC_END", "BC_CALL_BEGIN", "Local", "BC_CALL_END", "BC_PRINT",
-        ],
-        [
-            "BC_FUNC_BEGIN", "Local", "BC_PARAM", "A", "Integers", "BC_CONST", "1",
-            "BC_STORE_LIST", "A", "BC_LOADVAR", "A", "BC_RETURN", "BC_FUNC_END",
-            "BC_CALL_BEGIN", "Local", "BC_CONST", "0", "BC_CALL_END", "BC_PRINT",
         ],
         [
             "BC_FUNC_BEGIN", "Local", "BC_LOADVAR", "N", "BC_RETURN", "BC_FUNC_END",
@@ -714,6 +752,19 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
                     "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
                 ],
                 "123\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Adjust", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers",
+                    "BC_PARAM", "C", "Integers", "BC_LOADVAR", "A", "BC_CONST", "1", "BC_BINOP", "+",
+                    "BC_STORE_LIST", "A", "BC_LOADVAR", "B", "BC_CONST", "2", "BC_BINOP", "+",
+                    "BC_STORE_LIST", "B", "BC_LOADVAR", "C", "BC_CONST", "3", "BC_BINOP", "+",
+                    "BC_STORE_LIST", "C", "BC_LOADVAR", "A", "BC_LOADVAR", "B", "BC_BINOP", "+",
+                    "BC_LOADVAR", "C", "BC_BINOP", "+", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN",
+                    "Adjust", "BC_CONST", "1", "BC_CONST", "2", "BC_CONST", "3", "BC_CALL_END",
+                    "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "12\n",
             ),
             (
                 [
