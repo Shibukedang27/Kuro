@@ -794,12 +794,12 @@ def test_kuro_native_codegen_bounds_globals_before_reserved_loop_storage(global_
 @pytest.mark.parametrize(
     "bytecode",
     [
-        '"BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Text", "BC_CONST", "1", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc", "BC_CONST", "41", "BC_CALL_END", "BC_PRINT"',
+        '"BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Decimals", "BC_CONST", "1", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc", "BC_CONST", "41", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Integers", "BC_LOADVAR", "N", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "FortyTwo", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "FortyTwo", "BC_CONST", "1", "BC_CALL_END", "BC_PRINT"',
-        '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Text", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CALL_END", "BC_PRINT"',
+        '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Decimals", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_PARAM", "C", "Integers", "BC_PARAM", "D", "Integers", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CONST", "1", "BC_CONST", "0", "BC_CALL_END", "BC_PRINT"',
-        '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_PARAM", "C", "Text", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CONST", "1", "BC_CALL_END", "BC_PRINT"',
+        '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_PARAM", "C", "Decimals", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CONST", "1", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_PARAM", "C", "Integers", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_LOADVAR", "Missing", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CALL_END", "BC_PRINT"',
