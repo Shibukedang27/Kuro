@@ -430,12 +430,14 @@ def test_kuro_native_codegen_compiles_one_integer_action_local(target, tmp_path)
     assert env["NativeFailed"] == 0
     if target == "x86_64-linux":
         assert "mov %rdi, 1024(%rsp)\n" in env["NativeOut"]
-        assert "mov %rax, 1032(%rsp)\n" in env["NativeOut"]
-        assert "mov 1032(%rsp), %rax" in env["NativeOut"]
+        assert "mov %rsp, %r15\n" in env["NativeOut"]
+        assert "mov %rax, 1024(%r15)\n" in env["NativeOut"]
+        assert "mov 1024(%r15), %rax" in env["NativeOut"]
     else:
         assert "str x0, [sp, #1024]\n" in env["NativeOut"]
-        assert "str x0, [sp, #1032]\n" in env["NativeOut"]
-        assert "ldr x0, [sp, #1032]" in env["NativeOut"]
+        assert "mov x19, sp\n" in env["NativeOut"]
+        assert "str x0, [x19, #1024]\n" in env["NativeOut"]
+        assert "ldr x0, [x19, #1024]" in env["NativeOut"]
         assembly = tmp_path / "action-local-arm64.s"
         object_file = tmp_path / "action-local-arm64.o"
         assembly.write_text(env["NativeOut"], encoding="utf-8")
@@ -472,15 +474,46 @@ def test_kuro_native_codegen_compiles_two_integer_action_locals(target, tmp_path
     ]
     assert env["NativeFailed"] == 0
     if target == "x86_64-linux":
-        for slot in (1032, 1040):
-            assert f"mov %rax, {slot}(%rsp)\n" in env["NativeOut"]
-            assert f"mov {slot}(%rsp), %rax" in env["NativeOut"]
+        for slot in (1024, 1032):
+            assert f"mov %rax, {slot}(%r15)\n" in env["NativeOut"]
+            assert f"mov {slot}(%r15), %rax" in env["NativeOut"]
     else:
-        for slot in (1032, 1040):
-            assert f"str x0, [sp, #{slot}]\n" in env["NativeOut"]
-            assert f"ldr x0, [sp, #{slot}]" in env["NativeOut"]
+        for slot in (1024, 1032):
+            assert f"str x0, [x19, #{slot}]\n" in env["NativeOut"]
+            assert f"ldr x0, [x19, #{slot}]" in env["NativeOut"]
         assembly = tmp_path / "two-action-locals-arm64.s"
         object_file = tmp_path / "two-action-locals-arm64.o"
+        assembly.write_text(env["NativeOut"], encoding="utf-8")
+        subprocess.run(
+            ["clang", "-target", "arm64-apple-macos11", "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert object_file.stat().st_size > 0
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_shares_nonparameter_action_variables_with_caller(target, tmp_path):
+    source = (
+        "Action Remember Value: Integers;\n"
+        "Saved = Value;\n"
+        "Done.\n"
+        "Call Remember 9;\n"
+        "Print Saved.\n"
+    )
+    tokens, env = compile_program_to_codegen(source, target=target)
+
+    assert "BC_STORE_LIST" in tokens and "Saved" in tokens
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        assert "mov %rax, 1024(%r15)\n" in env["NativeOut"]
+        assert "mov 1024(%rsp), %rax" in env["NativeOut"]
+    else:
+        assert "str x0, [x19, #1024]\n" in env["NativeOut"]
+        assert "ldr x0, [sp, #1024]" in env["NativeOut"]
+        assembly = tmp_path / "shared-action-global-arm64.s"
+        object_file = tmp_path / "shared-action-global-arm64.o"
         assembly.write_text(env["NativeOut"], encoding="utf-8")
         subprocess.run(
             ["clang", "-target", "arm64-apple-macos11", "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
@@ -548,12 +581,12 @@ def test_kuro_native_codegen_updates_action_parameter_and_local_slots(target, tm
 
     assert env["NativeFailed"] == 0
     if target == "x86_64-linux":
-        assert "add 1032(%rsp), %rax\n" in env["NativeOut"]
-        assert "mov %rax, 1032(%rsp)\n" in env["NativeOut"]
+        assert "add 1024(%r15), %rax\n" in env["NativeOut"]
+        assert "mov %rax, 1024(%r15)\n" in env["NativeOut"]
         assert "mov %rax, 1024(%rsp)\n" in env["NativeOut"]
     else:
-        assert "ldr x1, [sp, #1032]\n    add x0, x1, x0\n" in env["NativeOut"]
-        assert "str x0, [sp, #1032]\n" in env["NativeOut"]
+        assert "ldr x1, [x19, #1024]\n    add x0, x1, x0\n" in env["NativeOut"]
+        assert "str x0, [x19, #1024]\n" in env["NativeOut"]
         assert "str x0, [sp, #1024]\n" in env["NativeOut"]
         assembly = tmp_path / "action-update-add-arm64.s"
         object_file = tmp_path / "action-update-add-arm64.o"
@@ -580,13 +613,15 @@ def test_kuro_native_codegen_initializes_action_local_from_update_or_add(opcode,
 
     assert env["NativeFailed"] == 0
     if target == "x86_64-linux":
-        assert "mov %rax, 1024(%rsp)\n" in env["NativeOut"]
+        assert "movq $0, 1024(%rsp)\n" in env["NativeOut"]
+        assert "mov %rax, 1024(%r15)\n" in env["NativeOut"]
         if opcode == "BC_ADD":
-            assert "add 1024(%rsp), %rax\n" not in env["NativeOut"]
+            assert "add 1024(%r15), %rax\n" in env["NativeOut"]
     else:
-        assert "str x0, [sp, #1024]\n" in env["NativeOut"]
+        assert "str xzr, [sp, #1024]\n" in env["NativeOut"]
+        assert "str x0, [x19, #1024]\n" in env["NativeOut"]
         if opcode == "BC_ADD":
-            assert "ldr x1, [sp, #1024]\n" not in env["NativeOut"]
+            assert "ldr x1, [x19, #1024]\n" in env["NativeOut"]
         assembly = tmp_path / f"action-{opcode.lower()}-local-arm64.s"
         object_file = tmp_path / f"action-{opcode.lower()}-local-arm64.o"
         assembly.write_text(env["NativeOut"], encoding="utf-8")
@@ -608,6 +643,22 @@ def test_kuro_native_codegen_rejects_undeclared_action_local_read():
     env = run_codegen(bytecode, target="x86_64-linux")
 
     assert env["NativeFailed"] == 1
+
+
+@pytest.mark.parametrize("global_count, expected_failed", [(64, 0), (65, 1)])
+def test_kuro_native_codegen_bounds_globals_before_reserved_loop_storage(global_count, expected_failed):
+    tokens = []
+    for index in range(global_count):
+        tokens.extend(["BC_CONST", str(index), "BC_STORE_LIST", f"G{index}"])
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target="x86_64-linux")
+
+    assert env["NativeFailed"] == expected_failed
+    if global_count == 64:
+        assert "movq $0, 1528(%rsp)\n" in env["NativeOut"]
+        assert "mov %rax, 1528(%rsp)\n" in env["NativeOut"]
+    else:
+        assert env["NativeOut"] == ""
 
 
 @pytest.mark.parametrize(
@@ -998,6 +1049,45 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
                     "SeedUpdate", "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
                 ],
                 "41\n73\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Remember", "BC_PARAM", "Value", "Integers",
+                    "BC_LOADVAR", "Value", "BC_STORE_LIST", "Saved", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "Remember", "BC_CONST", "9", "BC_CALL_END",
+                    "BC_STORE_LIST", "_", "BC_LOADVAR", "Saved", "BC_PRINT",
+                ],
+                "9\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Seed", "BC_CONST", "40", "BC_STORE_LIST", "Count",
+                    "BC_LOADVAR", "Count", "BC_RETURN", "BC_FUNC_END",
+                    "BC_FUNC_BEGIN", "Increment", "BC_CONST", "1", "BC_ADD", "Count",
+                    "BC_LOADVAR", "Count", "BC_RETURN", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "Seed", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_LOADVAR", "_", "BC_PRINT",
+                    "BC_CALL_BEGIN", "Increment", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_LOADVAR", "_", "BC_PRINT",
+                    "BC_CALL_BEGIN", "Increment", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "40\n41\n42\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Seed", "BC_CONST", "100", "BC_STORE_LIST", "A",
+                    "BC_LOADVAR", "A", "BC_RETURN", "BC_FUNC_END",
+                    "BC_FUNC_BEGIN", "Change", "BC_PARAM", "A", "Integers",
+                    "BC_LOADVAR", "A", "BC_CONST", "1", "BC_BINOP", "+",
+                    "BC_STORE_LIST", "A", "BC_LOADVAR", "A", "BC_RETURN", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "Seed", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_LOADVAR", "_", "BC_PRINT",
+                    "BC_CALL_BEGIN", "Change", "BC_CONST", "5", "BC_CALL_END",
+                    "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+                    "BC_LOADVAR", "A", "BC_PRINT",
+                ],
+                "100\n6\n100\n",
             ),
         ],
     )
