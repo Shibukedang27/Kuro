@@ -245,7 +245,6 @@ Action EmitIntegerBinaryPrint;
     Done.
 Done.
 
-NativeVariableNames is Text;
 NativeVariableName is Text;
 NativeCurrentParamName0 is Text;
 NativeCurrentParamName1 is Text;
@@ -254,7 +253,16 @@ NativeCurrentLocalName is Text;
 NativeFunctionLocalNameCount = 0;
 NativeCurrentFunctionLocalStart = 0;
 NativeCurrentFunctionLocalCount = 0;
-NativeVariableCount = 0;
+NativeGlobalVariableNames is Text;
+NativeGlobalVariableCount = 0;
+NativeGlobalVariableName is Text;
+NativeGlobalCurrentName is Text;
+NativeGlobalNamePosition = 0;
+NativeGlobalSearchIndex = 0;
+NativeGlobalSearchResult = -1;
+NativeGlobalVariableSlot = -1;
+NativeGlobalVariableOffset = 0;
+NativeVariableIsGlobal = 0;
 NativeIfLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeIfElseSeen = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeRepeatLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -263,27 +271,45 @@ NativeWhileLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeWhileStackDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeWhileTestSeen = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 
-Action NativeFindVariable Name, Index;
-    If Index is less than NativeVariableCount;
-        Get NativeVariableNames Index;
-        If @_ is equal to Name;
-            Return Index;
-        Else;
-            NativeFindNext = Index + 1;
-            Call NativeFindVariable Name, NativeFindNext;
-            Return @_;
-        Done.
-    Else;
-        Return -1;
-    Done.
-Done.
-
 Action NativeTextNamesEqual Left: Text, Right: Text;
     If Left is equal to Right;
         Return 1;
     Else;
         Return 0;
     Done.
+Done.
+
+Action NativeFindGlobalVariable Name: Text, Index: Integers;
+    NativeGlobalSearchIndex = 0;
+    NativeGlobalSearchResult = -1;
+    While NativeGlobalSearchIndex is less than NativeGlobalVariableCount and NativeGlobalSearchResult is less than 0;
+        NativeGlobalNamePosition = NativeGlobalSearchIndex + 1;
+        Get NativeGlobalVariableNames NativeGlobalNamePosition;
+        NativeGlobalCurrentName = @_;
+        Call NativeTextNamesEqual Name, NativeGlobalCurrentName;
+        If @_ is equal to 1;
+            NativeGlobalSearchResult = NativeGlobalSearchIndex;
+        Else;
+            Add 1 to NativeGlobalSearchIndex;
+        Done.
+    Done.
+    Return NativeGlobalSearchResult;
+Done.
+
+Action NativeRegisterGlobalVariable Name: Text;
+    Call NativeFindGlobalVariable Name, 0;
+    NativeGlobalVariableSlot = @_;
+    If NativeGlobalVariableSlot is less than 0;
+        If NativeGlobalVariableCount is less than 64;
+            NativeGlobalVariableSlot = NativeGlobalVariableCount;
+            Append Name to NativeGlobalVariableNames;
+            Add 1 to NativeGlobalVariableCount;
+        Else;
+            NativeGlobalVariableSlot = -1;
+            NativeFailed = 1;
+        Done.
+    Done.
+    Return NativeGlobalVariableSlot;
 Done.
 
 Action NativeFindFunctionParamSlot Name: Text, Index: Integers;
@@ -401,6 +427,8 @@ Action NativeFindFunction Name, Index;
 Done.
 
 Action NativePrepareProgram;
+    NativeGlobalVariableNames = "";
+    NativeGlobalVariableCount = 0;
     NativePreparePos = 0;
     Length BytecodeOut;
     NativePrepareLength = @_;
@@ -501,6 +529,37 @@ Action NativePrepareProgram;
                             NativeFailed = 1;
                         Else;
                             NativePrepareLastBodyIfEnd = 0;
+                            If NativePrepareBodyOp is equal to "BC_STORE_LIST" or NativePrepareBodyOp is equal to "BC_UPDATE" or NativePrepareBodyOp is equal to "BC_ADD";
+                                NativePrepareGlobalNamePos = NativePrepareBodyPos + 1;
+                                Get BytecodeOut NativePrepareGlobalNamePos;
+                                NativePrepareGlobalName = @_;
+                                NativePrepareGlobalIsParam = 0;
+                                If NativePrepareParamCount is greater than 0;
+                                    Call NativeTextNamesEqual NativePrepareGlobalName, NativePrepareParamName0;
+                                    If @_ is equal to 1;
+                                        NativePrepareGlobalIsParam = 1;
+                                    Done.
+                                Done.
+                                If NativePrepareParamCount is greater than 1;
+                                    Call NativeTextNamesEqual NativePrepareGlobalName, NativePrepareParamName1;
+                                    If @_ is equal to 1;
+                                        NativePrepareGlobalIsParam = 1;
+                                    Done.
+                                Done.
+                                If NativePrepareParamCount is greater than 2;
+                                    Call NativeTextNamesEqual NativePrepareGlobalName, NativePrepareParamName2;
+                                    If @_ is equal to 1;
+                                        NativePrepareGlobalIsParam = 1;
+                                    Done.
+                                Done.
+                                Call NativeTextNamesEqual NativePrepareGlobalName, "_";
+                                If @_ is equal to 1;
+                                    NativePrepareGlobalIsParam = 1;
+                                Done.
+                                If NativePrepareGlobalIsParam is equal to 0;
+                                    Call NativeRegisterGlobalVariable NativePrepareGlobalName;
+                                Done.
+                            Done.
                             If NativePrepareBodyOp is equal to "BC_IF_BEGIN";
                                 Add 1 to NativePrepareIfCount;
                                 If NativePrepareIfDepth is less than 16;
@@ -681,6 +740,12 @@ Action NativePrepareProgram;
                 NativeFailed = 1;
             Done.
         Else;
+            If NativePrepareOp is equal to "BC_STORE_LIST" or NativePrepareOp is equal to "BC_UPDATE" or NativePrepareOp is equal to "BC_ADD";
+                NativePrepareGlobalNamePos = NativePreparePos + 1;
+                Get BytecodeOut NativePrepareGlobalNamePos;
+                NativePrepareGlobalName = @_;
+                Call NativeRegisterGlobalVariable NativePrepareGlobalName;
+            Done.
             Call NativeOpcodeArity NativePrepareOp;
             NativePrepareOperandCount = @_;
             If NativeOpcodeKnown is equal to 0;
@@ -705,7 +770,6 @@ Action EmitStraightIntegerProgram;
     NativeStackDepth = 0;
     NativeCallDepth = 0;
     NativeReturned = 0;
-    NativeVariableCount = 0;
     If NativeFunctionMode is equal to 1;
         NativeCurrentFunctionLocalStart = NativeFunctionLocalNameCount;
         NativeCurrentFunctionLocalCount = 0;
@@ -717,12 +781,26 @@ Action EmitStraightIntegerProgram;
     NativeWhileDepth = 0;
     NativeWhileCounter = 0;
     NativeX86 = 0;
-    NativeOut = ".section __TEXT,__text\n.globl _main\n_main:\n    sub sp, sp, #2048\n";
+    NativeOut = ".section __TEXT,__text\n.globl _main\n_main:\n    sub sp, sp, #2048\n    mov x19, sp\n";
     If NativeTarget is equal to "x86_64-macos" or NativeTarget is equal to "x86_64-linux";
         NativeX86 = 1;
-        NativeOut = ".section .text\n.globl _start\n_start:\n    sub $2048, %rsp\n";
+        NativeOut = ".section .text\n.globl _start\n_start:\n    sub $2048, %rsp\n    mov %rsp, %r15\n";
         If NativeTarget is equal to "x86_64-macos";
-            NativeOut = ".section __TEXT,__text\n.globl _start\n_start:\n    sub $2048, %rsp\n";
+            NativeOut = ".section __TEXT,__text\n.globl _start\n_start:\n    sub $2048, %rsp\n    mov %rsp, %r15\n";
+        Done.
+    Done.
+    If NativeFunctionMode is equal to 0;
+        NativeGlobalInitIndex = 0;
+        While NativeGlobalInitIndex is less than NativeGlobalVariableCount;
+            NativeGlobalVariableOffset = 1024 + NativeGlobalInitIndex * 8;
+            Call NativeLengthToText NativeGlobalVariableOffset;
+            NativeGlobalVariableOffsetText = @_;
+            If NativeX86 is equal to 1;
+                NativeOut = NativeOut + "    movq $0, " + NativeGlobalVariableOffsetText + "(%rsp)\n";
+            Else;
+                NativeOut = NativeOut + "    str xzr, [sp, #" + NativeGlobalVariableOffsetText + "]\n";
+            Done.
+            Add 1 to NativeGlobalInitIndex;
         Done.
     Done.
     If NativeFunctionMode is equal to 1;
@@ -756,7 +834,7 @@ Action EmitStraightIntegerProgram;
             Done.
         Done.
     Done.
-    If NativeStraightLength is greater than 64;
+    If NativeStraightLength is greater than 512;
         NativeFailed = 1;
     Done.
 
@@ -1128,32 +1206,38 @@ Action EmitStraightIntegerProgram;
                 Get BytecodeOut NativeStraightPos;
                 NativeVariableName = @_;
                 Add 1 to NativeStraightPos;
+                NativeVariableIsGlobal = 0;
                 If NativeFunctionMode is equal to 0;
-                    Call NativeFindVariable NativeVariableName, 0;
+                    Call NativeFindGlobalVariable NativeVariableName, 0;
                     NativeVariableSlot = @_;
                     If NativeVariableSlot is less than 0;
-                        If NativeVariableCount is less than 32;
-                            NativeVariableSlot = NativeVariableCount;
-                            Append NativeVariableName to NativeVariableNames;
-                            Add 1 to NativeVariableCount;
-                        Else;
-                            NativeFailed = 1;
-                        Done.
+                        NativeFailed = 1;
                     Done.
                 Else;
                     Call NativeFindFunctionParamSlot NativeVariableName, 0;
                     NativeVariableSlot = @_;
                     If NativeVariableSlot is less than 0;
-                        Call NativeFindFunctionLocalSlot NativeVariableName, 0;
-                        NativeFunctionLocalSlot = @_;
-                        If NativeFunctionLocalSlot is greater than or equal to 0;
-                            NativeVariableSlot = NativeCurrentFunctionParamCount + NativeFunctionLocalSlot;
+                        Call NativeTextNamesEqual NativeVariableName, "_";
+                        If @_ is equal to 1;
+                            Call NativeFindFunctionLocalSlot NativeVariableName, 0;
+                            NativeFunctionLocalSlot = @_;
+                            If NativeFunctionLocalSlot is greater than or equal to 0;
+                                NativeVariableSlot = NativeCurrentFunctionParamCount + NativeFunctionLocalSlot;
+                            Else;
+                                If NativeCurrentFunctionLocalCount is less than 32 and NativeFunctionLocalNameCount is less than 1024;
+                                    NativeVariableSlot = NativeCurrentFunctionParamCount + NativeCurrentFunctionLocalCount;
+                                    Append NativeVariableName to NativeFunctionLocalNames;
+                                    Add 1 to NativeCurrentFunctionLocalCount;
+                                    Add 1 to NativeFunctionLocalNameCount;
+                                Else;
+                                    NativeFailed = 1;
+                                Done.
+                            Done.
                         Else;
-                            If NativeCurrentFunctionLocalCount is less than 32 and NativeFunctionLocalNameCount is less than 1024;
-                                NativeVariableSlot = NativeCurrentFunctionParamCount + NativeCurrentFunctionLocalCount;
-                                Append NativeVariableName to NativeFunctionLocalNames;
-                                Add 1 to NativeCurrentFunctionLocalCount;
-                                Add 1 to NativeFunctionLocalNameCount;
+                            Call NativeFindGlobalVariable NativeVariableName, 0;
+                            NativeVariableSlot = @_;
+                            If NativeVariableSlot is greater than or equal to 0;
+                                NativeVariableIsGlobal = 1;
                             Else;
                                 NativeFailed = 1;
                             Done.
@@ -1168,9 +1252,19 @@ Action EmitStraightIntegerProgram;
                     Call NativeLengthToText NativeVariableOffset;
                     NativeVariableOffsetText = @_;
                     If NativeX86 is equal to 1;
-                        NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
+                        NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n";
+                        If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                            NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%r15)\n";
+                        Else;
+                            NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
+                        Done.
                     Else;
-                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
+                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n";
+                        If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                            NativeOut = NativeOut + "    str x0, [x19, #" + NativeVariableOffsetText + "]\n";
+                        Else;
+                            NativeOut = NativeOut + "    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
+                        Done.
                     Done.
                     NativeStackDepth = NativeStackDepth - 1;
                 Done.
@@ -1185,20 +1279,32 @@ Action EmitStraightIntegerProgram;
                 Get BytecodeOut NativeStraightPos;
                 NativeVariableName = @_;
                 Add 1 to NativeStraightPos;
+                NativeVariableIsGlobal = 0;
                 If NativeFunctionMode is equal to 1;
                     Call NativeFindFunctionParamSlot NativeVariableName, 0;
                     NativeVariableSlot = @_;
                     If NativeVariableSlot is less than 0;
-                        Call NativeFindFunctionLocalSlot NativeVariableName, 0;
-                        NativeFunctionLocalSlot = @_;
-                        If NativeFunctionLocalSlot is greater than or equal to 0;
-                            NativeVariableSlot = NativeCurrentFunctionParamCount + NativeFunctionLocalSlot;
+                        Call NativeTextNamesEqual NativeVariableName, "_";
+                        If @_ is equal to 1;
+                            Call NativeFindFunctionLocalSlot NativeVariableName, 0;
+                            NativeFunctionLocalSlot = @_;
+                            If NativeFunctionLocalSlot is greater than or equal to 0;
+                                NativeVariableSlot = NativeCurrentFunctionParamCount + NativeFunctionLocalSlot;
+                            Else;
+                                NativeVariableSlot = -1;
+                            Done.
                         Else;
-                            NativeVariableSlot = -1;
+                            Call NativeFindGlobalVariable NativeVariableName, 0;
+                            NativeVariableSlot = @_;
+                            If NativeVariableSlot is greater than or equal to 0;
+                                NativeVariableIsGlobal = 1;
+                            Else;
+                                NativeVariableSlot = -1;
+                            Done.
                         Done.
                     Done.
                 Else;
-                    Call NativeFindVariable NativeVariableName, 0;
+                    Call NativeFindGlobalVariable NativeVariableName, 0;
                     NativeVariableSlot = @_;
                 Done.
                 If NativeVariableSlot is less than 0;
@@ -1211,9 +1317,19 @@ Action EmitStraightIntegerProgram;
                     Call NativeLengthToText NativeStackOffset;
                     NativeStackOffsetText = @_;
                     If NativeX86 is equal to 1;
-                        NativeOut = NativeOut + "    mov " + NativeVariableOffsetText + "(%rsp), %rax\n    mov %rax, " + NativeStackOffsetText + "(%rsp)\n";
+                        If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                            NativeOut = NativeOut + "    mov " + NativeVariableOffsetText + "(%r15), %rax\n";
+                        Else;
+                            NativeOut = NativeOut + "    mov " + NativeVariableOffsetText + "(%rsp), %rax\n";
+                        Done.
+                        NativeOut = NativeOut + "    mov %rax, " + NativeStackOffsetText + "(%rsp)\n";
                     Else;
-                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeVariableOffsetText + "]\n    str x0, [sp, #" + NativeStackOffsetText + "]\n";
+                        If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                            NativeOut = NativeOut + "    ldr x0, [x19, #" + NativeVariableOffsetText + "]\n";
+                        Else;
+                            NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeVariableOffsetText + "]\n";
+                        Done.
+                        NativeOut = NativeOut + "    str x0, [sp, #" + NativeStackOffsetText + "]\n";
                     Done.
                     Add 1 to NativeStackDepth;
                 Done.
@@ -1229,28 +1345,40 @@ Action EmitStraightIntegerProgram;
                 NativeVariableName = @_;
                 Add 1 to NativeStraightPos;
                 NativeVariableWasNew = 0;
+                NativeVariableIsGlobal = 0;
                 If NativeFunctionMode is equal to 1;
                     Call NativeFindFunctionParamSlot NativeVariableName, 0;
                     NativeVariableSlot = @_;
                     If NativeVariableSlot is less than 0;
-                        Call NativeFindFunctionLocalSlot NativeVariableName, 0;
-                        NativeFunctionLocalSlot = @_;
-                        If NativeFunctionLocalSlot is greater than or equal to 0;
-                            NativeVariableSlot = NativeCurrentFunctionParamCount + NativeFunctionLocalSlot;
+                        Call NativeTextNamesEqual NativeVariableName, "_";
+                        If @_ is equal to 1;
+                            Call NativeFindFunctionLocalSlot NativeVariableName, 0;
+                            NativeFunctionLocalSlot = @_;
+                            If NativeFunctionLocalSlot is greater than or equal to 0;
+                                NativeVariableSlot = NativeCurrentFunctionParamCount + NativeFunctionLocalSlot;
+                            Else;
+                                If NativeCurrentFunctionLocalCount is less than 32 and NativeFunctionLocalNameCount is less than 1024;
+                                    NativeVariableSlot = NativeCurrentFunctionParamCount + NativeCurrentFunctionLocalCount;
+                                    Append NativeVariableName to NativeFunctionLocalNames;
+                                    Add 1 to NativeCurrentFunctionLocalCount;
+                                    Add 1 to NativeFunctionLocalNameCount;
+                                    NativeVariableWasNew = 1;
+                                Else;
+                                    NativeFailed = 1;
+                                Done.
+                            Done.
                         Else;
-                            If NativeCurrentFunctionLocalCount is less than 32 and NativeFunctionLocalNameCount is less than 1024;
-                                NativeVariableSlot = NativeCurrentFunctionParamCount + NativeCurrentFunctionLocalCount;
-                                Append NativeVariableName to NativeFunctionLocalNames;
-                                Add 1 to NativeCurrentFunctionLocalCount;
-                                Add 1 to NativeFunctionLocalNameCount;
-                                NativeVariableWasNew = 1;
+                            Call NativeFindGlobalVariable NativeVariableName, 0;
+                            NativeVariableSlot = @_;
+                            If NativeVariableSlot is greater than or equal to 0;
+                                NativeVariableIsGlobal = 1;
                             Else;
                                 NativeFailed = 1;
                             Done.
                         Done.
                     Done.
                 Else;
-                    Call NativeFindVariable NativeVariableName, 0;
+                    Call NativeFindGlobalVariable NativeVariableName, 0;
                     NativeVariableSlot = @_;
                     If NativeVariableSlot is less than 0;
                         NativeFailed = 1;
@@ -1266,15 +1394,31 @@ Action EmitStraightIntegerProgram;
                     If NativeX86 is equal to 1;
                         NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n";
                         If NativeStraightOp is equal to "BC_ADD" and NativeVariableWasNew is equal to 0;
-                            NativeOut = NativeOut + "    add " + NativeVariableOffsetText + "(%rsp), %rax\n";
+                            If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                                NativeOut = NativeOut + "    add " + NativeVariableOffsetText + "(%r15), %rax\n";
+                            Else;
+                                NativeOut = NativeOut + "    add " + NativeVariableOffsetText + "(%rsp), %rax\n";
+                            Done.
                         Done.
-                        NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
+                        If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                            NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%r15)\n";
+                        Else;
+                            NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
+                        Done.
                     Else;
                         NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n";
                         If NativeStraightOp is equal to "BC_ADD" and NativeVariableWasNew is equal to 0;
-                            NativeOut = NativeOut + "    ldr x1, [sp, #" + NativeVariableOffsetText + "]\n    add x0, x1, x0\n";
+                            If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                                NativeOut = NativeOut + "    ldr x1, [x19, #" + NativeVariableOffsetText + "]\n    add x0, x1, x0\n";
+                            Else;
+                                NativeOut = NativeOut + "    ldr x1, [sp, #" + NativeVariableOffsetText + "]\n    add x0, x1, x0\n";
+                            Done.
                         Done.
-                        NativeOut = NativeOut + "    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
+                        If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                            NativeOut = NativeOut + "    str x0, [x19, #" + NativeVariableOffsetText + "]\n";
+                        Else;
+                            NativeOut = NativeOut + "    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
+                        Done.
                     Done.
                     NativeStackDepth = NativeStackDepth - 1;
                 Done.
