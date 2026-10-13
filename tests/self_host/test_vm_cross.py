@@ -138,6 +138,35 @@ def test_kuro_vm_re_evaluates_while_conditions():
     assert output == [0, 1, 2]
 
 
+def test_kuro_vm_executes_control_flow_inside_actions():
+    source = (
+        "Action First;\n"
+        "N = 0;\n"
+        "If 1 is equal to 1;\nAdd 1 to N;\nDone.\n"
+        "Repeat 1;\nAdd 1 to N;\nDone.\n"
+        "While N is less than 3;\nAdd 1 to N;\nDone.\n"
+        "Return N;\nDone.\n"
+        "Action Second;\n"
+        "M = 0;\n"
+        "If 1 is equal to 1;\nAdd 1 to M;\nDone.\n"
+        "Repeat 1;\nAdd 1 to M;\nDone.\n"
+        "While M is less than 3;\nAdd 1 to M;\nDone.\n"
+        "Return M;\nDone.\n"
+        "Action RaiseToThree Value: Integers;\n"
+        "While Value is less than 3;\nAdd 1 to Value;\nDone.\n"
+        "Return Value;\nDone.\n"
+        "T = 0;\nWhile T is less than 1;\nAdd 1 to T;\nDone.\n"
+        "Call First;\nPrint @_.\n"
+        "Call Second;\nPrint @_.\n"
+        "Call RaiseToThree 0;\nPrint @_.\n"
+        "Print T.\n"
+    )
+    output, failed = run_kuro_vm(source)
+
+    assert failed in (None, 0)
+    assert output == [3, 3, 3, 1]
+
+
 def test_kuro_vm_supports_indexing_and_length():
     output, failed = run_kuro_vm('Name = "Kuro";\nGet Name 1;\nPrint @_.')
     assert failed in (None, 0)
