@@ -153,6 +153,38 @@ def test_kuro_native_codegen_compiles_zero_parameter_integer_action(
     assert parameter_store not in env["NativeOut"][function_start:]
 
 
+@pytest.mark.parametrize(
+    ("target", "function_label", "zero_return_instruction"),
+    [
+        ("x86_64-linux", ".Lkuro_fn_0:", "xor %eax, %eax"),
+        ("aarch64-macos", "L_kuro_fn_0:", "mov x0, #0"),
+    ],
+)
+@pytest.mark.parametrize(
+    "source",
+    [
+        "Action Show;\nPrint 42.\nDone.\nCall Show;\nPrint @_.\n",
+        "Action Echo N: Integers;\nPrint N.\nDone.\nCall Echo 42;\nPrint @_.\n",
+    ],
+)
+def test_kuro_native_codegen_compiles_zero_return_integer_action(
+    source, target, function_label, zero_return_instruction
+):
+    tokens, env = compile_program_to_codegen(source, target=target)
+
+    assert tokens.count("BC_FUNC_END") == 1
+    assert tokens.count("BC_RETURN") == 0
+    assert "BC_CALL_END" in tokens
+    assert env["NativeFailed"] == 0
+    function_start = env["NativeOut"].index(function_label)
+    function_end = env["NativeOut"].find("_kuro_print_int:", function_start)
+    if function_end < 0:
+        function_end = len(env["NativeOut"])
+    function_assembly = env["NativeOut"][function_start:function_end]
+    assert zero_return_instruction in function_assembly
+    assert "ret\n" in function_assembly
+
+
 @pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
 def test_kuro_native_codegen_supports_conditional_integer_action_returns(target):
     source = (
@@ -1033,6 +1065,55 @@ def test_kuro_owned_x86_linux_codegen_runs_every_nested_action_return_path(
     )
     assert result.returncode == 0
     assert result.stdout == expected
+    assert result.stderr == ""
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+@pytest.mark.parametrize(
+    "tokens",
+    [
+        [
+            "BC_FUNC_BEGIN", "Show", "BC_CONST", "42", "BC_PRINT", "BC_FUNC_END",
+            "BC_CALL_BEGIN", "Show", "BC_CALL_END", "BC_STORE_LIST", "_",
+            "BC_LOADVAR", "_", "BC_PRINT",
+        ],
+        [
+            "BC_FUNC_BEGIN", "Echo", "BC_PARAM", "N", "Integers", "BC_LOADVAR",
+            "N", "BC_PRINT", "BC_FUNC_END", "BC_CALL_BEGIN", "Echo", "BC_CONST",
+            "42", "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+        ],
+    ],
+)
+def test_kuro_owned_x86_linux_codegen_runs_zero_return_integer_actions(
+    tmp_path, tokens, x86_linux_codegen
+):
+    generated = subprocess.run(
+        [str(x86_linux_codegen)],
+        input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    executable = tmp_path / "zero-return-action-linux"
+    subprocess.run(
+        [
+            "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
+            "-Wl,-e,_start", "-x", "assembler", "-", "-o", str(executable),
+        ],
+        input=generated.stdout,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [str(executable)], capture_output=True, text=True, timeout=5, check=False
+    )
+    assert result.returncode == 0
+    assert result.stdout == "42\n0\n"
     assert result.stderr == ""
 
 
