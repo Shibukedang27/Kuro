@@ -525,7 +525,80 @@ def test_kuro_native_codegen_compiles_mixed_integer_text_action_parameters(
     assert object_file.stat().st_size > 0
 
 
-def test_kuro_native_codegen_rejects_decimal_action_parameters_until_supported():
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+@pytest.mark.parametrize(
+    ("source", "x86_prologue", "x86_call", "arm_prologue", "arm_call"),
+    [
+        (
+            "Action Select Middle: Integers, First: Decimals, Last: Decimals;\n"
+            "Return Middle;\nDone.\nCall Select 42, 0.5, 2.25;\nPrint @_.\n",
+            "mov %rdi, 1024(%rsp)\n    movsd %xmm0, 1032(%rsp)\n    movsd %xmm1, 1040(%rsp)",
+            "mov 0(%rsp), %rdi\n    movsd 8(%rsp), %xmm0\n    movsd 16(%rsp), %xmm1",
+            "str x0, [sp, #1024]\n    str d0, [sp, #1032]\n    str d1, [sp, #1040]",
+            "ldr x0, [sp, #0]\n    ldr d0, [sp, #8]\n    ldr d1, [sp, #16]",
+        ),
+        (
+            "Action Select First: Decimals, Middle: Integers, Last: Decimals;\n"
+            "Return Middle;\nDone.\nCall Select 0.5, 42, 2.25;\nPrint @_.\n",
+            "movsd %xmm0, 1024(%rsp)\n    mov %rdi, 1032(%rsp)\n    movsd %xmm1, 1040(%rsp)",
+            "movsd 0(%rsp), %xmm0\n    mov 8(%rsp), %rdi\n    movsd 16(%rsp), %xmm1",
+            "str d0, [sp, #1024]\n    str x0, [sp, #1032]\n    str d1, [sp, #1040]",
+            "ldr d0, [sp, #0]\n    ldr x0, [sp, #8]\n    ldr d1, [sp, #16]",
+        ),
+    ],
+)
+def test_kuro_native_codegen_mixes_decimal_and_integer_abi_registers(
+    target, source, x86_prologue, x86_call, arm_prologue, arm_call, tmp_path
+):
+    tokens, env = compile_program_to_codegen(source, target=target)
+
+    assert "Decimals" in tokens
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        assert x86_prologue in env["NativeOut"]
+        assert x86_call in env["NativeOut"]
+        clang_target = "x86_64-unknown-linux-gnu"
+    else:
+        assert arm_prologue in env["NativeOut"]
+        assert arm_call in env["NativeOut"]
+        clang_target = "arm64-apple-macos11"
+    assert ".double 0.5" in env["NativeOut"]
+    assert ".double 2.25" in env["NativeOut"]
+
+    assembly = tmp_path / f"mixed-decimal-{target}.s"
+    object_file = tmp_path / f"mixed-decimal-{target}.o"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(
+        ["clang", "-target", clang_target, "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert object_file.stat().st_size > 0
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_forwards_decimal_action_parameter(target):
+    source = (
+        "Action Sink Value: Decimals;\nReturn 7;\nDone.\n"
+        "Action Forward Value: Decimals;\nCall Sink Value;\nReturn 42;\nDone.\n"
+        "Call Forward 2.5;\nPrint @_.\n"
+    )
+    tokens, env = compile_program_to_codegen(source, target=target)
+
+    assert tokens.count("Decimals") == 2
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        assert "movsd %xmm0, 1024(%rsp)" in env["NativeOut"]
+        assert "movsd 0(%rsp), %xmm0" in env["NativeOut"]
+        assert "call .Lkuro_fn_0" in env["NativeOut"]
+    else:
+        assert "str d0, [sp, #1024]" in env["NativeOut"]
+        assert "ldr d0, [sp, #0]" in env["NativeOut"]
+        assert "bl L_kuro_fn_0" in env["NativeOut"]
+
+
+def test_kuro_native_codegen_rejects_decimal_return_until_float_returns_supported():
     source = (
         "Action Echo Value: Decimals;\nReturn Value;\nDone.\n"
         "Call Echo 1.25;\nPrint @_.\n"
@@ -794,12 +867,9 @@ def test_kuro_native_codegen_bounds_globals_before_reserved_loop_storage(global_
 @pytest.mark.parametrize(
     "bytecode",
     [
-        '"BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Decimals", "BC_CONST", "1", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc", "BC_CONST", "41", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "Inc", "BC_PARAM", "N", "Integers", "BC_LOADVAR", "N", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Inc", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "FortyTwo", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "FortyTwo", "BC_CONST", "1", "BC_CALL_END", "BC_PRINT"',
-        '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Decimals", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_PARAM", "C", "Integers", "BC_PARAM", "D", "Integers", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CONST", "1", "BC_CONST", "0", "BC_CALL_END", "BC_PRINT"',
-        '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_PARAM", "C", "Decimals", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CONST", "1", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_PARAM", "C", "Integers", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CALL_END", "BC_PRINT"',
         '"BC_FUNC_BEGIN", "Add", "BC_PARAM", "A", "Integers", "BC_PARAM", "B", "Integers", "BC_LOADVAR", "Missing", "BC_RETURN", "BC_FUNC_END", "BC_CALL_BEGIN", "Add", "BC_CONST", "4", "BC_CONST", "2", "BC_CALL_END", "BC_PRINT"',
@@ -1263,6 +1333,29 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
                     "BC_LOADVAR", "_", "BC_PRINT",
                 ],
                 "tail\n5\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Select", "BC_PARAM", "First", "Decimals",
+                    "BC_PARAM", "Middle", "Integers", "BC_PARAM", "Last", "Decimals",
+                    "BC_LOADVAR", "Middle", "BC_RETURN", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "Select", "BC_CONST", "0.5", "BC_CONST", "42",
+                    "BC_CONST", "2.25", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "42\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Sink", "BC_PARAM", "Value", "Decimals",
+                    "BC_CONST", "7", "BC_RETURN", "BC_FUNC_END",
+                    "BC_FUNC_BEGIN", "Forward", "BC_PARAM", "Value", "Decimals",
+                    "BC_CALL_BEGIN", "Sink", "BC_LOADVAR", "Value", "BC_CALL_END",
+                    "BC_STORE_LIST", "_", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "Forward", "BC_CONST", "2.5", "BC_CALL_END",
+                    "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "42\n",
             ),
             (
                 [
