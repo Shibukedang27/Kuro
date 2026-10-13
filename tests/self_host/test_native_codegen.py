@@ -805,6 +805,19 @@ def test_kuro_native_codegen_rejects_malformed_while(bytecode):
     assert run_codegen(bytecode)["NativeFailed"] == 1
 
 
+def test_native_codegen_source_emits_with_macos_arm64_backend():
+    from compiler.native import emit_macos_arm64
+    from compiler.pipeline import compile_source
+    from compiler.self_host import native_codegen_source
+
+    result = compile_source(native_codegen_source("aarch64-macos"))
+    assert result.ok, result.diags.render_all()
+    assembly = emit_macos_arm64(result.ir)
+
+    assert assembly.startswith(".section __TEXT,__text")
+    assert "_kuro_print_int:" in assembly
+
+
 @requires_macos_arm64
 def test_native_kuro_codegen_image_consumes_artifact(tmp_path):
     from compiler.self_host import build_native_codegen

@@ -245,7 +245,6 @@ Action EmitIntegerBinaryPrint;
     Done.
 Done.
 
-NativeVariableNames is Text;
 NativeVariableName is Text;
 NativeCurrentParamName0 is Text;
 NativeCurrentParamName1 is Text;
@@ -254,7 +253,6 @@ NativeCurrentLocalName is Text;
 NativeFunctionLocalNameCount = 0;
 NativeCurrentFunctionLocalStart = 0;
 NativeCurrentFunctionLocalCount = 0;
-NativeVariableCount = 0;
 NativeGlobalVariableNames is Text;
 NativeGlobalVariableCount = 0;
 NativeGlobalVariableName is Text;
@@ -272,21 +270,6 @@ NativeRepeatStackDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeWhileLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeWhileStackDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeWhileTestSeen = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
-
-Action NativeFindVariable Name, Index;
-    If Index is less than NativeVariableCount;
-        Get NativeVariableNames Index;
-        If @_ is equal to Name;
-            Return Index;
-        Else;
-            NativeFindNext = Index + 1;
-            Call NativeFindVariable Name, NativeFindNext;
-            Return @_;
-        Done.
-    Else;
-        Return -1;
-    Done.
-Done.
 
 Action NativeTextNamesEqual Left: Text, Right: Text;
     If Left is equal to Right;
@@ -787,7 +770,6 @@ Action EmitStraightIntegerProgram;
     NativeStackDepth = 0;
     NativeCallDepth = 0;
     NativeReturned = 0;
-    NativeVariableCount = 0;
     If NativeFunctionMode is equal to 1;
         NativeCurrentFunctionLocalStart = NativeFunctionLocalNameCount;
         NativeCurrentFunctionLocalCount = 0;
