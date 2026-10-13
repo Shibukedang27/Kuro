@@ -598,14 +598,73 @@ def test_kuro_native_codegen_forwards_decimal_action_parameter(target):
         assert "bl L_kuro_fn_0" in env["NativeOut"]
 
 
-def test_kuro_native_codegen_rejects_decimal_return_until_float_returns_supported():
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_returns_decimal_action_values_in_float_registers(target, tmp_path):
     source = (
         "Action Echo Value: Decimals;\nReturn Value;\nDone.\n"
-        "Call Echo 1.25;\nPrint @_.\n"
+        "Action Consume Value: Decimals;\nReturn 42;\nDone.\n"
+        "Call Echo 1.25;\nCall Consume @_;\nPrint @_.\n"
     )
-    tokens, env = compile_program_to_codegen(source, target="x86_64-linux")
+    tokens, env = compile_program_to_codegen(source, target=target)
 
-    assert "Decimals" in tokens
+    assert tokens.count("Decimals") == 2
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        assert "movsd %xmm0, 1024(%rsp)" in env["NativeOut"]
+        assert "movsd 0(%rsp), %xmm0" in env["NativeOut"]
+        assert "movsd %xmm0, 0(%rsp)" in env["NativeOut"]
+        assert "call .Lkuro_fn_0" in env["NativeOut"]
+        clang_target = "x86_64-unknown-linux-gnu"
+    else:
+        assert "str d0, [sp, #1024]" in env["NativeOut"]
+        assert "ldr d0, [sp, #0]" in env["NativeOut"]
+        assert "str d0, [sp, #0]" in env["NativeOut"]
+        assert "bl L_kuro_fn_0" in env["NativeOut"]
+        clang_target = "arm64-apple-macos11"
+    assembly = tmp_path / f"decimal-return-{target}.s"
+    object_file = tmp_path / f"decimal-return-{target}.o"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(
+        ["clang", "-target", clang_target, "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert object_file.stat().st_size > 0
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_returns_decimal_across_if_branches(target):
+    source = (
+        "Action Choose Flag: Integers;\n"
+        "If Flag is equal to 1;\nReturn 1.25;\nElse;\nReturn 2.0;\nDone.\nDone.\n"
+        "Action Consume Value: Decimals;\nReturn 42;\nDone.\n"
+        "Call Choose 0;\nCall Consume @_;\nPrint @_.\n"
+    )
+    _, env = compile_program_to_codegen(source, target=target)
+
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        assert "movsd 0(%rsp), %xmm0" in env["NativeOut"]
+        assert ".double 1.25" in env["NativeOut"]
+        assert ".double 2.0" in env["NativeOut"]
+    else:
+        assert "ldr d0, [sp, #0]" in env["NativeOut"]
+        assert ".double 1.25" in env["NativeOut"]
+        assert ".double 2.0" in env["NativeOut"]
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_rejects_mixed_integer_and_decimal_return_kinds(target):
+    tokens = [
+        "BC_FUNC_BEGIN", "Choose", "BC_PARAM", "Flag", "Integers",
+        "BC_LOADVAR", "Flag", "BC_CONST", "1", "BC_CMP", "eq", "BC_IF_BEGIN",
+        "BC_CONST", "1.25", "BC_RETURN", "BC_ELSE_BEGIN", "BC_CONST", "2",
+        "BC_RETURN", "BC_IF_END", "BC_FUNC_END",
+        "BC_CONST", "0", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
     assert env["NativeFailed"] == 1
     assert env["NativeOut"] == ""
 
@@ -1167,6 +1226,20 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
                 [
                     "BC_FUNC_BEGIN", "FortyTwo", "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END",
                     "BC_CALL_BEGIN", "FortyTwo", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "42\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Choose", "BC_PARAM", "Flag", "Integers",
+                    "BC_LOADVAR", "Flag", "BC_CONST", "1", "BC_CMP", "eq", "BC_IF_BEGIN",
+                    "BC_CONST", "1.25", "BC_RETURN", "BC_ELSE_BEGIN", "BC_CONST", "2.0", "BC_RETURN",
+                    "BC_IF_END", "BC_FUNC_END",
+                    "BC_FUNC_BEGIN", "Consume", "BC_PARAM", "Value", "Decimals",
+                    "BC_CONST", "42", "BC_RETURN", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "Choose", "BC_CONST", "0", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_CALL_BEGIN", "Consume", "BC_LOADVAR", "_", "BC_CALL_END", "BC_STORE_LIST", "_",
                     "BC_LOADVAR", "_", "BC_PRINT",
                 ],
                 "42\n",
