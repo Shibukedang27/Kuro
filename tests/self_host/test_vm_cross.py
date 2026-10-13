@@ -110,6 +110,17 @@ def test_kuro_vm_executes_action_call_and_return():
     assert output == [9]
 
 
+def test_kuro_vm_passes_mixed_text_and_integer_action_parameters():
+    output, failed = run_kuro_vm(
+        "Action EchoPair Count: Integers, Word: Text;\n"
+        "Print Word.\nReturn Count;\nDone.\n"
+        'Call EchoPair 7, "hello";\nPrint @_.\n'
+    )
+
+    assert failed in (None, 0)
+    assert output == ["hello", 7]
+
+
 def test_kuro_vm_keeps_recursive_call_frames_isolated():
     output, failed = run_kuro_vm(
         "Action Fact N;\n"

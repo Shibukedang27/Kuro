@@ -465,6 +465,79 @@ def test_kuro_native_codegen_compiles_three_parameter_integer_action(target, tmp
 
 
 @pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+@pytest.mark.parametrize(
+    ("source", "text_parameter_offset", "x86_register", "arm_register"),
+    [
+        (
+            "Action EchoPair Count: Integers, Word: Text;\n"
+            "Print Word.\nReturn Count;\nDone.\n"
+            'Call EchoPair 7, "hello";\nPrint @_.\n',
+            "1032",
+            "rsi",
+            "x1",
+        ),
+        (
+            "Action EchoPair Word: Text, Count: Integers;\n"
+            "Print Word.\nReturn Count;\nDone.\n"
+            'Call EchoPair "world", 9;\nPrint @_.\n',
+            "1024",
+            "rdi",
+            "x0",
+        ),
+        (
+            "Action EchoTriple First: Integers, Count: Integers, Last: Text;\n"
+            "Print Last.\nReturn First + Count;\nDone.\n"
+            'Call EchoTriple 2, 3, "tail";\nPrint @_.\n',
+            "1040",
+            "rdx",
+            "x2",
+        ),
+    ],
+)
+def test_kuro_native_codegen_compiles_mixed_integer_text_action_parameters(
+    target, source, text_parameter_offset, x86_register, arm_register, tmp_path
+):
+    tokens, env = compile_program_to_codegen(source, target=target)
+
+    assert "BC_CONST_TEXT" in tokens
+    assert "Text" in tokens
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        assert f"mov %{x86_register}, {text_parameter_offset}(%rsp)" in env["NativeOut"]
+        assert "lea L_kuro_text_constant_0(%rip), %rax" in env["NativeOut"]
+        assert "L_kuro_text_len_0:" in env["NativeOut"]
+        clang_target = "x86_64-unknown-linux-gnu"
+    else:
+        assert f"str {arm_register}, [sp, #{text_parameter_offset}]" in env["NativeOut"]
+        assert "adrp x0, L_kuro_text_constant_0@PAGE" in env["NativeOut"]
+        assert "L_kuro_text_len_0:" in env["NativeOut"]
+        clang_target = "arm64-apple-macos11"
+
+    assembly = tmp_path / f"mixed-text-{target}.s"
+    object_file = tmp_path / f"mixed-text-{target}.o"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(
+        ["clang", "-target", clang_target, "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert object_file.stat().st_size > 0
+
+
+def test_kuro_native_codegen_rejects_decimal_action_parameters_until_supported():
+    source = (
+        "Action Echo Value: Decimals;\nReturn Value;\nDone.\n"
+        "Call Echo 1.25;\nPrint @_.\n"
+    )
+    tokens, env = compile_program_to_codegen(source, target="x86_64-linux")
+
+    assert "Decimals" in tokens
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
 def test_kuro_native_codegen_compiles_one_integer_action_local(target, tmp_path):
     source = (
         "Action Local A: Integers;\n"
@@ -1158,6 +1231,47 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
                     "BC_LOADVAR", "A", "BC_PRINT",
                 ],
                 "100\n6\n100\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "EchoPair", "BC_PARAM", "Count", "Integers",
+                    "BC_PARAM", "Word", "Text", "BC_LOADVAR", "Word", "BC_PRINT",
+                    "BC_LOADVAR", "Count", "BC_RETURN", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "EchoPair", "BC_CONST", "7", "BC_CONST_TEXT", "hello",
+                    "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "hello\n7\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "EchoPair", "BC_PARAM", "Word", "Text",
+                    "BC_PARAM", "Count", "Integers", "BC_LOADVAR", "Word", "BC_PRINT",
+                    "BC_LOADVAR", "Count", "BC_RETURN", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "EchoPair", "BC_CONST_TEXT", "world", "BC_CONST", "9",
+                    "BC_CALL_END", "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "world\n9\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "EchoTriple", "BC_PARAM", "First", "Integers",
+                    "BC_PARAM", "Count", "Integers", "BC_PARAM", "Last", "Text",
+                    "BC_LOADVAR", "Last", "BC_PRINT", "BC_LOADVAR", "First", "BC_LOADVAR",
+                    "Count", "BC_BINOP", "+", "BC_RETURN", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "EchoTriple", "BC_CONST", "2", "BC_CONST", "3",
+                    "BC_CONST_TEXT", "tail", "BC_CALL_END", "BC_STORE_LIST", "_",
+                    "BC_LOADVAR", "_", "BC_PRINT",
+                ],
+                "tail\n5\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Echo", "BC_PARAM", "Message", "Text",
+                    "BC_LOADVAR", "Message", "BC_PRINT", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "Echo", "BC_CONST_TEXT", r'quoted: "hi" \\end',
+                    "BC_CALL_END", "BC_STORE_LIST", "_",
+                ],
+                'quoted: "hi" \\end\n',
             ),
         ],
     )

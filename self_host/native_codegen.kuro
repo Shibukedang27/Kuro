@@ -262,6 +262,29 @@ NativeGlobalSearchIndex = 0;
 NativeGlobalSearchResult = -1;
 NativeGlobalVariableSlot = -1;
 NativeGlobalVariableOffset = 0;
+NativeTextLiteralDataOut is Text;
+NativeTextLiteral is Text;
+NativeTextLiteralEscaped is Text;
+NativeTextLiteralEscapeCharacter is Text;
+NativeTextLiteralLabelText is Text;
+NativeTextLiteralOffsetText is Text;
+NativeStackDepth = 0;
+NativeX86 = 0;
+NativeTextLiteralEscapeIndex = 0;
+NativeTextLiteralOffset = 0;
+NativeTextLiteralCount = 0;
+NativeTextPrintCounter = 0;
+NativeTextPrintLabelText is Text;
+NativeTextPrintSyscall is Text;
+NativePrintValueIsText = 0;
+NativePrintPreviousOpcodePosition = 0;
+NativePrintPreviousOpcode is Text;
+NativePrintPreviousOperandPosition = 0;
+NativePrintPreviousValueName is Text;
+NativeParamTypeNamePosition = 0;
+NativeParamTypePosition = 0;
+NativeParamTypeName is Text;
+NativeParamTypeNextIndex = 0;
 NativeVariableIsGlobal = 0;
 NativeIfLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeIfElseSeen = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -328,6 +351,109 @@ Action NativeFindFunctionParamSlot Name: Text, Index: Integers;
     Else;
         Return -1;
     Done.
+Done.
+
+Action NativeFindFunctionParamType Name: Text, Index: Integers;
+    If Index is less than NativeCurrentFunctionParamCount;
+        NativeParamTypeNamePosition = NativeCurrentBodyStart - 2 - (NativeCurrentFunctionParamCount - Index - 1) * 3;
+        Get BytecodeOut NativeParamTypeNamePosition;
+        NativeParamTypeName = @_;
+        Call NativeTextNamesEqual Name, NativeParamTypeName;
+        If @_ is equal to 1;
+            NativeParamTypePosition = NativeParamTypeNamePosition + 1;
+            Get BytecodeOut NativeParamTypePosition;
+            Return @_;
+        Else;
+            NativeParamTypeNextIndex = Index + 1;
+            Call NativeFindFunctionParamType Name, NativeParamTypeNextIndex;
+            Return @_;
+        Done.
+    Else;
+        Return "";
+    Done.
+Done.
+
+Action NativeRegisterTextLiteral LiteralValue: Text;
+    Length LiteralValue;
+    NativeTextLiteralLength = @_;
+    If NativeTextLiteralLength is less than 1000 and NativeTextLiteralCount is less than 64;
+        NativeTextLiteralEscaped = "";
+        NativeTextLiteralEscapeIndex = 0;
+        While NativeTextLiteralEscapeIndex is less than NativeTextLiteralLength;
+            Get LiteralValue NativeTextLiteralEscapeIndex;
+            NativeTextLiteralEscapeCharacter = @_;
+            If NativeTextLiteralEscapeCharacter is equal to NativeBackslash or NativeTextLiteralEscapeCharacter is equal to NativeQuote;
+                NativeTextLiteralEscaped = NativeTextLiteralEscaped + NativeBackslash + NativeTextLiteralEscapeCharacter;
+            Else;
+                If NativeTextLiteralEscapeCharacter is equal to "\n";
+                    NativeTextLiteralEscaped = NativeTextLiteralEscaped + NativeBackslash + "n";
+                Else;
+                    If NativeTextLiteralEscapeCharacter is equal to "\r";
+                        NativeTextLiteralEscaped = NativeTextLiteralEscaped + NativeBackslash + "r";
+                    Else;
+                        If NativeTextLiteralEscapeCharacter is equal to "\t";
+                            NativeTextLiteralEscaped = NativeTextLiteralEscaped + NativeBackslash + "t";
+                        Else;
+                            NativeTextLiteralEscaped = NativeTextLiteralEscaped + NativeTextLiteralEscapeCharacter;
+                        Done.
+                    Done.
+                Done.
+            Done.
+            Add 1 to NativeTextLiteralEscapeIndex;
+        Done.
+        Call NativeLengthToText NativeTextLiteralCount;
+        NativeTextLiteralLabelText = @_;
+        NativeTextLiteralDataOut = NativeTextLiteralDataOut + "L_kuro_text_constant_" + NativeTextLiteralLabelText + ":\n.asciz \"" + NativeTextLiteralEscaped + "\"\n";
+        NativeTextLiteralOffset = NativeStackDepth * 8;
+        Call NativeLengthToText NativeTextLiteralOffset;
+        NativeTextLiteralOffsetText = @_;
+        If NativeX86 is equal to 1;
+            NativeOut = NativeOut + "    lea L_kuro_text_constant_" + NativeTextLiteralLabelText + "(%rip), %rax\n    mov %rax, " + NativeTextLiteralOffsetText + "(%rsp)\n";
+        Else;
+            NativeOut = NativeOut + "    adrp x0, L_kuro_text_constant_" + NativeTextLiteralLabelText + "@PAGE\n    add x0, x0, L_kuro_text_constant_" + NativeTextLiteralLabelText + "@PAGEOFF\n    str x0, [sp, #" + NativeTextLiteralOffsetText + "]\n";
+        Done.
+        Add 1 to NativeStackDepth;
+        Add 1 to NativeTextLiteralCount;
+    Else;
+        NativeFailed = 1;
+    Done.
+Done.
+
+Action NativeIsTopValueText Position: Integers;
+    NativePrintPreviousOpcodePosition = Position - 3;
+    If NativePrintPreviousOpcodePosition is greater than or equal to 0;
+        Get BytecodeOut NativePrintPreviousOpcodePosition;
+        NativePrintPreviousOpcode = @_;
+        If NativePrintPreviousOpcode is equal to "BC_CONST_TEXT";
+            Return 1;
+        Else;
+            If NativeFunctionMode is equal to 1 and NativePrintPreviousOpcode is equal to "BC_LOADVAR";
+                NativePrintPreviousOperandPosition = NativePrintPreviousOpcodePosition + 1;
+                Get BytecodeOut NativePrintPreviousOperandPosition;
+                NativePrintPreviousValueName = @_;
+                Call NativeFindFunctionParamType NativePrintPreviousValueName, 0;
+                If @_ is equal to "Text";
+                    Return 1;
+                Done.
+            Done.
+        Done.
+    Done.
+    Return 0;
+Done.
+
+Action NativeEmitTextPrint StackOffsetText: Text;
+    Call NativeLengthToText NativeTextPrintCounter;
+    NativeTextPrintLabelText = @_;
+    If NativeX86 is equal to 1;
+        NativeTextPrintSyscall = "$1";
+        If NativeTarget is equal to "x86_64-macos";
+            NativeTextPrintSyscall = "$0x2000004";
+        Done.
+        NativeOut = NativeOut + "    mov " + StackOffsetText + "(%rsp), %rsi\n    xor %rdx, %rdx\nL_kuro_text_len_" + NativeTextPrintLabelText + ":\n    cmpb $0, (%rsi,%rdx)\n    je L_kuro_text_write_" + NativeTextPrintLabelText + "\n    inc %rdx\n    jmp L_kuro_text_len_" + NativeTextPrintLabelText + "\nL_kuro_text_write_" + NativeTextPrintLabelText + ":\n    mov $1, %rdi\n    mov " + NativeTextPrintSyscall + ", %rax\n    syscall\n    movb $10, 2040(%rsp)\n    lea 2040(%rsp), %rsi\n    mov $1, %rdx\n    mov $1, %rdi\n    mov " + NativeTextPrintSyscall + ", %rax\n    syscall\n";
+    Else;
+        NativeOut = NativeOut + "    ldr x1, [sp, #" + StackOffsetText + "]\n    mov x2, #0\nL_kuro_text_len_" + NativeTextPrintLabelText + ":\n    ldrb w3, [x1, x2]\n    cbz w3, L_kuro_text_write_" + NativeTextPrintLabelText + "\n    add x2, x2, #1\n    b L_kuro_text_len_" + NativeTextPrintLabelText + "\nL_kuro_text_write_" + NativeTextPrintLabelText + ":\n    mov x0, #1\n    mov x16, #4\n    svc #0x80\n    mov w3, #10\n    strb w3, [sp, #2040]\n    add x1, sp, #2040\n    mov x2, #1\n    mov x0, #1\n    mov x16, #4\n    svc #0x80\n";
+    Done.
+    Add 1 to NativeTextPrintCounter;
 Done.
 
 Action NativeFindFunctionLocalSlot Name: Text, Index: Integers;
@@ -457,7 +583,7 @@ Action NativePrepareProgram;
                     NativePrepareParamName0 = @_;
                     NativePrepareParamTypePos = NativePrepareParamPos + 2;
                     Get BytecodeOut NativePrepareParamTypePos;
-                    If @_ is not equal to "Integers";
+                    If @_ is not equal to "Integers" and @_ is not equal to "Text";
                         NativeFailed = 1;
                     Done.
                     NativePrepareParamCount = 1;
@@ -471,7 +597,7 @@ Action NativePrepareProgram;
                             NativePrepareParamName1 = @_;
                             NativePrepareSecondParamTypePos = NativePrepareSecondParamPos + 2;
                             Get BytecodeOut NativePrepareSecondParamTypePos;
-                            If @_ is not equal to "Integers";
+                            If @_ is not equal to "Integers" and @_ is not equal to "Text";
                                 NativeFailed = 1;
                             Done.
                             NativePrepareParamCount = 2;
@@ -485,7 +611,7 @@ Action NativePrepareProgram;
                                     NativePrepareParamName2 = @_;
                                     NativePrepareThirdParamTypePos = NativePrepareThirdParamPos + 2;
                                     Get BytecodeOut NativePrepareThirdParamTypePos;
-                                    If @_ is not equal to "Integers";
+                                    If @_ is not equal to "Integers" and @_ is not equal to "Text";
                                         NativeFailed = 1;
                                     Done.
                                     NativePrepareParamCount = 3;
@@ -880,6 +1006,18 @@ Action EmitStraightIntegerProgram;
                 Else;
                     NativeFailed = 1;
                 Done.
+            Else;
+                NativeFailed = 1;
+            Done.
+        Done.
+
+        If NativeStraightOp is equal to "BC_CONST_TEXT";
+            NativeStraightKnown = 1;
+            If NativeStraightPos is less than NativeStraightEnd and NativeStackDepth is less than 128;
+                Get BytecodeOut NativeStraightPos;
+                NativeTextLiteral = @_;
+                Add 1 to NativeStraightPos;
+                Call NativeRegisterTextLiteral NativeTextLiteral;
             Else;
                 NativeFailed = 1;
             Done.
@@ -1539,10 +1677,16 @@ Action EmitStraightIntegerProgram;
                 NativeStackOffset = NativeStackDepth * 8 - 8;
                 Call NativeLengthToText NativeStackOffset;
                 NativeStackOffsetText = @_;
-                If NativeX86 is equal to 1;
-                    NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    call _kuro_print_int\n";
+                Call NativeIsTopValueText NativeStraightPos;
+                NativePrintValueIsText = @_;
+                If NativePrintValueIsText is equal to 1;
+                    Call NativeEmitTextPrint NativeStackOffsetText;
                 Else;
-                    NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    bl _kuro_print_int\n";
+                    If NativeX86 is equal to 1;
+                        NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    call _kuro_print_int\n";
+                    Else;
+                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    bl _kuro_print_int\n";
+                    Done.
                 Done.
                 NativeStackDepth = NativeStackDepth - 1;
             Else;
@@ -1579,10 +1723,17 @@ Action EmitStraightIntegerProgram;
                 NativeOut = NativeOut + "    mov $0, %rdi\n    mov " + NativeExitSyscall + ", %rax\n    syscall\nL_kuro_division_error:\n    mov $1, %rdi\n    mov " + NativeExitSyscall + ", %rax\n    syscall\n";
                 NativeOut = NativeOut + "_kuro_print_int:\n    push %rbp\n    mov %rsp, %rbp\n    sub $32, %rsp\n    lea 31(%rsp), %rsi\n    movb $10, (%rsi)\n    mov $1, %rcx\n    xor %r8d, %r8d\n    test %rax, %rax\n    jns L_kuro_positive\n    neg %rax\n    mov $1, %r8\nL_kuro_positive:\n    xor %rdx, %rdx\n    mov $10, %r9\n    div %r9\n    add $48, %dl\n    dec %rsi\n    mov %dl, (%rsi)\n    inc %rcx\n    test %rax, %rax\n    jnz L_kuro_positive\n    cmp $0, %r8\n    je L_kuro_write\n    dec %rsi\n    movb $45, (%rsi)\n    inc %rcx\nL_kuro_write:\n    mov " + NativeWriteSyscall + ", %rax\n    mov $1, %rdi\n    mov %rcx, %rdx\n    syscall\n    leave\n    ret\n";
             Else;
-                NativeOut = NativeOut + "    add sp, sp, #2048\n    mov x0, #0\n    mov x16, #1\n    svc #0x80\nL_kuro_division_error:\n    add sp, sp, #2048\n    mov x0, #1\n    mov x16, #1\n    svc #0x80\n";
+            NativeOut = NativeOut + "    add sp, sp, #2048\n    mov x0, #0\n    mov x16, #1\n    svc #0x80\nL_kuro_division_error:\n    add sp, sp, #2048\n    mov x0, #1\n    mov x16, #1\n    svc #0x80\n";
                 NativeOut = NativeOut + "_kuro_print_int:\n    sub sp, sp, #32\n    add x3, sp, #31\n    mov w4, #10\n    strb w4, [x3]\n    mov x2, #1\n    mov x5, #10\n    mov x6, #0\n    cmp x0, #0\n    b.ge L_kuro_digits_straight\n    neg x0, x0\n    mov x6, #1\nL_kuro_digits_straight:\n    udiv x7, x0, x5\n    msub x8, x7, x5, x0\n    add x8, x8, #48\n    sub x3, x3, #1\n    strb w8, [x3]\n    add x2, x2, #1\n    mov x0, x7\n    cbnz x0, L_kuro_digits_straight\n    cbz x6, L_kuro_write_straight\n    sub x3, x3, #1\n    mov w8, #45\n    strb w8, [x3]\n    add x2, x2, #1\nL_kuro_write_straight:\n    mov x0, #1\n    mov x1, x3\n    mov x16, #4\n    svc #0x80\n    add sp, sp, #32\n    ret\n";
             Done.
             NativeOut = NativeOut + NativeAllFunctionsOut;
+            If NativeTextLiteralDataOut is not equal to "";
+                If NativeTarget is equal to "x86_64-linux";
+                    NativeOut = NativeOut + "\n.section .rodata\n" + NativeTextLiteralDataOut;
+                Else;
+                    NativeOut = NativeOut + "\n.section __TEXT,__cstring\n" + NativeTextLiteralDataOut;
+                Done.
+            Done.
             Print NativeOut.
         Done.
     Done.
@@ -1610,6 +1761,9 @@ Done.
 NativeIfCounter = 0;
 NativeRepeatCounter = 0;
 NativeWhileCounter = 0;
+NativeTextLiteralCount = 0;
+NativeTextLiteralDataOut = "";
+NativeTextPrintCounter = 0;
 NativeFunctionLocalNames = "";
 NativeFunctionLocalNameCount = 1;
 Call NativePrepareProgram;
