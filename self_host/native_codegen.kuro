@@ -775,11 +775,8 @@ Action EmitStraightIntegerProgram;
         NativeCurrentFunctionLocalCount = 0;
     Done.
     NativeIfDepth = 0;
-    NativeIfCounter = 0;
     NativeRepeatDepth = 0;
-    NativeRepeatCounter = 0;
     NativeWhileDepth = 0;
-    NativeWhileCounter = 0;
     NativeX86 = 0;
     NativeOut = ".section __TEXT,__text\n.globl _main\n_main:\n    sub sp, sp, #2048\n    mov x19, sp\n";
     If NativeTarget is equal to "x86_64-macos" or NativeTarget is equal to "x86_64-linux";
@@ -1610,6 +1607,9 @@ Action NativeBuildFunctions;
     NativeFunctionMode = 0;
 Done.
 
+NativeIfCounter = 0;
+NativeRepeatCounter = 0;
+NativeWhileCounter = 0;
 NativeFunctionLocalNames = "";
 NativeFunctionLocalNameCount = 1;
 Call NativePrepareProgram;

@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import platform
+import re
 import subprocess
 import pytest
 
@@ -26,6 +27,32 @@ def nested_choice_program(argument):
         "BC_CALL_BEGIN", "Choose", "BC_CONST", str(argument), "BC_CALL_END",
         "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
     ]
+
+
+def action_control_flow_program():
+    return (
+        "Action First;\n"
+        "N = 0;\n"
+        "If 1 is equal to 1;\nAdd 1 to N;\nDone.\n"
+        "Repeat 1;\nAdd 1 to N;\nDone.\n"
+        "While N is less than 3;\nAdd 1 to N;\nDone.\n"
+        "Return N;\nDone.\n"
+        "Action Second;\n"
+        "M = 0;\n"
+        "If 1 is equal to 1;\nAdd 1 to M;\nDone.\n"
+        "Repeat 1;\nAdd 1 to M;\nDone.\n"
+        "While M is less than 3;\nAdd 1 to M;\nDone.\n"
+        "Return M;\nDone.\n"
+        "Action RaiseToThree Value: Integers;\n"
+        "While Value is less than 3;\nAdd 1 to Value;\nDone.\n"
+        "Return Value;\nDone.\n"
+        "T = 0;\nWhile T is less than 1;\nAdd 1 to T;\nDone.\n"
+        "Call First;\nPrint @_.\n"
+        "Call Second;\nPrint @_.\n"
+        "Call RaiseToThree 0;\nPrint @_.\n"
+        "Print T.\n"
+    )
+
 
 MACOS_ARM64_HOST = (
     platform.system() == "Darwin"
@@ -232,6 +259,36 @@ def test_kuro_native_codegen_supports_nested_conditional_integer_action_returns(
     assert tokens.count("BC_RETURN") == 4
     assert env["NativeFailed"] == 0
     assert env["NativeOut"].count("ret\n") >= 4
+
+
+@pytest.mark.parametrize(
+    ("target", "triple"),
+    [("x86_64-linux", "x86_64-unknown-linux-gnu"), ("aarch64-macos", "arm64-apple-macos")],
+)
+def test_kuro_native_codegen_keeps_action_control_flow_labels_unique(target, triple, tmp_path):
+    tokens, env = compile_program_to_codegen(action_control_flow_program(), target=target)
+
+    assert tokens.count("BC_FUNC_BEGIN") == 3
+    assert tokens.count("BC_IF_BEGIN") == 2
+    assert tokens.count("BC_REPEAT_BEGIN") == 2
+    assert tokens.count("BC_WHILE_BEGIN") == 4
+    assert env["NativeFailed"] == 0
+    labels = re.findall(
+        r"^L_kuro_(?:else|endif|repeat|endrepeat|while|endwhile)_\d+:$",
+        env["NativeOut"],
+        re.MULTILINE,
+    )
+    assert len(labels) == 16
+    assert len(labels) == len(set(labels))
+    object_file = tmp_path / f"action-control-flow-{target}.o"
+    subprocess.run(
+        ["clang", "-target", triple, "-c", "-x", "assembler", "-", "-o", str(object_file)],
+        input=env["NativeOut"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert object_file.stat().st_size > 0
 
 
 def test_kuro_native_codegen_rejects_one_sided_conditional_action_return():
@@ -1217,6 +1274,51 @@ def test_kuro_owned_x86_linux_codegen_runs_zero_return_integer_actions(
     )
     assert result.returncode == 0
     assert result.stdout == "42\n0\n"
+    assert result.stderr == ""
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+def test_kuro_owned_x86_linux_codegen_runs_action_control_flow_without_label_collisions(
+    tmp_path, x86_linux_codegen
+):
+    tokens, env = compile_program_to_codegen(action_control_flow_program(), target="x86_64-linux")
+    assert env["NativeFailed"] == 0
+
+    generated = subprocess.run(
+        [str(x86_linux_codegen)],
+        input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    labels = re.findall(
+        r"^(L_kuro_(?:else|endif|repeat|endrepeat|while|endwhile)_\d+):$",
+        generated.stdout,
+        re.MULTILINE,
+    )
+    assert len(labels) == 16
+    assert len(labels) == len(set(labels))
+
+    executable = tmp_path / "action-control-flow-linux"
+    subprocess.run(
+        [
+            "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
+            "-Wl,-e,_start", "-x", "assembler", "-", "-o", str(executable),
+        ],
+        input=generated.stdout,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [str(executable)], capture_output=True, text=True, timeout=5, check=False
+    )
+    assert result.returncode == 0
+    assert result.stdout == "3\n3\n3\n1\n"
     assert result.stderr == ""
 
 
