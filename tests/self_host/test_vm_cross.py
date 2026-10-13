@@ -121,6 +121,17 @@ def test_kuro_vm_passes_mixed_text_and_integer_action_parameters():
     assert output == ["hello", 7]
 
 
+def test_kuro_vm_passes_and_forwards_decimal_action_parameters():
+    output, failed = run_kuro_vm(
+        "Action Sink Value: Decimals;\nReturn Value;\nDone.\n"
+        "Action Forward Value: Decimals;\nCall Sink Value;\nReturn @_;\nDone.\n"
+        "Call Forward 3.25;\nPrint @_."
+    )
+
+    assert failed in (None, 0)
+    assert output == [3.25]
+
+
 def test_kuro_vm_keeps_recursive_call_frames_isolated():
     output, failed = run_kuro_vm(
         "Action Fact N;\n"
