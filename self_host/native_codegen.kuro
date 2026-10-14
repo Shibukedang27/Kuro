@@ -466,7 +466,12 @@ Action NativeFunctionParamTypeAt FunctionIndex: Integers, ParameterIndex: Intege
                 Get NativeFunctionParam2Types FunctionIndex;
                 Return @_;
             Else;
-                Return "";
+                If ParameterIndex is equal to 3;
+                    Get NativeFunctionParam3Types FunctionIndex;
+                    Return @_;
+                Else;
+                    Return "";
+                Done.
             Done.
         Done.
     Done.
@@ -535,7 +540,7 @@ Action NativeEmitFunctionParameter ParameterIndex: Integers, StackOffset: Intege
     Call NativeLengthToText StackOffset;
     NativeFunctionParameterOffsetText = @_;
     If NativeFunctionParameterType is equal to "Decimals";
-        If NativeFunctionDecimalParamIndex is less than 3;
+        If NativeFunctionDecimalParamIndex is less than 4;
             If NativeX86 is equal to 1;
                 Get NativeX86DecimalRegisters NativeFunctionDecimalParamIndex;
             Else;
@@ -552,7 +557,7 @@ Action NativeEmitFunctionParameter ParameterIndex: Integers, StackOffset: Intege
             NativeFailed = 1;
         Done.
     Else;
-        If NativeFunctionGeneralParamIndex is less than 3;
+        If NativeFunctionGeneralParamIndex is less than 4;
             If NativeX86 is equal to 1;
                 Get NativeX86GeneralRegisters NativeFunctionGeneralParamIndex;
             Else;
@@ -579,64 +584,31 @@ Action NativeEmitCallArgument ParameterIndex: Integers, StackOffset: Integers, S
     Call NativeLengthToText StackOffset;
     NativeCallArgumentOffsetText = @_;
     If NativeCallExpectedParameterType is equal to "Decimals";
-        If NativeCallActualArgumentKind is equal to "D";
-            If NativeCallDecimalRegisterIndex is equal to 0;
+        If NativeCallActualArgumentKind is equal to "D" or NativeCallActualArgumentKind is equal to "I";
+            If NativeCallDecimalRegisterIndex is less than 4;
                 If NativeX86 is equal to 1;
-                    NativeOut = NativeOut + "    movsd " + NativeCallArgumentOffsetText + "(%rsp), %xmm0\n";
-                Else;
-                    NativeOut = NativeOut + "    ldr d0, [sp, #" + NativeCallArgumentOffsetText + "]\n";
-                Done.
-            Else;
-                If NativeCallDecimalRegisterIndex is equal to 1;
-                    If NativeX86 is equal to 1;
-                        NativeOut = NativeOut + "    movsd " + NativeCallArgumentOffsetText + "(%rsp), %xmm1\n";
+                    Get NativeX86DecimalRegisters NativeCallDecimalRegisterIndex;
+                    NativeCallArgumentRegister = @_;
+                    If NativeCallActualArgumentKind is equal to "D";
+                        NativeOut = NativeOut + "    movsd " + NativeCallArgumentOffsetText + "(%rsp), %" + NativeCallArgumentRegister + "\n";
                     Else;
-                        NativeOut = NativeOut + "    ldr d1, [sp, #" + NativeCallArgumentOffsetText + "]\n";
+                        NativeOut = NativeOut + "    mov " + NativeCallArgumentOffsetText + "(%rsp), %rax\n    cvtsi2sd %rax, %" + NativeCallArgumentRegister + "\n";
                     Done.
                 Else;
-                    If NativeCallDecimalRegisterIndex is equal to 2;
-                        If NativeX86 is equal to 1;
-                            NativeOut = NativeOut + "    movsd " + NativeCallArgumentOffsetText + "(%rsp), %xmm2\n";
-                        Else;
-                            NativeOut = NativeOut + "    ldr d2, [sp, #" + NativeCallArgumentOffsetText + "]\n";
-                        Done.
+                    Get NativeArmDecimalRegisters NativeCallDecimalRegisterIndex;
+                    NativeCallArgumentRegister = @_;
+                    If NativeCallActualArgumentKind is equal to "D";
+                        NativeOut = NativeOut + "    ldr " + NativeCallArgumentRegister + ", [sp, #" + NativeCallArgumentOffsetText + "]\n";
                     Else;
-                        NativeFailed = 1;
-                    Done.
-                Done.
-            Done.
-            Add 1 to NativeCallDecimalRegisterIndex;
-        Else;
-            If NativeCallActualArgumentKind is equal to "I";
-                If NativeCallDecimalRegisterIndex is equal to 0;
-                    If NativeX86 is equal to 1;
-                        NativeOut = NativeOut + "    mov " + NativeCallArgumentOffsetText + "(%rsp), %rax\n    cvtsi2sd %rax, %xmm0\n";
-                    Else;
-                        NativeOut = NativeOut + "    ldr x9, [sp, #" + NativeCallArgumentOffsetText + "]\n    scvtf d0, x9\n";
-                    Done.
-                Else;
-                    If NativeCallDecimalRegisterIndex is equal to 1;
-                        If NativeX86 is equal to 1;
-                            NativeOut = NativeOut + "    mov " + NativeCallArgumentOffsetText + "(%rsp), %rax\n    cvtsi2sd %rax, %xmm1\n";
-                        Else;
-                            NativeOut = NativeOut + "    ldr x9, [sp, #" + NativeCallArgumentOffsetText + "]\n    scvtf d1, x9\n";
-                        Done.
-                    Else;
-                        If NativeCallDecimalRegisterIndex is equal to 2;
-                            If NativeX86 is equal to 1;
-                                NativeOut = NativeOut + "    mov " + NativeCallArgumentOffsetText + "(%rsp), %rax\n    cvtsi2sd %rax, %xmm2\n";
-                            Else;
-                                NativeOut = NativeOut + "    ldr x9, [sp, #" + NativeCallArgumentOffsetText + "]\n    scvtf d2, x9\n";
-                            Done.
-                        Else;
-                            NativeFailed = 1;
-                        Done.
+                        NativeOut = NativeOut + "    ldr x9, [sp, #" + NativeCallArgumentOffsetText + "]\n    scvtf " + NativeCallArgumentRegister + ", x9\n";
                     Done.
                 Done.
                 Add 1 to NativeCallDecimalRegisterIndex;
             Else;
                 NativeFailed = 1;
             Done.
+        Else;
+            NativeFailed = 1;
         Done.
     Else;
         NativeCallArgumentTypeMatches = 0;
@@ -647,32 +619,20 @@ Action NativeEmitCallArgument ParameterIndex: Integers, StackOffset: Integers, S
             NativeCallArgumentTypeMatches = 1;
         Done.
         If NativeCallArgumentTypeMatches is equal to 1;
-            If NativeCallGeneralRegisterIndex is equal to 0;
+            If NativeCallGeneralRegisterIndex is less than 4;
                 If NativeX86 is equal to 1;
-                    NativeOut = NativeOut + "    mov " + NativeCallArgumentOffsetText + "(%rsp), %rdi\n";
+                    Get NativeX86GeneralRegisters NativeCallGeneralRegisterIndex;
+                    NativeCallArgumentRegister = @_;
+                    NativeOut = NativeOut + "    mov " + NativeCallArgumentOffsetText + "(%rsp), %" + NativeCallArgumentRegister + "\n";
                 Else;
-                    NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeCallArgumentOffsetText + "]\n";
+                    Get NativeArmGeneralRegisters NativeCallGeneralRegisterIndex;
+                    NativeCallArgumentRegister = @_;
+                    NativeOut = NativeOut + "    ldr " + NativeCallArgumentRegister + ", [sp, #" + NativeCallArgumentOffsetText + "]\n";
                 Done.
+                Add 1 to NativeCallGeneralRegisterIndex;
             Else;
-                If NativeCallGeneralRegisterIndex is equal to 1;
-                    If NativeX86 is equal to 1;
-                        NativeOut = NativeOut + "    mov " + NativeCallArgumentOffsetText + "(%rsp), %rsi\n";
-                    Else;
-                        NativeOut = NativeOut + "    ldr x1, [sp, #" + NativeCallArgumentOffsetText + "]\n";
-                    Done.
-                Else;
-                    If NativeCallGeneralRegisterIndex is equal to 2;
-                        If NativeX86 is equal to 1;
-                            NativeOut = NativeOut + "    mov " + NativeCallArgumentOffsetText + "(%rsp), %rdx\n";
-                        Else;
-                            NativeOut = NativeOut + "    ldr x2, [sp, #" + NativeCallArgumentOffsetText + "]\n";
-                        Done.
-                    Else;
-                        NativeFailed = 1;
-                    Done.
-                Done.
+                NativeFailed = 1;
             Done.
-            Add 1 to NativeCallGeneralRegisterIndex;
         Else;
             NativeFailed = 1;
         Done.
@@ -787,13 +747,15 @@ NativeFunctionNames is Text;
 NativeFunctionParam0Names is Text;
 NativeFunctionParam1Names is Text;
 NativeFunctionParam2Names is Text;
+NativeFunctionParam3Names is Text;
 NativeFunctionParam0Types is Text;
 NativeFunctionParam1Types is Text;
 NativeFunctionParam2Types is Text;
-NativeX86GeneralRegisters = "rdi", "rsi", "rdx";
-NativeArmGeneralRegisters = "x0", "x1", "x2";
-NativeX86DecimalRegisters = "xmm0", "xmm1", "xmm2";
-NativeArmDecimalRegisters = "d0", "d1", "d2";
+NativeFunctionParam3Types is Text;
+NativeX86GeneralRegisters = "rdi", "rsi", "rdx", "rcx";
+NativeArmGeneralRegisters = "x0", "x1", "x2", "x3";
+NativeX86DecimalRegisters = "xmm0", "xmm1", "xmm2", "xmm3";
+NativeArmDecimalRegisters = "d0", "d1", "d2", "d3";
 NativeFunctionBodyStarts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeFunctionBodyEnds = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeFunctionParameterCounts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -1208,9 +1170,11 @@ Action NativePrepareProgram;
                 NativePrepareParamName0 = "";
                 NativePrepareParamName1 = "";
                 NativePrepareParamName2 = "";
+                NativePrepareParamName3 = "";
                 NativePrepareParamType0 = "";
                 NativePrepareParamType1 = "";
                 NativePrepareParamType2 = "";
+                NativePrepareParamType3 = "";
                 NativePrepareBodyStart = NativePrepareParamPos;
                 Get BytecodeOut NativePrepareParamPos;
                 If @_ is equal to "BC_PARAM";
@@ -1258,7 +1222,24 @@ Action NativePrepareProgram;
                                     If NativePrepareBodyStart is less than NativePrepareLength;
                                         Get BytecodeOut NativePrepareBodyStart;
                                         If @_ is equal to "BC_PARAM";
-                                            NativeFailed = 1;
+                                            NativePrepareFourthParamPos = NativePrepareBodyStart;
+                                            NativePrepareFourthParamNamePos = NativePrepareFourthParamPos + 1;
+                                            Get BytecodeOut NativePrepareFourthParamNamePos;
+                                            NativePrepareParamName3 = @_;
+                                            NativePrepareFourthParamTypePos = NativePrepareFourthParamPos + 2;
+                                            Get BytecodeOut NativePrepareFourthParamTypePos;
+                                            NativePrepareParamType3 = @_;
+                                            If @_ is not equal to "Integers" and @_ is not equal to "Text" and @_ is not equal to "Decimals";
+                                                NativeFailed = 1;
+                                            Done.
+                                            NativePrepareParamCount = 4;
+                                            NativePrepareBodyStart = NativePrepareFourthParamPos + 3;
+                                            If NativePrepareBodyStart is less than NativePrepareLength;
+                                                Get BytecodeOut NativePrepareBodyStart;
+                                                If @_ is equal to "BC_PARAM";
+                                                    NativeFailed = 1;
+                                                Done.
+                                            Done.
                                         Done.
                                     Done.
                                 Done.
@@ -1313,6 +1294,12 @@ Action NativePrepareProgram;
                                 Done.
                                 If NativePrepareParamCount is greater than 2;
                                     Call NativeTextNamesEqual NativePrepareGlobalName, NativePrepareParamName2;
+                                    If @_ is equal to 1;
+                                        NativePrepareGlobalIsParam = 1;
+                                    Done.
+                                Done.
+                                If NativePrepareParamCount is greater than 3;
+                                    Call NativeTextNamesEqual NativePrepareGlobalName, NativePrepareParamName3;
                                     If @_ is equal to 1;
                                         NativePrepareGlobalIsParam = 1;
                                     Done.
@@ -1498,9 +1485,11 @@ Action NativePrepareProgram;
                     Append NativePrepareParamName0 to NativeFunctionParam0Names;
                     Append NativePrepareParamName1 to NativeFunctionParam1Names;
                     Append NativePrepareParamName2 to NativeFunctionParam2Names;
+                    Append NativePrepareParamName3 to NativeFunctionParam3Names;
                     Append NativePrepareParamType0 to NativeFunctionParam0Types;
                     Append NativePrepareParamType1 to NativeFunctionParam1Types;
                     Append NativePrepareParamType2 to NativeFunctionParam2Types;
+                    Append NativePrepareParamType3 to NativeFunctionParam3Types;
                     Add 1 to NativeFunctionCount;
                     NativePreparePos = NativePrepareBodyEnd + 1;
                 Done.
