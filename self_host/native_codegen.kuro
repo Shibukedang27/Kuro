@@ -269,6 +269,24 @@ NativeTextLiteralEscapeCharacter is Text;
 NativeTextLiteralLabelText is Text;
 NativeTextLiteralOffsetText is Text;
 NativeStackDepth = 0;
+NativeInferOneStackDepth = 0;
+NativeInferOneStackIndex = 0;
+NativeInferOneLeftIndex = 0;
+NativeInferOneRightIndex = 0;
+NativeInferOneLeftKind is Text;
+NativeInferOneRightKind is Text;
+NativeInferOneResultKind is Text;
+NativeInferOneCallBaseDepth = 0;
+NativeInferOneCallParamCount = 0;
+NativeInferOneExpectedDepth = 0;
+NativeStraightLeftKindIndex = 0;
+NativeStraightRightKindIndex = 0;
+NativeStraightLeftKind is Text;
+NativeStraightRightKind is Text;
+NativeStraightResultKind is Text;
+NativeStraightNumericValid = 0;
+NativeStraightFloatInstruction is Text;
+NativeCompareFloatCondition is Text;
 NativeX86 = 0;
 NativeTextLiteralEscapeIndex = 0;
 NativeTextLiteralOffset = 0;
@@ -490,6 +508,23 @@ Action NativeRejectDecimalTopTwo;
         Get NativeStackKinds NativeDecimalTopIndex;
         If @_ is equal to "D";
             NativeFailed = 1;
+        Done.
+    Done.
+Done.
+
+Action NativeEmitNumericFloatOperand StackOffsetText: Text, ValueKind: Text, FloatRegister: Text, GeneralRegister: Text;
+    If NativeX86 is equal to 1;
+        If ValueKind is equal to "D";
+            NativeOut = NativeOut + "    movsd " + StackOffsetText + "(%rsp), " + FloatRegister + "\n";
+        Else;
+            NativeOut = NativeOut + "    mov " + StackOffsetText + "(%rsp), " + GeneralRegister + "\n    cvtsi2sd " + GeneralRegister + ", " + FloatRegister + "\n";
+        Done.
+    Else;
+        NativeOut = NativeOut + "    ldr " + GeneralRegister + ", [sp, #" + StackOffsetText + "]\n";
+        If ValueKind is equal to "D";
+            NativeOut = NativeOut + "    fmov " + FloatRegister + ", " + GeneralRegister + "\n";
+        Else;
+            NativeOut = NativeOut + "    scvtf " + FloatRegister + ", " + GeneralRegister + "\n";
         Done.
     Done.
 Done.
@@ -803,6 +838,7 @@ NativeFunctionDecimalParamIndex = 0;
 NativeCallFunctionIndices = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeCallBaseDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeInferOneCallFunctionIndices = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeInferOneCallBaseDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeMainUnderscoreKind = "I";
 NativeFunctionUnderscoreKind = "I";
 NativeStackKinds = "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I",
@@ -876,6 +912,33 @@ Action NativeMergeReturnKinds CurrentKind: Text, NextKind: Text;
     Done.
 Done.
 
+Action NativeInferPushKind Kind: Text;
+    If NativeInferOneStackDepth is less than 128;
+        Set NativeStackKinds NativeInferOneStackDepth to Kind;
+        Add 1 to NativeInferOneStackDepth;
+        NativeInferOneLastValueKind = Kind;
+    Else;
+        NativeFailed = 1;
+        NativeInferOneReturnStatus = 1;
+        NativeInferOneLastValueKind = "?";
+    Done.
+Done.
+
+Action NativeInferPopKind;
+    If NativeInferOneStackDepth is greater than 0;
+        NativeInferOneStackDepth = NativeInferOneStackDepth - 1;
+        If NativeInferOneStackDepth is greater than 0;
+            NativeInferOneStackIndex = NativeInferOneStackDepth - 1;
+            Get NativeStackKinds NativeInferOneStackIndex;
+            NativeInferOneLastValueKind = @_;
+        Else;
+            NativeInferOneLastValueKind = "I";
+        Done.
+    Else;
+        NativeInferOneLastValueKind = "?";
+    Done.
+Done.
+
 Action NativeInferOneFunctionReturnKind FunctionIndex: Integers;
     Get NativeFunctionReturnCounts FunctionIndex;
     NativeInferOneReturnCount = @_;
@@ -893,100 +956,187 @@ Action NativeInferOneFunctionReturnKind FunctionIndex: Integers;
     NativeInferOneLastValueKind = "I";
     NativeInferOneUnderscoreKind = "I";
     NativeInferOneReturnKind = "";
-    NativeInferOneReturnUnknown = 0;
+    NativeInferOneReturnStatus = 0;
     NativeInferOneCallDepth = 0;
-    While NativeInferOnePosition is less than NativeInferOneEnd;
+    NativeInferOneStackDepth = 0;
+    While NativeInferOnePosition is less than NativeInferOneEnd and NativeFailed is equal to 0;
         Get BytecodeOut NativeInferOnePosition;
         NativeInferOneOp = @_;
         If NativeInferOneOp is equal to "BC_CONST";
             NativeInferOneOperandPosition = NativeInferOnePosition + 1;
             Get BytecodeOut NativeInferOneOperandPosition;
             Call NativeInferLiteralKind @_;
-            NativeInferOneLastValueKind = @_;
-        Else;
-            If NativeInferOneOp is equal to "BC_CONST_TEXT";
-                NativeInferOneLastValueKind = "T";
+            NativeInferOneResultKind = @_;
+            Call NativeInferPushKind NativeInferOneResultKind;
+        Done.
+
+        If NativeInferOneOp is equal to "BC_CONST_TEXT";
+            Call NativeInferPushKind "T";
+        Done.
+
+        If NativeInferOneOp is equal to "BC_LOADVAR";
+            NativeInferOneOperandPosition = NativeInferOnePosition + 1;
+            Get BytecodeOut NativeInferOneOperandPosition;
+            NativeInferOneVariableName = @_;
+            Call NativeFindFunctionParamType NativeInferOneVariableName, 0;
+            NativeInferOneVariableType = @_;
+            NativeInferOneResultKind = "I";
+            If NativeInferOneVariableType is equal to "Decimals";
+                NativeInferOneResultKind = "D";
             Else;
-                If NativeInferOneOp is equal to "BC_LOADVAR";
-                    NativeInferOneOperandPosition = NativeInferOnePosition + 1;
-                    Get BytecodeOut NativeInferOneOperandPosition;
-                    NativeInferOneVariableName = @_;
-                    Call NativeFindFunctionParamType NativeInferOneVariableName, 0;
-                    NativeInferOneVariableType = @_;
-                    If NativeInferOneVariableType is equal to "Decimals";
-                        NativeInferOneLastValueKind = "D";
-                    Else;
-                        If NativeInferOneVariableType is equal to "Text";
-                            NativeInferOneLastValueKind = "T";
-                        Else;
-                            If NativeInferOneVariableName is equal to "_";
-                                NativeInferOneLastValueKind = NativeInferOneUnderscoreKind;
-                            Else;
-                                NativeInferOneLastValueKind = "I";
-                            Done.
-                        Done.
-                    Done.
+                If NativeInferOneVariableType is equal to "Text";
+                    NativeInferOneResultKind = "T";
                 Else;
-                    If NativeInferOneOp is equal to "BC_STORE_LIST";
-                        NativeInferOneOperandPosition = NativeInferOnePosition + 1;
-                        Get BytecodeOut NativeInferOneOperandPosition;
-                        If @_ is equal to "_";
-                            NativeInferOneUnderscoreKind = NativeInferOneLastValueKind;
-                        Done.
-                    Else;
-                        If NativeInferOneOp is equal to "BC_CALL_BEGIN";
-                            NativeInferOneOperandPosition = NativeInferOnePosition + 1;
-                            Get BytecodeOut NativeInferOneOperandPosition;
-                            NativeInferOneCallName = @_;
-                            Call NativeFindFunction NativeInferOneCallName, 0;
-                            NativeInferOneCallFunctionIndex = @_;
-                            If NativeInferOneCallFunctionIndex is greater than or equal to 0 and NativeInferOneCallDepth is less than 16;
-                                Set NativeInferOneCallFunctionIndices NativeInferOneCallDepth to NativeInferOneCallFunctionIndex;
-                                Add 1 to NativeInferOneCallDepth;
-                            Else;
-                                NativeInferOneLastValueKind = "?";
-                            Done.
-                        Else;
-                            If NativeInferOneOp is equal to "BC_CALL_END";
-                                If NativeInferOneCallDepth is greater than 0;
-                                    NativeInferOneCallDepth = NativeInferOneCallDepth - 1;
-                                    Get NativeInferOneCallFunctionIndices NativeInferOneCallDepth;
-                                    NativeInferOneCallFunctionIndex = @_;
-                                    Get NativeFunctionReturnKinds NativeInferOneCallFunctionIndex;
-                                    NativeInferOneLastValueKind = @_;
-                                Else;
-                                    NativeInferOneLastValueKind = "?";
-                                Done.
-                            Else;
-                                If NativeInferOneOp is equal to "BC_BINOP" or NativeInferOneOp is equal to "BC_CMP" or NativeInferOneOp is equal to "BC_BOOL" or NativeInferOneOp is equal to "BC_ISCLASS" or NativeInferOneOp is equal to "BC_LENGTH" or NativeInferOneOp is equal to "BC_GET";
-                                    NativeInferOneLastValueKind = "I";
-                                Done.
-                                If NativeInferOneOp is equal to "BC_RETURN";
-                                    If NativeInferOneLastValueKind is equal to "?";
-                                        NativeInferOneReturnUnknown = 1;
-                                    Else;
-                                        Call NativeMergeReturnKinds NativeInferOneReturnKind, NativeInferOneLastValueKind;
-                                        NativeInferOneReturnKind = @_;
-                                    Done.
-                                Done.
+                    If NativeInferOneVariableName is equal to "_";
+                        NativeInferOneResultKind = NativeInferOneUnderscoreKind;
+                    Done.
+                Done.
+            Done.
+            Call NativeInferPushKind NativeInferOneResultKind;
+        Done.
+
+        If NativeInferOneOp is equal to "BC_STORE_LIST";
+            NativeInferOneOperandPosition = NativeInferOnePosition + 1;
+            Get BytecodeOut NativeInferOneOperandPosition;
+            NativeInferOneVariableName = @_;
+            If NativeInferOneStackDepth is greater than 0;
+                NativeInferOneStackIndex = NativeInferOneStackDepth - 1;
+                Get NativeStackKinds NativeInferOneStackIndex;
+                NativeInferOneLastValueKind = @_;
+                If NativeInferOneVariableName is equal to "_";
+                    NativeInferOneUnderscoreKind = NativeInferOneLastValueKind;
+                Done.
+                Call NativeInferPopKind;
+            Else;
+                NativeInferOneLastValueKind = "?";
+            Done.
+        Done.
+
+        If NativeInferOneOp is equal to "BC_CALL_BEGIN";
+            NativeInferOneOperandPosition = NativeInferOnePosition + 1;
+            Get BytecodeOut NativeInferOneOperandPosition;
+            NativeInferOneCallName = @_;
+            Call NativeFindFunction NativeInferOneCallName, 0;
+            NativeInferOneCallFunctionIndex = @_;
+            If NativeInferOneCallFunctionIndex is greater than or equal to 0 and NativeInferOneCallDepth is less than 16;
+                Set NativeInferOneCallFunctionIndices NativeInferOneCallDepth to NativeInferOneCallFunctionIndex;
+                Set NativeInferOneCallBaseDepths NativeInferOneCallDepth to NativeInferOneStackDepth;
+                Add 1 to NativeInferOneCallDepth;
+            Else;
+                NativeInferOneLastValueKind = "?";
+            Done.
+        Done.
+
+        If NativeInferOneOp is equal to "BC_CALL_END";
+            If NativeInferOneCallDepth is greater than 0;
+                NativeInferOneCallDepth = NativeInferOneCallDepth - 1;
+                Get NativeInferOneCallFunctionIndices NativeInferOneCallDepth;
+                NativeInferOneCallFunctionIndex = @_;
+                Get NativeInferOneCallBaseDepths NativeInferOneCallDepth;
+                NativeInferOneCallBaseDepth = @_;
+                Get NativeFunctionParameterCounts NativeInferOneCallFunctionIndex;
+                NativeInferOneCallParamCount = @_;
+                NativeInferOneExpectedDepth = NativeInferOneCallBaseDepth + NativeInferOneCallParamCount;
+                If NativeInferOneStackDepth is equal to NativeInferOneExpectedDepth;
+                    Get NativeFunctionReturnKinds NativeInferOneCallFunctionIndex;
+                    NativeInferOneResultKind = @_;
+                    If NativeInferOneResultKind is equal to "?";
+                        NativeInferOneResultKind = "P";
+                    Done.
+                    NativeInferOneStackDepth = NativeInferOneCallBaseDepth;
+                    Call NativeInferPushKind NativeInferOneResultKind;
+                Else;
+                    NativeInferOneStackDepth = NativeInferOneCallBaseDepth;
+                    NativeInferOneLastValueKind = "?";
+                Done.
+            Else;
+                NativeInferOneLastValueKind = "?";
+            Done.
+        Done.
+
+        If NativeInferOneOp is equal to "BC_BINOP";
+            If NativeInferOneStackDepth is greater than 1;
+                NativeInferOneLeftIndex = NativeInferOneStackDepth - 2;
+                NativeInferOneRightIndex = NativeInferOneStackDepth - 1;
+                Get NativeStackKinds NativeInferOneLeftIndex;
+                NativeInferOneLeftKind = @_;
+                Get NativeStackKinds NativeInferOneRightIndex;
+                NativeInferOneRightKind = @_;
+                NativeInferOneResultKind = "?";
+                If NativeInferOneLeftKind is equal to "P" or NativeInferOneRightKind is equal to "P";
+                    NativeInferOneResultKind = "P";
+                Else;
+                    If NativeInferOneLeftKind is equal to "I" or NativeInferOneLeftKind is equal to "D";
+                        If NativeInferOneRightKind is equal to "I" or NativeInferOneRightKind is equal to "D";
+                            NativeInferOneResultKind = "I";
+                            If NativeInferOneLeftKind is equal to "D" or NativeInferOneRightKind is equal to "D";
+                                NativeInferOneResultKind = "D";
                             Done.
                         Done.
                     Done.
                 Done.
+                NativeInferOneStackDepth = NativeInferOneLeftIndex;
+                Call NativeInferPushKind NativeInferOneResultKind;
+            Else;
+                NativeInferOneLastValueKind = "?";
             Done.
         Done.
+
+        If NativeInferOneOp is equal to "BC_CMP";
+            If NativeInferOneStackDepth is greater than 1;
+                NativeInferOneStackDepth = NativeInferOneStackDepth - 2;
+                Call NativeInferPushKind "I";
+            Else;
+                NativeInferOneLastValueKind = "?";
+            Done.
+        Done.
+
+        If NativeInferOneOp is equal to "BC_BOOL" or NativeInferOneOp is equal to "BC_ISCLASS" or NativeInferOneOp is equal to "BC_LENGTH" or NativeInferOneOp is equal to "BC_GET";
+            If NativeInferOneStackDepth is greater than 0;
+                NativeInferOneStackIndex = NativeInferOneStackDepth - 1;
+                Set NativeStackKinds NativeInferOneStackIndex to "I";
+                NativeInferOneLastValueKind = "I";
+            Else;
+                Call NativeInferPushKind "I";
+            Done.
+        Done.
+
+        If NativeInferOneOp is equal to "BC_ADD" or NativeInferOneOp is equal to "BC_UPDATE" or NativeInferOneOp is equal to "BC_PRINT" or NativeInferOneOp is equal to "BC_IF_BEGIN" or NativeInferOneOp is equal to "BC_REPEAT_BEGIN" or NativeInferOneOp is equal to "BC_WHILE_TEST";
+            Call NativeInferPopKind;
+        Done.
+
+        If NativeInferOneOp is equal to "BC_RETURN";
+            If NativeInferOneStackDepth is greater than 0;
+                NativeInferOneStackIndex = NativeInferOneStackDepth - 1;
+                Get NativeStackKinds NativeInferOneStackIndex;
+                NativeInferOneLastValueKind = @_;
+            Else;
+                NativeInferOneLastValueKind = "?";
+            Done.
+            If NativeInferOneLastValueKind is equal to "?";
+                NativeInferOneReturnStatus = 1;
+            Else;
+                If NativeInferOneLastValueKind is equal to "P";
+                    If NativeInferOneReturnStatus is equal to 0;
+                        NativeInferOneReturnStatus = 2;
+                    Done.
+                Else;
+                    Call NativeMergeReturnKinds NativeInferOneReturnKind, NativeInferOneLastValueKind;
+                    NativeInferOneReturnKind = @_;
+                Done.
+            Done.
+            NativeInferOneStackDepth = 0;
+            NativeInferOneLastValueKind = "I";
+        Done.
+
         Call NativeOpcodeArity NativeInferOneOp;
         NativeInferOneArity = @_;
         NativeInferOnePosition = NativeInferOnePosition + NativeInferOneArity + 1;
     Done.
-    If NativeInferOneReturnUnknown is equal to 1;
+    If NativeInferOneReturnStatus is equal to 1;
         Return "?";
     Else;
-        If NativeInferOneReturnKind is equal to "";
-            Return "I";
-        Else;
-            Return NativeInferOneReturnKind;
-        Done.
+        Return NativeInferOneReturnKind;
     Done.
 Done.
 
@@ -1002,7 +1152,7 @@ Action NativeInferFunctionReturnKinds;
             If NativeInferCandidateKind is equal to "X";
                 NativeFailed = 1;
             Else;
-                If NativeInferCandidateKind is not equal to "?";
+                If NativeInferCandidateKind is not equal to "?" and NativeInferCandidateKind is not equal to "";
                     Get NativeFunctionReturnKinds NativeInferFunctionIndex;
                     If @_ is not equal to NativeInferCandidateKind;
                         Set NativeFunctionReturnKinds NativeInferFunctionIndex to NativeInferCandidateKind;
@@ -1018,9 +1168,15 @@ Action NativeInferFunctionReturnKinds;
     While NativeInferCheckIndex is less than NativeFunctionCount and NativeFailed is equal to 0;
         Get NativeFunctionReturnCounts NativeInferCheckIndex;
         If @_ is greater than 0;
-            Get NativeFunctionReturnKinds NativeInferCheckIndex;
-            If @_ is equal to "?" or @_ is equal to "X";
+            Call NativeInferOneFunctionReturnKind NativeInferCheckIndex;
+            NativeInferCandidateKind = @_;
+            If NativeInferCandidateKind is equal to "?" or NativeInferCandidateKind is equal to "X" or NativeInferCandidateKind is equal to "" or NativeInferOneReturnStatus is equal to 2;
                 NativeFailed = 1;
+            Else;
+                Get NativeFunctionReturnKinds NativeInferCheckIndex;
+                If @_ is equal to "?" or @_ is equal to "X";
+                    NativeFailed = 1;
+                Done.
             Done.
         Else;
             Set NativeFunctionReturnKinds NativeInferCheckIndex to "I";
@@ -1502,53 +1658,118 @@ Action EmitStraightIntegerProgram;
         If NativeStraightOp is equal to "BC_BINOP";
             NativeStraightKnown = 1;
             If NativeStraightPos is less than NativeStraightEnd and NativeStackDepth is greater than 1;
-                Call NativeRejectDecimalTopTwo;
                 Get BytecodeOut NativeStraightPos;
                 NativeStraightOperator = @_;
                 Add 1 to NativeStraightPos;
+                NativeStraightLeftKindIndex = NativeStackDepth - 2;
+                NativeStraightRightKindIndex = NativeStackDepth - 1;
+                Get NativeStackKinds NativeStraightLeftKindIndex;
+                NativeStraightLeftKind = @_;
+                Get NativeStackKinds NativeStraightRightKindIndex;
+                NativeStraightRightKind = @_;
+                NativeStraightNumericValid = 0;
+                If NativeStraightLeftKind is equal to "I" or NativeStraightLeftKind is equal to "D";
+                    If NativeStraightRightKind is equal to "I" or NativeStraightRightKind is equal to "D";
+                        NativeStraightNumericValid = 1;
+                    Done.
+                Done.
                 NativeRightOffset = NativeStackDepth * 8 - 8;
                 NativeLeftOffset = NativeStackDepth * 8 - 16;
                 Call NativeLengthToText NativeRightOffset;
                 NativeRightOffsetText = @_;
                 Call NativeLengthToText NativeLeftOffset;
                 NativeLeftOffsetText = @_;
-                NativeStraightInstruction = "";
-                If NativeStraightOperator is equal to "+";
-                    NativeStraightInstruction = "    add x0, x0, x1\n";
-                Done.
-                If NativeStraightOperator is equal to "-";
-                    NativeStraightInstruction = "    sub x0, x0, x1\n";
-                Done.
-                If NativeStraightOperator is equal to "*";
-                    NativeStraightInstruction = "    mul x0, x0, x1\n";
-                Done.
-                If NativeStraightOperator is equal to "/";
-                    NativeStraightInstruction = "    cbz x1, L_kuro_division_error\n    sdiv x0, x0, x1\n";
-                Done.
-                If NativeStraightInstruction is equal to "";
+                If NativeStraightNumericValid is equal to 0;
                     NativeFailed = 1;
                 Else;
-                    If NativeX86 is equal to 1;
-                        NativeStraightInstruction = "";
+                    If NativeStraightLeftKind is equal to "D" or NativeStraightRightKind is equal to "D";
+                        NativeStraightResultKind = "D";
+                        NativeStraightFloatInstruction = "";
                         If NativeStraightOperator is equal to "+";
-                            NativeStraightInstruction = "    add %rcx, %rax\n";
+                            If NativeX86 is equal to 1;
+                                NativeStraightFloatInstruction = "    addsd %xmm1, %xmm0\n";
+                            Else;
+                                NativeStraightFloatInstruction = "    fadd d0, d0, d1\n";
+                            Done.
                         Done.
                         If NativeStraightOperator is equal to "-";
-                            NativeStraightInstruction = "    sub %rcx, %rax\n";
+                            If NativeX86 is equal to 1;
+                                NativeStraightFloatInstruction = "    subsd %xmm1, %xmm0\n";
+                            Else;
+                                NativeStraightFloatInstruction = "    fsub d0, d0, d1\n";
+                            Done.
                         Done.
                         If NativeStraightOperator is equal to "*";
-                            NativeStraightInstruction = "    imul %rcx, %rax\n";
+                            If NativeX86 is equal to 1;
+                                NativeStraightFloatInstruction = "    mulsd %xmm1, %xmm0\n";
+                            Else;
+                                NativeStraightFloatInstruction = "    fmul d0, d0, d1\n";
+                            Done.
                         Done.
                         If NativeStraightOperator is equal to "/";
-                            NativeStraightInstruction = "    test %rcx, %rcx\n    jz L_kuro_division_error\n    cqo\n    idiv %rcx\n";
+                            If NativeX86 is equal to 1;
+                                NativeStraightFloatInstruction = "    divsd %xmm1, %xmm0\n";
+                            Else;
+                                NativeStraightFloatInstruction = "    fdiv d0, d0, d1\n";
+                            Done.
                         Done.
-                        NativeOut = NativeOut + "    mov " + NativeLeftOffsetText + "(%rsp), %rax\n    mov " + NativeRightOffsetText + "(%rsp), %rcx\n";
-                        NativeOut = NativeOut + NativeStraightInstruction + "    mov %rax, " + NativeLeftOffsetText + "(%rsp)\n";
+                        If NativeStraightFloatInstruction is equal to "";
+                            NativeFailed = 1;
+                        Else;
+                            If NativeX86 is equal to 1;
+                                Call NativeEmitNumericFloatOperand NativeLeftOffsetText, NativeStraightLeftKind, "%xmm0", "%rax";
+                                Call NativeEmitNumericFloatOperand NativeRightOffsetText, NativeStraightRightKind, "%xmm1", "%rcx";
+                                NativeOut = NativeOut + NativeStraightFloatInstruction + "    movq %xmm0, " + NativeLeftOffsetText + "(%rsp)\n";
+                            Else;
+                                Call NativeEmitNumericFloatOperand NativeLeftOffsetText, NativeStraightLeftKind, "d0", "x0";
+                                Call NativeEmitNumericFloatOperand NativeRightOffsetText, NativeStraightRightKind, "d1", "x1";
+                                NativeOut = NativeOut + NativeStraightFloatInstruction + "    fmov x0, d0\n    str x0, [sp, #" + NativeLeftOffsetText + "]\n";
+                            Done.
+                            Set NativeStackKinds NativeStraightLeftKindIndex to "D";
+                            NativeStackDepth = NativeStackDepth - 1;
+                        Done.
                     Else;
-                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeLeftOffsetText + "]\n    ldr x1, [sp, #" + NativeRightOffsetText + "]\n";
-                        NativeOut = NativeOut + NativeStraightInstruction + "    str x0, [sp, #" + NativeLeftOffsetText + "]\n";
+                        NativeStraightResultKind = "I";
+                        NativeStraightInstruction = "";
+                        If NativeStraightOperator is equal to "+";
+                            NativeStraightInstruction = "    add x0, x0, x1\n";
+                        Done.
+                        If NativeStraightOperator is equal to "-";
+                            NativeStraightInstruction = "    sub x0, x0, x1\n";
+                        Done.
+                        If NativeStraightOperator is equal to "*";
+                            NativeStraightInstruction = "    mul x0, x0, x1\n";
+                        Done.
+                        If NativeStraightOperator is equal to "/";
+                            NativeStraightInstruction = "    cbz x1, L_kuro_division_error\n    sdiv x0, x0, x1\n";
+                        Done.
+                        If NativeStraightInstruction is equal to "";
+                            NativeFailed = 1;
+                        Else;
+                            If NativeX86 is equal to 1;
+                                NativeStraightInstruction = "";
+                                If NativeStraightOperator is equal to "+";
+                                    NativeStraightInstruction = "    add %rcx, %rax\n";
+                                Done.
+                                If NativeStraightOperator is equal to "-";
+                                    NativeStraightInstruction = "    sub %rcx, %rax\n";
+                                Done.
+                                If NativeStraightOperator is equal to "*";
+                                    NativeStraightInstruction = "    imul %rcx, %rax\n";
+                                Done.
+                                If NativeStraightOperator is equal to "/";
+                                    NativeStraightInstruction = "    test %rcx, %rcx\n    jz L_kuro_division_error\n    cqo\n    idiv %rcx\n";
+                                Done.
+                                NativeOut = NativeOut + "    mov " + NativeLeftOffsetText + "(%rsp), %rax\n    mov " + NativeRightOffsetText + "(%rsp), %rcx\n";
+                                NativeOut = NativeOut + NativeStraightInstruction + "    mov %rax, " + NativeLeftOffsetText + "(%rsp)\n";
+                            Else;
+                                NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeLeftOffsetText + "]\n    ldr x1, [sp, #" + NativeRightOffsetText + "]\n";
+                                NativeOut = NativeOut + NativeStraightInstruction + "    str x0, [sp, #" + NativeLeftOffsetText + "]\n";
+                            Done.
+                            Set NativeStackKinds NativeStraightLeftKindIndex to "I";
+                            NativeStackDepth = NativeStackDepth - 1;
+                        Done.
                     Done.
-                    NativeStackDepth = NativeStackDepth - 1;
                 Done.
             Else;
                 NativeFailed = 1;
@@ -1558,10 +1779,21 @@ Action EmitStraightIntegerProgram;
         If NativeStraightOp is equal to "BC_CMP";
             NativeStraightKnown = 1;
             If NativeStraightPos is less than NativeStraightEnd and NativeStackDepth is greater than 1;
-                Call NativeRejectDecimalTopTwo;
                 Get BytecodeOut NativeStraightPos;
                 NativeCompareOperator = @_;
                 Add 1 to NativeStraightPos;
+                NativeStraightLeftKindIndex = NativeStackDepth - 2;
+                NativeStraightRightKindIndex = NativeStackDepth - 1;
+                Get NativeStackKinds NativeStraightLeftKindIndex;
+                NativeStraightLeftKind = @_;
+                Get NativeStackKinds NativeStraightRightKindIndex;
+                NativeStraightRightKind = @_;
+                NativeStraightNumericValid = 0;
+                If NativeStraightLeftKind is equal to "I" or NativeStraightLeftKind is equal to "D";
+                    If NativeStraightRightKind is equal to "I" or NativeStraightRightKind is equal to "D";
+                        NativeStraightNumericValid = 1;
+                    Done.
+                Done.
                 NativeRightOffset = NativeStackDepth * 8 - 8;
                 NativeLeftOffset = NativeStackDepth * 8 - 16;
                 Call NativeLengthToText NativeRightOffset;
@@ -1569,53 +1801,89 @@ Action EmitStraightIntegerProgram;
                 Call NativeLengthToText NativeLeftOffset;
                 NativeLeftOffsetText = @_;
                 NativeCompareInstruction = "";
+                NativeCompareFloatCondition = "";
+                NativeCompareFloatAuxiliary = "";
+                NativeCompareFloatInstruction = "";
                 If NativeCompareOperator is equal to "eq";
                     NativeCompareInstruction = "    cset w0, eq\n";
+                    NativeCompareFloatInstruction = "    cset w0, eq\n";
+                    NativeCompareFloatCondition = "sete";
+                    NativeCompareFloatAuxiliary = "    setnp %cl\n    andb %cl, %al\n";
                 Done.
-                If NativeCompareOperator is equal to "neq";
+                If NativeCompareOperator is equal to "ne" or NativeCompareOperator is equal to "neq";
                     NativeCompareInstruction = "    cset w0, ne\n";
+                    NativeCompareFloatInstruction = "    cset w0, ne\n";
+                    NativeCompareFloatCondition = "setne";
+                    NativeCompareFloatAuxiliary = "    setp %cl\n    orb %cl, %al\n";
                 Done.
                 If NativeCompareOperator is equal to "lt";
                     NativeCompareInstruction = "    cset w0, lt\n";
+                    NativeCompareFloatInstruction = "    cset w0, mi\n";
+                    NativeCompareFloatCondition = "setb";
+                    NativeCompareFloatAuxiliary = "    setnp %cl\n    andb %cl, %al\n";
                 Done.
                 If NativeCompareOperator is equal to "lte" or NativeCompareOperator is equal to "le";
                     NativeCompareInstruction = "    cset w0, le\n";
+                    NativeCompareFloatInstruction = "    cset w0, ls\n";
+                    NativeCompareFloatCondition = "setbe";
+                    NativeCompareFloatAuxiliary = "    setnp %cl\n    andb %cl, %al\n";
                 Done.
                 If NativeCompareOperator is equal to "gt";
                     NativeCompareInstruction = "    cset w0, gt\n";
+                    NativeCompareFloatInstruction = "    cset w0, gt\n";
+                    NativeCompareFloatCondition = "seta";
                 Done.
                 If NativeCompareOperator is equal to "gte" or NativeCompareOperator is equal to "ge";
                     NativeCompareInstruction = "    cset w0, ge\n";
+                    NativeCompareFloatInstruction = "    cset w0, ge\n";
+                    NativeCompareFloatCondition = "setae";
                 Done.
                 If NativeCompareInstruction is equal to "";
                     NativeFailed = 1;
                 Else;
-                    If NativeX86 is equal to 1;
-                        NativeCompareInstruction = "";
-                        If NativeCompareOperator is equal to "eq";
-                            NativeCompareInstruction = "sete";
-                        Done.
-                        If NativeCompareOperator is equal to "neq";
-                            NativeCompareInstruction = "setne";
-                        Done.
-                        If NativeCompareOperator is equal to "lt";
-                            NativeCompareInstruction = "setl";
-                        Done.
-                        If NativeCompareOperator is equal to "lte" or NativeCompareOperator is equal to "le";
-                            NativeCompareInstruction = "setle";
-                        Done.
-                        If NativeCompareOperator is equal to "gt";
-                            NativeCompareInstruction = "setg";
-                        Done.
-                        If NativeCompareOperator is equal to "gte" or NativeCompareOperator is equal to "ge";
-                            NativeCompareInstruction = "setge";
-                        Done.
-                        NativeOut = NativeOut + "    mov " + NativeLeftOffsetText + "(%rsp), %rax\n    mov " + NativeRightOffsetText + "(%rsp), %rcx\n    cmp %rcx, %rax\n    " + NativeCompareInstruction + " %al\n    movzbq %al, %rax\n    mov %rax, " + NativeLeftOffsetText + "(%rsp)\n";
+                    If NativeStraightNumericValid is equal to 0;
+                        NativeFailed = 1;
                     Else;
-                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeLeftOffsetText + "]\n    ldr x1, [sp, #" + NativeRightOffsetText + "]\n    cmp x0, x1\n";
-                        NativeOut = NativeOut + NativeCompareInstruction + "    str x0, [sp, #" + NativeLeftOffsetText + "]\n";
+                        If NativeStraightLeftKind is equal to "D" or NativeStraightRightKind is equal to "D";
+                            If NativeX86 is equal to 1;
+                                Call NativeEmitNumericFloatOperand NativeLeftOffsetText, NativeStraightLeftKind, "%xmm0", "%rax";
+                                Call NativeEmitNumericFloatOperand NativeRightOffsetText, NativeStraightRightKind, "%xmm1", "%rcx";
+                                NativeOut = NativeOut + "    ucomisd %xmm1, %xmm0\n    " + NativeCompareFloatCondition + " %al\n" + NativeCompareFloatAuxiliary + "    movzbq %al, %rax\n    mov %rax, " + NativeLeftOffsetText + "(%rsp)\n";
+                            Else;
+                                Call NativeEmitNumericFloatOperand NativeLeftOffsetText, NativeStraightLeftKind, "d0", "x0";
+                                Call NativeEmitNumericFloatOperand NativeRightOffsetText, NativeStraightRightKind, "d1", "x1";
+                                NativeOut = NativeOut + "    fcmp d0, d1\n" + NativeCompareFloatInstruction + "    str x0, [sp, #" + NativeLeftOffsetText + "]\n";
+                            Done.
+                        Else;
+                            If NativeX86 is equal to 1;
+                                NativeCompareInstruction = "";
+                                If NativeCompareOperator is equal to "eq";
+                                    NativeCompareInstruction = "sete";
+                                Done.
+                                If NativeCompareOperator is equal to "ne" or NativeCompareOperator is equal to "neq";
+                                    NativeCompareInstruction = "setne";
+                                Done.
+                                If NativeCompareOperator is equal to "lt";
+                                    NativeCompareInstruction = "setl";
+                                Done.
+                                If NativeCompareOperator is equal to "lte" or NativeCompareOperator is equal to "le";
+                                    NativeCompareInstruction = "setle";
+                                Done.
+                                If NativeCompareOperator is equal to "gt";
+                                    NativeCompareInstruction = "setg";
+                                Done.
+                                If NativeCompareOperator is equal to "gte" or NativeCompareOperator is equal to "ge";
+                                    NativeCompareInstruction = "setge";
+                                Done.
+                                NativeOut = NativeOut + "    mov " + NativeLeftOffsetText + "(%rsp), %rax\n    mov " + NativeRightOffsetText + "(%rsp), %rcx\n    cmp %rcx, %rax\n    " + NativeCompareInstruction + " %al\n    movzbq %al, %rax\n    mov %rax, " + NativeLeftOffsetText + "(%rsp)\n";
+                            Else;
+                                NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeLeftOffsetText + "]\n    ldr x1, [sp, #" + NativeRightOffsetText + "]\n    cmp x0, x1\n";
+                                NativeOut = NativeOut + NativeCompareInstruction + "    str x0, [sp, #" + NativeLeftOffsetText + "]\n";
+                            Done.
+                        Done.
+                        Set NativeStackKinds NativeStraightLeftKindIndex to "I";
+                        NativeStackDepth = NativeStackDepth - 1;
                     Done.
-                    NativeStackDepth = NativeStackDepth - 1;
                 Done.
             Else;
                 NativeFailed = 1;

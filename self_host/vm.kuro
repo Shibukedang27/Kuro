@@ -1141,7 +1141,7 @@ Action VMStep;
                 VMStep_Result = 1;
             Done.
         Else;
-            If VMStep_OpName is equal to "neq";
+            If VMStep_OpName is equal to "ne" or VMStep_OpName is equal to "neq";
                 If VMStep_Left is not equal to VMStep_Right;
                     VMStep_Result = 1;
                 Done.

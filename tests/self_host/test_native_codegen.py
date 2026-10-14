@@ -54,6 +54,54 @@ def action_control_flow_program():
     )
 
 
+def recursive_numeric_action_program():
+    return (
+        "Action CountDownInteger Value: Integers;\n"
+        "If Value is equal to 0;\nReturn 1;\nElse;\n"
+        "Value = Value - 1;\nCall CountDownInteger Value;\nReturn 1 + @_;\n"
+        "Done.\nDone.\n"
+        "Action ScaleToBase Value: Integers;\n"
+        "If Value is equal to 0;\nReturn 1.25;\nElse;\n"
+        "Value = Value - 1;\nCall ScaleToBase Value;\nReturn 1.5 * @_;\n"
+        "Done.\nDone.\n"
+        "Action VerifyDecimal Value: Decimals;\n"
+        "If Value is equal to 1.875;\nReturn 42;\nElse;\nReturn 0;\n"
+        "Done.\nDone.\n"
+        "Call CountDownInteger 2;\nPrint @_.\n"
+        "Call ScaleToBase 1;\nCall VerifyDecimal @_;\nPrint @_.\n"
+    )
+
+
+def nan_decimal_comparison_program():
+    comparisons = (
+        ("Equal", "equal to"),
+        ("NotEqual", "not equal to"),
+        ("Less", "less than"),
+        ("LessEqual", "less than or equal to"),
+        ("Greater", "greater than"),
+        ("GreaterEqual", "greater than or equal to"),
+    )
+    actions = "".join(
+        f"Action Check{name} Value: Decimals;\n"
+        f"If Value is {operator} Value;\nReturn 1;\nElse;\nReturn 0;\nDone.\nDone.\n"
+        for name, operator in comparisons
+    )
+    calls = "".join(
+        "Call OverflowCount 1024;\nCall MakeNaN @_;\n"
+        f"Call Check{name} @_;\nPrint @_.\n"
+        for name, _ in comparisons
+    )
+    return (
+        "Action OverflowCount Count: Integers;\n"
+        "If Count is equal to 0;\nReturn 1.0;\nElse;\n"
+        "Count = Count - 1;\nCall OverflowCount Count;\nReturn 2.0 * @_;\n"
+        "Done.\nDone.\n"
+        "Action MakeNaN Value: Decimals;\nReturn Value - Value;\nDone.\n"
+        + actions
+        + calls
+    )
+
+
 MACOS_ARM64_HOST = (
     platform.system() == "Darwin"
     and platform.machine().lower() in {"arm64", "aarch64"}
@@ -653,6 +701,102 @@ def test_kuro_native_codegen_returns_decimal_across_if_branches(target):
         assert ".double 1.25" in env["NativeOut"]
         assert ".double 2.0" in env["NativeOut"]
 
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_lowers_mixed_decimal_arithmetic_and_comparisons(target, tmp_path):
+    source = (
+        "Action Calculate Left: Decimals, Right: Integers;\n"
+        "Return (Left + Right) - (Left * Right) / Right;\nDone.\n"
+        "Action Check Value: Decimals;\n"
+        "If Value is equal to 2.0;\nReturn 1;\nElse;\nReturn 0;\nDone.\nDone.\n"
+        "Call Calculate 1.5, 2;\nCall Check @_;\nPrint @_.\n"
+    )
+    _, env = compile_program_to_codegen(source, target=target)
+
+    assert env["NativeFailed"] == 0
+    assembly = env["NativeOut"]
+    if target == "x86_64-linux":
+        for instruction in ("addsd %xmm1, %xmm0", "subsd %xmm1, %xmm0", "mulsd %xmm1, %xmm0", "divsd %xmm1, %xmm0"):
+            assert instruction in assembly
+        assert "cvtsi2sd %rcx, %xmm1" in assembly
+        assert "ucomisd %xmm1, %xmm0" in assembly
+        assert "sete %al" in assembly
+        clang_target = "x86_64-unknown-linux-gnu"
+    else:
+        for instruction in ("fadd d0, d0, d1", "fsub d0, d0, d1", "fmul d0, d0, d1", "fdiv d0, d0, d1"):
+            assert instruction in assembly
+        assert "scvtf d1, x1" in assembly
+        assert "fcmp d0, d1" in assembly
+        assert "cset w0, eq" in assembly
+        clang_target = "arm64-apple-macos11"
+
+    asm_path = tmp_path / f"decimal-ops-{target}.s"
+    object_path = tmp_path / f"decimal-ops-{target}.o"
+    asm_path.write_text(assembly, encoding="utf-8")
+    subprocess.run(
+        ["clang", "-target", clang_target, "-c", "-x", "assembler", str(asm_path), "-o", str(object_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert object_path.stat().st_size > 0
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_uses_ieee_ordered_decimal_comparison_conditions(target, tmp_path):
+    _, env = compile_program_to_codegen(nan_decimal_comparison_program(), target=target)
+    assert env["NativeFailed"] == 0
+    assembly = env["NativeOut"]
+    if target == "x86_64-linux":
+        for instruction in ("setnp %cl", "setp %cl", "andb %cl, %al", "orb %cl, %al", "setbe %al"):
+            assert instruction in assembly
+        clang_target = "x86_64-unknown-linux-gnu"
+    else:
+        assert "cset w0, mi" in assembly
+        assert "cset w0, ls" in assembly
+        clang_target = "arm64-apple-macos11"
+
+    asm_path = tmp_path / f"decimal-nan-comparisons-{target}.s"
+    object_path = tmp_path / f"decimal-nan-comparisons-{target}.o"
+    asm_path.write_text(assembly, encoding="utf-8")
+    subprocess.run(
+        ["clang", "-target", clang_target, "-c", "-x", "assembler", str(asm_path), "-o", str(object_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert object_path.stat().st_size > 0
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_infers_recursive_integer_and_decimal_return_kinds(target):
+    tokens, env = compile_program_to_codegen(recursive_numeric_action_program(), target=target)
+
+    assert tokens.count("BC_FUNC_BEGIN") == 3
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        assert "call .Lkuro_fn_0" in env["NativeOut"]
+        assert "call .Lkuro_fn_1" in env["NativeOut"]
+        assert "mulsd %xmm1, %xmm0" in env["NativeOut"]
+    else:
+        assert "bl L_kuro_fn_0" in env["NativeOut"]
+        assert "bl L_kuro_fn_1" in env["NativeOut"]
+        assert "fmul d0, d0, d1" in env["NativeOut"]
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_rejects_recursive_only_unknown_return_kind(target):
+    source = (
+        "Action Loop Value: Integers;\n"
+        "Call Loop Value;\nReturn 1 + @_;\nDone.\n"
+        "Call Loop 0;\nPrint @_.\n"
+    )
+    _, env = compile_program_to_codegen(source, target=target)
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
 @pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
 def test_kuro_native_codegen_rejects_mixed_integer_and_decimal_return_kinds(target):
     tokens = [
@@ -1232,6 +1376,14 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
             ),
             (
                 [
+                    "BC_FUNC_BEGIN", "EchoDecimal", "BC_CONST", "2.5", "BC_RETURN", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "EchoDecimal", "BC_CALL_END", "BC_CONST", "2.5",
+                    "BC_CMP", "eq", "BC_PRINT",
+                ],
+                "1\n",
+            ),
+            (
+                [
                     "BC_FUNC_BEGIN", "Choose", "BC_PARAM", "Flag", "Integers",
                     "BC_LOADVAR", "Flag", "BC_CONST", "1", "BC_CMP", "eq", "BC_IF_BEGIN",
                     "BC_CONST", "1.25", "BC_RETURN", "BC_ELSE_BEGIN", "BC_CONST", "2.0", "BC_RETURN",
@@ -1243,6 +1395,28 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
                     "BC_LOADVAR", "_", "BC_PRINT",
                 ],
                 "42\n",
+            ),
+            (
+                [
+                    "BC_FUNC_BEGIN", "Arithmetic", "BC_PARAM", "Left", "Decimals",
+                    "BC_PARAM", "Right", "Integers", "BC_LOADVAR", "Left",
+                    "BC_LOADVAR", "Right", "BC_BINOP", "+", "BC_LOADVAR", "Left",
+                    "BC_LOADVAR", "Right", "BC_BINOP", "*", "BC_LOADVAR", "Right",
+                    "BC_BINOP", "/", "BC_BINOP", "-", "BC_RETURN", "BC_FUNC_END",
+                    "BC_CALL_BEGIN", "Arithmetic", "BC_CONST", "1.5", "BC_CONST", "2",
+                    "BC_CALL_END", "BC_CONST", "2.0", "BC_CMP", "eq", "BC_PRINT",
+                    "BC_CONST", "1.5", "BC_CONST", "2.5", "BC_CMP", "lt", "BC_PRINT",
+                    "BC_CONST", "2.5", "BC_CONST", "1.5", "BC_CMP", "gt", "BC_PRINT",
+                    "BC_CONST", "2.5", "BC_CONST", "2.5", "BC_CMP", "le", "BC_PRINT",
+                    "BC_CONST", "2.5", "BC_CONST", "2.5", "BC_CMP", "ge", "BC_PRINT",
+                    "BC_CONST", "2.5", "BC_CONST", "2.5", "BC_CMP", "eq", "BC_PRINT",
+                    "BC_CONST", "2.5", "BC_CONST", "2.75", "BC_CMP", "ne", "BC_PRINT",
+                    "BC_CONST", "2.5", "BC_CONST", "2.5", "BC_CMP", "ne", "BC_PRINT",
+                    "BC_CONST", "2.5", "BC_CONST", "2", "BC_CMP", "gt", "BC_PRINT",
+                    "BC_CONST", "2", "BC_CONST", "2.5", "BC_CMP", "lt", "BC_PRINT",
+                    "BC_CONST", "-1.5", "BC_CONST", "-0.5", "BC_CMP", "lt", "BC_PRINT",
+                ],
+                "1\n1\n1\n1\n1\n1\n1\n0\n1\n1\n1\n",
             ),
             (
                 [
@@ -1602,8 +1776,76 @@ def test_kuro_owned_x86_linux_codegen_runs_action_control_flow_without_label_col
     assert result.stderr == ""
 
 
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+def test_kuro_owned_x86_linux_codegen_runs_recursive_numeric_actions(tmp_path, x86_linux_codegen):
+    tokens, env = compile_program_to_codegen(recursive_numeric_action_program(), target="x86_64-linux")
+    assert env["NativeFailed"] == 0
+    generated = subprocess.run(
+        [str(x86_linux_codegen)],
+        input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    executable = tmp_path / "recursive-numeric-actions-linux"
+    subprocess.run(
+        [
+            "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
+            "-Wl,-e,_start", "-x", "assembler", "-", "-o", str(executable),
+        ],
+        input=generated.stdout,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [str(executable)], capture_output=True, text=True, timeout=5, check=False
+    )
+    assert result.returncode == 0
+    assert result.stdout == "3\n42\n"
+    assert result.stderr == ""
+
+
 def test_native_kuro_codegen_rejects_unknown_output_target(tmp_path):
     from compiler.self_host import SelfHostError, build_native_codegen
 
     with pytest.raises(SelfHostError, match="unsupported code-generation output target"):
         build_native_codegen(tmp_path / "bad", output_target="x86_64-windows")
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+def test_kuro_owned_x86_linux_codegen_uses_ieee_nan_decimal_comparisons(tmp_path, x86_linux_codegen):
+    tokens, env = compile_program_to_codegen(nan_decimal_comparison_program(), target="x86_64-linux")
+    assert env["NativeFailed"] == 0
+    generated = subprocess.run(
+        [str(x86_linux_codegen)],
+        input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    executable = tmp_path / "decimal-nan-comparisons-linux"
+    subprocess.run(
+        [
+            "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
+            "-Wl,-e,_start", "-x", "assembler", "-", "-o", str(executable),
+        ],
+        input=generated.stdout,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [str(executable)], capture_output=True, text=True, timeout=5, check=False
+    )
+    assert result.returncode == 0
+    assert result.stdout.splitlines() == ["0", "1", "0", "0", "0", "0"]
+    assert result.stderr == ""
