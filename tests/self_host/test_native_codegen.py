@@ -96,6 +96,31 @@ def four_parameter_action_program():
     )
 
 
+def stack_spill_action_program():
+    integers = [f"I{index}" for index in range(1, 10)]
+    decimals = [f"D{index}" for index in range(1, 10)]
+    texts = [f"Text{index}" for index in range(1, 10)]
+    integer_parameters = ", ".join(f"{name}: Integers" for name in integers)
+    decimal_parameters = ", ".join(f"{name}: Decimals" for name in decimals)
+    text_parameters = ", ".join(f"{name}: Text" for name in texts)
+    integer_values = ", ".join(str(index) for index in range(1, 10))
+    decimal_values = ", ".join(f"{index}.0" for index in range(1, 10))
+    decimal_spill_values = ", ".join([*(f"{index}.0" for index in range(1, 9)), "9"])
+    text_values = ", ".join(f'"text{index}"' for index in range(1, 10))
+    return (
+        f"Action IntegerSpill {integer_parameters};\nReturn I9;\nDone.\n"
+        f"Action DecimalSpill {decimal_parameters};\nReturn D9;\nDone.\n"
+        f"Action MixedSpill {integer_parameters}, {decimal_parameters};\nReturn D9;\nDone.\n"
+        f"Action TextSpill {text_parameters};\nPrint Text9.\nReturn 1;\nDone.\n"
+        "Action CheckDecimal Value: Decimals;\n"
+        "If Value is equal to 9.0;\nReturn 1;\nElse;\nReturn 0;\nDone.\nDone.\n"
+        f"Call IntegerSpill {integer_values};\nPrint @_.\n"
+        f"Call DecimalSpill {decimal_spill_values};\nCall CheckDecimal @_;\nPrint @_.\n"
+        f"Call MixedSpill {integer_values}, {decimal_values};\nCall CheckDecimal @_;\nPrint @_.\n"
+        f"Call TextSpill {text_values};\nPrint @_.\n"
+    )
+
+
 def nan_decimal_comparison_program():
     comparisons = (
         ("Equal", "equal to"),
@@ -695,11 +720,55 @@ def test_kuro_native_codegen_supports_four_action_parameters(target, tmp_path):
 @pytest.mark.parametrize(
     "target", ["x86_64-linux", "aarch64-macos"], ids=["linux-x86-64", "apple-arm64"]
 )
-def test_kuro_native_codegen_rejects_five_action_parameters(target):
-    source = (
-        "Action Five First: Integers, Second: Integers, Third: Integers, Fourth: Integers, Fifth: Integers;\n"
-        "Return First;\nDone.\nCall Five 1, 2, 3, 4, 5;\nPrint @_.\n"
+def test_kuro_native_codegen_marshals_abi_stack_spills(target, tmp_path):
+    tokens, env = compile_program_to_codegen(stack_spill_action_program(), target=target)
+
+    assert tokens.count("BC_PARAM") == 46
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        expected = (
+            "mov 2064(%rsp), %rax",
+            "mov 2080(%rsp), %rax",
+            "movsd 2088(%rsp), %xmm15",
+            "movsd %xmm15, 24(%rsp)",
+            "cvtsi2sd %rax, %xmm15",
+            "sub $32, %rsp",
+            "add $32, %rsp",
+        )
+        clang_target = "x86_64-unknown-linux-gnu"
+    else:
+        expected = (
+            "ldr x9, [sp, #2064]",
+            "ldr d31, [sp, #2072]",
+            "str d31, [sp, #8]",
+            "scvtf d31, x9",
+            "sub sp, sp, #16",
+            "add sp, sp, #16",
+        )
+        clang_target = "arm64-apple-macos11"
+    for fragment in expected:
+        assert fragment in env["NativeOut"]
+
+    assembly = tmp_path / f"stack-spills-{target}.s"
+    object_file = tmp_path / f"stack-spills-{target}.o"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(
+        ["clang", "-target", clang_target, "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+        check=True,
+        capture_output=True,
+        text=True,
     )
+    assert object_file.stat().st_size > 0
+
+
+@pytest.mark.parametrize(
+    "target", ["x86_64-linux", "aarch64-macos"], ids=["linux-x86-64", "apple-arm64"]
+)
+def test_kuro_native_codegen_rejects_more_than_eighteen_action_parameters(target):
+    names = [f"P{index}" for index in range(1, 20)]
+    parameters = ", ".join(f"{name}: Integers" for name in names)
+    values = ", ".join(str(index) for index in range(1, 20))
+    source = f"Action Nineteen {parameters};\nReturn P1;\nDone.\nCall Nineteen {values};\nPrint @_.\n"
     _, env = compile_program_to_codegen(source, target=target)
 
     assert env["NativeFailed"] == 1
@@ -1964,4 +2033,40 @@ def test_kuro_owned_x86_linux_codegen_runs_four_parameter_actions(tmp_path, x86_
 
     assert result.returncode == 0
     assert result.stdout == "5\n100\n1\n1\nmixed\n5\ntail-text\n9\n"
+    assert result.stderr == ""
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+def test_kuro_owned_x86_linux_codegen_runs_abi_stack_spills(tmp_path, x86_linux_codegen):
+    tokens, env = compile_program_to_codegen(stack_spill_action_program(), target="x86_64-linux")
+    assert env["NativeFailed"] == 0
+
+    executable = tmp_path / "kuro-generated-abi-stack-spills"
+    generated = subprocess.run(
+        [str(x86_linux_codegen)],
+        input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    subprocess.run(
+        [
+            "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
+            "-Wl,-e,_start", "-x", "assembler", "-", "-o", str(executable),
+        ],
+        input=generated.stdout,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [str(executable)], capture_output=True, text=True, timeout=5, check=False
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == "9\n1\n1\ntext9\n1\n"
     assert result.stderr == ""
