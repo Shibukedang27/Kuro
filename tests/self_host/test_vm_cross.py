@@ -132,6 +132,16 @@ def test_kuro_vm_passes_and_forwards_decimal_action_parameters():
     assert output == [3.25]
 
 
+def test_kuro_vm_returns_typed_decimal_action_values():
+    output, failed = run_kuro_vm(
+        "Action Echo Value: Decimals;\nReturn Value;\nDone.\n"
+        "Call Echo 3.25;\nPrint @_."
+    )
+
+    assert failed in (None, 0)
+    assert output == [3.25]
+
+
 def test_kuro_vm_keeps_recursive_call_frames_isolated():
     output, failed = run_kuro_vm(
         "Action Fact N;\n"

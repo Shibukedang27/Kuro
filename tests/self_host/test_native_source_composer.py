@@ -11,20 +11,36 @@ COMPOSER = self_host.ROOT / "bootstrap" / "compose-native-source.sh"
 
 
 @pytest.mark.parametrize(
-    ("mode", "target", "expected"),
+    ("mode", "target"),
     [
-        ("compiler", "aarch64-macos", self_host.native_compiler_source()),
-        ("runtime", "aarch64-macos", self_host.native_runtime_source()),
-        ("artifact-launcher", "aarch64-macos", self_host.native_artifact_launcher_source()),
+        ("compiler", "aarch64-macos"),
+        ("runtime", "aarch64-macos"),
+        ("artifact-launcher", "aarch64-macos"),
         *[
-            ("codegen", target, self_host.native_codegen_source(target))
+            ("codegen", target)
             for target in ("aarch64-macos", "x86_64-macos", "x86_64-linux")
         ],
     ],
+    ids=[
+        "compiler-aarch64-macos",
+        "runtime-aarch64-macos",
+        "artifact-launcher-aarch64-macos",
+        "codegen-aarch64-macos",
+        "codegen-x86_64-macos",
+        "codegen-x86_64-linux",
+    ],
 )
 def test_shell_native_source_composition_matches_python_oracle(
-    mode: str, target: str, expected: str
+    mode: str, target: str
 ) -> None:
+    if mode == "compiler":
+        expected = self_host.native_compiler_source()
+    elif mode == "runtime":
+        expected = self_host.native_runtime_source()
+    elif mode == "artifact-launcher":
+        expected = self_host.native_artifact_launcher_source()
+    else:
+        expected = self_host.native_codegen_source(target)
     result = subprocess.run(
         ["sh", str(COMPOSER), mode, target],
         check=True,

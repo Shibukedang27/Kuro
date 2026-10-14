@@ -403,7 +403,7 @@ Action NativeValidateDecimalLiteral Value: Text;
             Done.
             Add 1 to NativeDecimalValidationIndex;
         Done.
-        If NativeDecimalValidationValid is equal to 1 and NativeDecimalValidationDigitCount is greater than 0;
+        If NativeDecimalValidationValid is equal to 1 and NativeDecimalValidationDigitCount is greater than 0 and NativeDecimalValidationPointCount is equal to 1;
             Return 1;
         Else;
             Return 0;
@@ -763,6 +763,7 @@ NativeFunctionBodyStarts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 NativeFunctionBodyEnds = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeFunctionParameterCounts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeFunctionReturnCounts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeFunctionReturnKinds = "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?";
 NativeFunctionCount = 0;
 NativeFunctionMode = 0;
 NativeCurrentFunctionIndex = 0;
@@ -801,6 +802,9 @@ NativeFunctionGeneralParamIndex = 0;
 NativeFunctionDecimalParamIndex = 0;
 NativeCallFunctionIndices = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeCallBaseDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeInferOneCallFunctionIndices = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeMainUnderscoreKind = "I";
+NativeFunctionUnderscoreKind = "I";
 NativeStackKinds = "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I",
      "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I",
      "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I",
@@ -843,6 +847,185 @@ Action NativeFindFunction Name, Index;
         Done.
     Else;
         Return -1;
+    Done.
+Done.
+
+Action NativeInferLiteralKind Value: Text;
+    Call NativeValidateUnsignedInteger Value;
+    If @_ is equal to 1;
+        Return "I";
+    Else;
+        Call NativeValidateDecimalLiteral Value;
+        If @_ is equal to 1;
+            Return "D";
+        Else;
+            Return "?";
+        Done.
+    Done.
+Done.
+
+Action NativeMergeReturnKinds CurrentKind: Text, NextKind: Text;
+    If CurrentKind is equal to "";
+        Return NextKind;
+    Else;
+        If CurrentKind is equal to NextKind;
+            Return CurrentKind;
+        Else;
+            Return "X";
+        Done.
+    Done.
+Done.
+
+Action NativeInferOneFunctionReturnKind FunctionIndex: Integers;
+    Get NativeFunctionReturnCounts FunctionIndex;
+    NativeInferOneReturnCount = @_;
+    If NativeInferOneReturnCount is equal to 0;
+        Return "I";
+    Done.
+    Get NativeFunctionBodyStarts FunctionIndex;
+    NativeInferOnePosition = @_;
+    NativeCurrentBodyStart = @_;
+    Get NativeFunctionBodyEnds FunctionIndex;
+    NativeInferOneEnd = @_;
+    Get NativeFunctionParameterCounts FunctionIndex;
+    NativeCurrentFunctionParamCount = @_;
+    NativeCurrentFunctionIndex = FunctionIndex;
+    NativeInferOneLastValueKind = "I";
+    NativeInferOneUnderscoreKind = "I";
+    NativeInferOneReturnKind = "";
+    NativeInferOneReturnUnknown = 0;
+    NativeInferOneCallDepth = 0;
+    While NativeInferOnePosition is less than NativeInferOneEnd;
+        Get BytecodeOut NativeInferOnePosition;
+        NativeInferOneOp = @_;
+        If NativeInferOneOp is equal to "BC_CONST";
+            NativeInferOneOperandPosition = NativeInferOnePosition + 1;
+            Get BytecodeOut NativeInferOneOperandPosition;
+            Call NativeInferLiteralKind @_;
+            NativeInferOneLastValueKind = @_;
+        Else;
+            If NativeInferOneOp is equal to "BC_CONST_TEXT";
+                NativeInferOneLastValueKind = "T";
+            Else;
+                If NativeInferOneOp is equal to "BC_LOADVAR";
+                    NativeInferOneOperandPosition = NativeInferOnePosition + 1;
+                    Get BytecodeOut NativeInferOneOperandPosition;
+                    NativeInferOneVariableName = @_;
+                    Call NativeFindFunctionParamType NativeInferOneVariableName, 0;
+                    NativeInferOneVariableType = @_;
+                    If NativeInferOneVariableType is equal to "Decimals";
+                        NativeInferOneLastValueKind = "D";
+                    Else;
+                        If NativeInferOneVariableType is equal to "Text";
+                            NativeInferOneLastValueKind = "T";
+                        Else;
+                            If NativeInferOneVariableName is equal to "_";
+                                NativeInferOneLastValueKind = NativeInferOneUnderscoreKind;
+                            Else;
+                                NativeInferOneLastValueKind = "I";
+                            Done.
+                        Done.
+                    Done.
+                Else;
+                    If NativeInferOneOp is equal to "BC_STORE_LIST";
+                        NativeInferOneOperandPosition = NativeInferOnePosition + 1;
+                        Get BytecodeOut NativeInferOneOperandPosition;
+                        If @_ is equal to "_";
+                            NativeInferOneUnderscoreKind = NativeInferOneLastValueKind;
+                        Done.
+                    Else;
+                        If NativeInferOneOp is equal to "BC_CALL_BEGIN";
+                            NativeInferOneOperandPosition = NativeInferOnePosition + 1;
+                            Get BytecodeOut NativeInferOneOperandPosition;
+                            NativeInferOneCallName = @_;
+                            Call NativeFindFunction NativeInferOneCallName, 0;
+                            NativeInferOneCallFunctionIndex = @_;
+                            If NativeInferOneCallFunctionIndex is greater than or equal to 0 and NativeInferOneCallDepth is less than 16;
+                                Set NativeInferOneCallFunctionIndices NativeInferOneCallDepth to NativeInferOneCallFunctionIndex;
+                                Add 1 to NativeInferOneCallDepth;
+                            Else;
+                                NativeInferOneLastValueKind = "?";
+                            Done.
+                        Else;
+                            If NativeInferOneOp is equal to "BC_CALL_END";
+                                If NativeInferOneCallDepth is greater than 0;
+                                    NativeInferOneCallDepth = NativeInferOneCallDepth - 1;
+                                    Get NativeInferOneCallFunctionIndices NativeInferOneCallDepth;
+                                    NativeInferOneCallFunctionIndex = @_;
+                                    Get NativeFunctionReturnKinds NativeInferOneCallFunctionIndex;
+                                    NativeInferOneLastValueKind = @_;
+                                Else;
+                                    NativeInferOneLastValueKind = "?";
+                                Done.
+                            Else;
+                                If NativeInferOneOp is equal to "BC_BINOP" or NativeInferOneOp is equal to "BC_CMP" or NativeInferOneOp is equal to "BC_BOOL" or NativeInferOneOp is equal to "BC_ISCLASS" or NativeInferOneOp is equal to "BC_LENGTH" or NativeInferOneOp is equal to "BC_GET";
+                                    NativeInferOneLastValueKind = "I";
+                                Done.
+                                If NativeInferOneOp is equal to "BC_RETURN";
+                                    If NativeInferOneLastValueKind is equal to "?";
+                                        NativeInferOneReturnUnknown = 1;
+                                    Else;
+                                        Call NativeMergeReturnKinds NativeInferOneReturnKind, NativeInferOneLastValueKind;
+                                        NativeInferOneReturnKind = @_;
+                                    Done.
+                                Done.
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+        Call NativeOpcodeArity NativeInferOneOp;
+        NativeInferOneArity = @_;
+        NativeInferOnePosition = NativeInferOnePosition + NativeInferOneArity + 1;
+    Done.
+    If NativeInferOneReturnUnknown is equal to 1;
+        Return "?";
+    Else;
+        If NativeInferOneReturnKind is equal to "";
+            Return "I";
+        Else;
+            Return NativeInferOneReturnKind;
+        Done.
+    Done.
+Done.
+
+Action NativeInferFunctionReturnKinds;
+    NativeInferPass = 0;
+    NativeInferChanged = 1;
+    While NativeInferPass is less than NativeFunctionCount and NativeInferChanged is equal to 1 and NativeFailed is equal to 0;
+        NativeInferChanged = 0;
+        NativeInferFunctionIndex = 0;
+        While NativeInferFunctionIndex is less than NativeFunctionCount and NativeFailed is equal to 0;
+            Call NativeInferOneFunctionReturnKind NativeInferFunctionIndex;
+            NativeInferCandidateKind = @_;
+            If NativeInferCandidateKind is equal to "X";
+                NativeFailed = 1;
+            Else;
+                If NativeInferCandidateKind is not equal to "?";
+                    Get NativeFunctionReturnKinds NativeInferFunctionIndex;
+                    If @_ is not equal to NativeInferCandidateKind;
+                        Set NativeFunctionReturnKinds NativeInferFunctionIndex to NativeInferCandidateKind;
+                        NativeInferChanged = 1;
+                    Done.
+                Done.
+            Done.
+            Add 1 to NativeInferFunctionIndex;
+        Done.
+        Add 1 to NativeInferPass;
+    Done.
+    NativeInferCheckIndex = 0;
+    While NativeInferCheckIndex is less than NativeFunctionCount and NativeFailed is equal to 0;
+        Get NativeFunctionReturnCounts NativeInferCheckIndex;
+        If @_ is greater than 0;
+            Get NativeFunctionReturnKinds NativeInferCheckIndex;
+            If @_ is equal to "?" or @_ is equal to "X";
+                NativeFailed = 1;
+            Done.
+        Else;
+            Set NativeFunctionReturnKinds NativeInferCheckIndex to "I";
+        Done.
+        Add 1 to NativeInferCheckIndex;
     Done.
 Done.
 
@@ -1200,8 +1383,11 @@ Action EmitStraightIntegerProgram;
     NativeCallDepth = 0;
     NativeReturned = 0;
     If NativeFunctionMode is equal to 1;
+        NativeFunctionUnderscoreKind = "I";
         NativeCurrentFunctionLocalStart = NativeFunctionLocalNameCount;
         NativeCurrentFunctionLocalCount = 0;
+    Else;
+        NativeMainUnderscoreKind = "I";
     Done.
     NativeIfDepth = 0;
     NativeRepeatDepth = 0;
@@ -1281,26 +1467,20 @@ Action EmitStraightIntegerProgram;
                 Get BytecodeOut NativeStraightPos;
                 NativeStraightValue = @_;
                 Add 1 to NativeStraightPos;
-                Call NativeActiveCallArgumentType;
-                NativeStraightExpectedType = @_;
-                If NativeStraightExpectedType is equal to "Decimals";
-                    Call NativeRegisterDecimalLiteral NativeStraightValue;
-                Else;
-                    Call NativeValidateUnsignedInteger NativeStraightValue;
-                    If @_ is equal to 1;
-                        NativeStackOffset = NativeStackDepth * 8;
-                        Call NativeLengthToText NativeStackOffset;
-                        NativeStackOffsetText = @_;
-                        If NativeX86 is equal to 1;
-                            NativeOut = NativeOut + "    mov $" + NativeStraightValue + ", %rax\n    mov %rax, " + NativeStackOffsetText + "(%rsp)\n";
-                        Else;
-                            NativeOut = NativeOut + "    mov x0, #" + NativeStraightValue + "\n    str x0, [sp, #" + NativeStackOffsetText + "]\n";
-                        Done.
-                        Set NativeStackKinds NativeStackDepth to "I";
-                        Add 1 to NativeStackDepth;
+                Call NativeValidateUnsignedInteger NativeStraightValue;
+                If @_ is equal to 1;
+                    NativeStackOffset = NativeStackDepth * 8;
+                    Call NativeLengthToText NativeStackOffset;
+                    NativeStackOffsetText = @_;
+                    If NativeX86 is equal to 1;
+                        NativeOut = NativeOut + "    mov $" + NativeStraightValue + ", %rax\n    mov %rax, " + NativeStackOffsetText + "(%rsp)\n";
                     Else;
-                        NativeFailed = 1;
+                        NativeOut = NativeOut + "    mov x0, #" + NativeStraightValue + "\n    str x0, [sp, #" + NativeStackOffsetText + "]\n";
                     Done.
+                    Set NativeStackKinds NativeStackDepth to "I";
+                    Add 1 to NativeStackDepth;
+                Else;
+                    Call NativeRegisterDecimalLiteral NativeStraightValue;
                 Done.
             Else;
                 NativeFailed = 1;
@@ -1638,7 +1818,12 @@ Action EmitStraightIntegerProgram;
             If NativeStraightPos is less than NativeStraightEnd and NativeStackDepth is greater than 0;
                 Get BytecodeOut NativeStraightPos;
                 NativeVariableName = @_;
-                Call NativeRejectDecimalTop;
+                NativeStoreKindIndex = NativeStackDepth - 1;
+                Get NativeStackKinds NativeStoreKindIndex;
+                NativeStoreValueKind = @_;
+                If NativeStoreValueKind is equal to "D" and NativeVariableName is not equal to "_";
+                    NativeFailed = 1;
+                Done.
                 If NativeFunctionMode is equal to 1;
                     Call NativeFindFunctionParamType NativeVariableName, 0;
                     If @_ is equal to "Decimals";
@@ -1706,6 +1891,13 @@ Action EmitStraightIntegerProgram;
                             NativeOut = NativeOut + "    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
                         Done.
                     Done.
+                    If NativeVariableName is equal to "_";
+                        If NativeFunctionMode is equal to 1;
+                            NativeFunctionUnderscoreKind = NativeStoreValueKind;
+                        Else;
+                            NativeMainUnderscoreKind = NativeStoreValueKind;
+                        Done.
+                    Done.
                     NativeStackDepth = NativeStackDepth - 1;
                 Done.
             Else;
@@ -1755,7 +1947,15 @@ Action EmitStraightIntegerProgram;
                     Else;
                         If @_ is equal to "Decimals";
                             NativeVariableKind = "D";
+                        Else;
+                            If NativeVariableName is equal to "_";
+                                NativeVariableKind = NativeFunctionUnderscoreKind;
+                            Done.
                         Done.
+                    Done.
+                Else;
+                    If NativeVariableName is equal to "_";
+                        NativeVariableKind = NativeMainUnderscoreKind;
                     Done.
                 Done.
                 If NativeVariableSlot is less than 0;
@@ -1935,12 +2135,27 @@ Action EmitStraightIntegerProgram;
                     NativeCallArgumentOffset = NativeCallBaseDepth * 8;
                     Call NativeLengthToText NativeCallArgumentOffset;
                     NativeCallArgumentOffsetText = @_;
-                    If NativeX86 is equal to 1;
-                        NativeOut = NativeOut + "    call .Lkuro_fn_" + NativeFunctionLabelText + "\n    mov %rax, " + NativeCallArgumentOffsetText + "(%rsp)\n";
+                    Get NativeFunctionReturnKinds NativeCallResolvedIndex;
+                    NativeCallResultKind = @_;
+                    If NativeCallResultKind is equal to "D";
+                        If NativeX86 is equal to 1;
+                            NativeOut = NativeOut + "    call .Lkuro_fn_" + NativeFunctionLabelText + "\n    movsd %xmm0, " + NativeCallArgumentOffsetText + "(%rsp)\n";
+                        Else;
+                            NativeOut = NativeOut + "    bl L_kuro_fn_" + NativeFunctionLabelText + "\n    str d0, [sp, #" + NativeCallArgumentOffsetText + "]\n";
+                        Done.
+                        Set NativeStackKinds NativeCallBaseDepth to "D";
                     Else;
-                        NativeOut = NativeOut + "    bl L_kuro_fn_" + NativeFunctionLabelText + "\n    str x0, [sp, #" + NativeCallArgumentOffsetText + "]\n";
+                        If NativeCallResultKind is equal to "I" or NativeCallResultKind is equal to "T";
+                            If NativeX86 is equal to 1;
+                                NativeOut = NativeOut + "    call .Lkuro_fn_" + NativeFunctionLabelText + "\n    mov %rax, " + NativeCallArgumentOffsetText + "(%rsp)\n";
+                            Else;
+                                NativeOut = NativeOut + "    bl L_kuro_fn_" + NativeFunctionLabelText + "\n    str x0, [sp, #" + NativeCallArgumentOffsetText + "]\n";
+                            Done.
+                            Set NativeStackKinds NativeCallBaseDepth to NativeCallResultKind;
+                        Else;
+                            NativeFailed = 1;
+                        Done.
                     Done.
-                    Set NativeStackKinds NativeCallBaseDepth to "I";
                     NativeStackDepth = NativeCallBaseDepth + 1;
                     NativeCallDepth = NativeCallIndex;
                 Else;
@@ -1953,17 +2168,32 @@ Action EmitStraightIntegerProgram;
 
         If NativeStraightOp is equal to "BC_RETURN";
             NativeStraightKnown = 1;
-            Call NativeRejectDecimalTop;
             If NativeFunctionMode is equal to 1 and NativeStackDepth is equal to 1;
                 NativeStackOffset = NativeStackDepth * 8 - 8;
+                Get NativeFunctionReturnKinds NativeCurrentFunctionIndex;
+                NativeExpectedReturnKind = @_;
                 Call NativeLengthToText NativeStackOffset;
                 NativeStackOffsetText = @_;
-                If NativeX86 is equal to 1;
-                    NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    add $2048, %rsp\n    pop %rbp\n    ret\n";
+                If NativeExpectedReturnKind is equal to "D";
+                    If NativeX86 is equal to 1;
+                        NativeOut = NativeOut + "    movsd " + NativeStackOffsetText + "(%rsp), %xmm0\n    add $2048, %rsp\n    pop %rbp\n    ret\n";
+                    Else;
+                        NativeOut = NativeOut + "    ldr d0, [sp, #" + NativeStackOffsetText + "]\n    add sp, sp, #2048\n    ldp x29, x30, [sp], #16\n    ret\n";
+                    Done.
                 Else;
-                    NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    add sp, sp, #2048\n    ldp x29, x30, [sp], #16\n    ret\n";
+                    If NativeExpectedReturnKind is equal to "I" or NativeExpectedReturnKind is equal to "T";
+                        If NativeX86 is equal to 1;
+                            NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    add $2048, %rsp\n    pop %rbp\n    ret\n";
+                        Else;
+                            NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n    add sp, sp, #2048\n    ldp x29, x30, [sp], #16\n    ret\n";
+                        Done.
+                    Else;
+                        NativeFailed = 1;
+                    Done.
                 Done.
-                NativeStackDepth = 0;
+                If NativeFailed is equal to 0;
+                    NativeStackDepth = 0;
+                Done.
             Else;
                 NativeFailed = 1;
             Done.
@@ -2076,7 +2306,10 @@ NativeFunctionLocalNames = "";
 NativeFunctionLocalNameCount = 1;
 Call NativePrepareProgram;
 If NativeFailed is equal to 0;
-    Call NativeBuildFunctions;
+    Call NativeInferFunctionReturnKinds;
+    If NativeFailed is equal to 0;
+        Call NativeBuildFunctions;
+    Done.
 Done.
 
 Length BytecodeOut;
