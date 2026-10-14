@@ -142,6 +142,26 @@ def test_kuro_vm_returns_typed_decimal_action_values():
     assert output == [3.25]
 
 
+def test_kuro_vm_matches_host_for_decimal_action_arithmetic_and_comparisons():
+    source = (
+        "Action Calculate Left: Decimals, Right: Integers;\n"
+        "Return (Left + Right) - (Left * Right) / Right;\nDone.\n"
+        "Call Calculate 1.5, 2;\n"
+        "If @_ is equal to 2.0;\nPrint 1.\nElse;\nPrint 0.\nDone.\n"
+        "Compare Lower 1.5 is less than 2.5;\n"
+        "If Lower is equal to 1;\nPrint 1.\nElse;\nPrint 0.\nDone.\n"
+        "Compare Different 2.5 is not equal to 3.5;\n"
+        "If Different is equal to 1;\nPrint 1.\nElse;\nPrint 0.\nDone."
+    )
+    host = run_source(source)
+    assert host.ok, host.compile.diags.render_all() if not host.compile.ok else host.runtime_error
+    env = run_kuro_vm_environment(source)
+
+    assert env["VMFailed"] in (None, 0)
+    assert env["VMOutput"] == [1, 1, 1]
+    assert host.stdout == "1\n1\n1\n"
+
+
 def test_kuro_vm_keeps_recursive_call_frames_isolated():
     output, failed = run_kuro_vm(
         "Action Fact N;\n"
