@@ -1223,6 +1223,15 @@ def decimal_parameter_assignment_bytecode():
     ]
 
 
+def decimal_parameter_mutation_bytecode(opcode, operand, expected):
+    return [
+        "BC_FUNC_BEGIN", "MutateDecimal", "BC_PARAM", "Balance", "Decimals",
+        "BC_CONST", operand, opcode, "Balance", "BC_LOADVAR", "Balance", "BC_RETURN", "BC_FUNC_END",
+        "BC_CALL_BEGIN", "MutateDecimal", "BC_CONST", "1.25", "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_CONST", expected, "BC_CMP", "eq", "BC_PRINT",
+    ]
+
+
 @pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
 def test_kuro_native_codegen_assigns_decimal_action_parameter(target, tmp_path):
     source = (
@@ -1258,6 +1267,53 @@ def test_kuro_native_codegen_assigns_decimal_action_parameter(target, tmp_path):
 
 
 @pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_compiles_decimal_action_parameter_add_and_update(target, tmp_path):
+    source = (
+        "Action AddBalance Balance: Decimals;\n"
+        "Add 2 to Balance;\n"
+        "Return Balance;\n"
+        "Done.\n"
+        "Action AddDecimalBalance Balance: Decimals;\n"
+        "Add 2.5 to Balance;\n"
+        "Return Balance;\n"
+        "Done.\n"
+        "Action SetBalance Balance: Decimals;\n"
+        "Update Balance to 6.25;\n"
+        "Return Balance;\n"
+        "Done.\n"
+        "Call AddBalance 1.25;\n"
+        "If @_ is equal to 3.25;\nPrint 1.\nElse;\nPrint 0.\nDone.\n"
+        "Call AddDecimalBalance 1.25;\n"
+        "If @_ is equal to 3.75;\nPrint 1.\nElse;\nPrint 0.\nDone.\n"
+        "Call SetBalance 1.25;\n"
+        "If @_ is equal to 6.25;\nPrint 1.\nElse;\nPrint 0.\nDone.\n"
+    )
+    tokens, env = compile_program_to_codegen(source, target=target)
+
+    assert tokens.count("BC_ADD") == 2
+    assert tokens.count("BC_UPDATE") == 1
+    assert env["NativeFailed"] == 0
+    if target == "x86_64-linux":
+        assert "cvtsi2sd" in env["NativeOut"]
+        assert "addsd" in env["NativeOut"]
+        clang_target = "x86_64-unknown-linux-gnu"
+    else:
+        assert "scvtf d0, x0" in env["NativeOut"]
+        assert "fadd d0, d1, d0" in env["NativeOut"]
+        clang_target = "arm64-apple-macos11"
+    assembly = tmp_path / f"decimal-action-add-update-{target}.s"
+    object_file = tmp_path / f"decimal-action-add-update-{target}.o"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(
+        ["clang", "-target", clang_target, "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert object_file.stat().st_size > 0
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
 @pytest.mark.parametrize(
     ("parameter_type", "literal"),
     [("Decimals", "1"), ("Integers", "1.5"), ("Text", "1.5")],
@@ -1268,6 +1324,28 @@ def test_kuro_native_codegen_rejects_mismatched_decimal_action_parameter_store(
     tokens = [
         "BC_FUNC_BEGIN", "Mismatch", "BC_PARAM", "Value", parameter_type,
         "BC_CONST", literal, "BC_STORE_LIST", "Value", "BC_LOADVAR", "Value", "BC_RETURN", "BC_FUNC_END",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 1
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+@pytest.mark.parametrize(
+    ("opcode", "parameter_type", "literal"),
+    [
+        ("BC_UPDATE", "Decimals", "1"),
+        ("BC_ADD", "Integers", "1.5"),
+        ("BC_UPDATE", "Integers", "1.5"),
+    ],
+)
+def test_kuro_native_codegen_rejects_mismatched_decimal_action_parameter_mutation(
+    target, opcode, parameter_type, literal
+):
+    tokens = [
+        "BC_FUNC_BEGIN", "Mismatch", "BC_PARAM", "Balance", parameter_type,
+        "BC_CONST", literal, opcode, "Balance", "BC_LOADVAR", "Balance", "BC_RETURN", "BC_FUNC_END",
     ]
     bytecode = ", ".join(json.dumps(token) for token in tokens)
     env = run_codegen(bytecode, target=target)
@@ -1291,6 +1369,50 @@ def test_kuro_owned_x86_linux_codegen_runs_decimal_parameter_assignment(tmp_path
     )
     assert generated.returncode == 0, f"generator exited {generated.returncode}: {generated.stderr!r}"
     executable = tmp_path / "decimal-action-mutations-linux"
+    subprocess.run(
+        [
+            "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
+            "-Wl,-e,_start", "-x", "assembler", "-", "-o", str(executable),
+        ],
+        input=generated.stdout,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [str(executable)], capture_output=True, text=True, timeout=5, check=False
+    )
+    assert result.returncode == 0
+    assert result.stdout == "1\n"
+    assert result.stderr == ""
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+@pytest.mark.parametrize(
+    ("opcode", "operand", "expected"),
+    [("BC_ADD", "2.5", "3.75"), ("BC_ADD", "2", "3.25"), ("BC_UPDATE", "6.25", "6.25")],
+)
+def test_kuro_owned_x86_linux_codegen_runs_decimal_parameter_mutation(
+    tmp_path, x86_linux_codegen, opcode, operand, expected
+):
+    tokens = decimal_parameter_mutation_bytecode(opcode, operand, expected)
+    generated = subprocess.run(
+        [str(x86_linux_codegen)],
+        input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    assert generated.returncode == 0, (
+        f"{opcode} operand {operand}: generator exited {generated.returncode}; "
+        f"stdout={generated.stdout[:200]!r}; stderr={generated.stderr[:200]!r}"
+    )
+    assert generated.stdout
+    executable = tmp_path / f"decimal-{opcode.lower()}-{operand.replace('.', '-')}-linux"
     subprocess.run(
         [
             "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
