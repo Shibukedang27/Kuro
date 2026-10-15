@@ -1539,7 +1539,7 @@ Action EmitStraightIntegerProgram;
             Add 1 to NativeFunctionParamIndex;
         Done.
     Done.
-    If NativeStraightLength is greater than 512;
+    If NativeStraightLength is greater than 4096;
         NativeFailed = 1;
     Done.
 

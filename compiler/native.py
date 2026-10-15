@@ -114,6 +114,20 @@ NATIVE_INPUT_READ_LIMIT = NATIVE_INPUT_CAPACITY - 1
 NATIVE_COLLECTION_CAPACITY = 1 << 16
 NATIVE_COLLECTION_BYTES = NATIVE_COLLECTION_CAPACITY * 8
 NATIVE_TEXT_HEAP_CAPACITY = 1 << 24
+# Native code generators grow assembly through repeated immutable Text joins.
+# Their 4096-token path needs over 512 MiB cumulatively, so scope a larger heap
+# to generator images instead of increasing the default for ordinary programs.
+NATIVE_CODEGEN_TEXT_HEAP_CAPACITY = 1 << 30
+
+
+def _resolve_text_heap_capacity(capacity: int | None) -> int:
+    if capacity is None:
+        return NATIVE_TEXT_HEAP_CAPACITY
+    if type(capacity) is not int or not 1 <= capacity <= NATIVE_CODEGEN_TEXT_HEAP_CAPACITY:
+        raise NativeBackendError(
+            f"native text heap capacity must be in [1, {NATIVE_CODEGEN_TEXT_HEAP_CAPACITY}]"
+        )
+    return capacity
 
 
 def _link_x86_64_linux(assembly: Path, destination: Path) -> None:
@@ -338,6 +352,12 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
             return
         lines.append(f"    str {register}, [sp, #{slots[target]}]")
 
+    def emit_text_concat(left: str, right: str, destination: str):
+        load(left, "x0")
+        load(right, "x1")
+        lines.append("    bl _kuro_concat_text")
+        store(destination)
+
     def load_collection_length(name: str, register: str = "x0"):
         lines.extend([f"    adrp {register}, {collection_lengths[name]}@PAGE", f"    add {register}, {register}, {collection_lengths[name]}@PAGEOFF", f"    ldr {register}, [{register}]"])
 
@@ -551,13 +571,16 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
             if name == "MakeEnum":
                 if len(arguments) != 2:
                     raise NativeBackendError("native MakeEnum requires a type and variant")
-                lines.extend(["    mov x0, #4096", "    bl _malloc"])
-                store(item.dest)
-                load(item.dest, "x0"); load(arguments[0], "x1"); lines.append("    bl _strcpy")
                 dot_label = f"L_kuro_data_{len(data)}"
                 data.append((dot_label, "."))
-                lines.extend([f"    adrp x1, {dot_label}@PAGE", f"    add x1, x1, {dot_label}@PAGEOFF", "    bl _strcat"])
-                load(item.dest, "x0"); load(arguments[1], "x1"); lines.append("    bl _strcat")
+                load(arguments[0], "x0")
+                lines.extend([
+                    f"    adrp x1, {dot_label}@PAGE",
+                    f"    add x1, x1, {dot_label}@PAGEOFF",
+                    "    bl _kuro_concat_text",
+                ])
+                store(item.dest)
+                emit_text_concat(item.dest, arguments[1], item.dest)
                 kinds[item.dest] = "text"
                 continue
             if name == "MakeRecord":
@@ -703,14 +726,7 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
         elif op == "BINOP":
             bop, left, right = item.args
             if bop == "+" and kinds.get(left) == "text" and kinds.get(right) == "text":
-                lines.extend(["    mov x0, #4096", "    bl _malloc"])
-                store(item.dest)
-                load(item.dest, "x0")
-                load(left, "x1")
-                lines.append("    bl _strcpy")
-                load(item.dest, "x0")
-                load(right, "x1")
-                lines.append("    bl _strcat")
+                emit_text_concat(left, right, item.dest)
                 kinds[item.dest] = "text"
                 continue
             if kinds.get(left) != "number" or kinds.get(right) != "number":
@@ -879,6 +895,41 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
     for label, value in formats:
         lines.append(f'{label}: .asciz "{value}"')
     lines.append('L_kuro_float_format: .asciz "%g\\n"')
+    if any(
+        (item.op == "BINOP" and item.args and item.args[0] == "+")
+        or (item.op == "CALL" and item.args and item.args[0] == "MakeEnum")
+        for item in all_items
+    ):
+        lines.extend([
+            ".section __TEXT,__text",
+            "_kuro_concat_text:",
+            "    stp x29, x30, [sp, #-16]!",
+            "    mov x29, sp",
+            "    stp x19, x20, [sp, #-16]!",
+            "    stp x21, x22, [sp, #-16]!",
+            "    mov x19, x0",
+            "    mov x20, x1",
+            "    mov x0, x19",
+            "    bl _strlen",
+            "    mov x21, x0",
+            "    mov x0, x20",
+            "    bl _strlen",
+            "    add x0, x0, x21",
+            "    add x0, x0, #1",
+            "    bl _malloc",
+            "    mov x22, x0",
+            "    mov x0, x22",
+            "    mov x1, x19",
+            "    bl _strcpy",
+            "    mov x0, x22",
+            "    mov x1, x20",
+            "    bl _strcat",
+            "    mov x0, x22",
+            "    ldp x21, x22, [sp], #16",
+            "    ldp x19, x20, [sp], #16",
+            "    ldp x29, x30, [sp], #16",
+            "    ret",
+        ])
     if collection_buffers or global_labels:
         lines.extend([
             ".section __TEXT,__text",
@@ -1147,19 +1198,14 @@ def _emit_dynamic_function(
                     "    cmp x1, #0x1000", f"    b.lo {numeric_label}",
                     f"    b {text_label}",
                     f"{numeric_label}:", "    add x0, x0, x1", f"    b {done_label}",
-                    f"{text_label}:",
-                    "    mov x0, #4096", "    bl _malloc",
+                    f"{text_label}:", "    bl _kuro_concat_text",
                 ])
-                store(item.dest)
-                load(item.dest, "x0"); load(left, "x1"); lines.append("    bl _strcpy")
-                load(item.dest, "x0"); load(right, "x1"); lines.append("    bl _strcat")
                 lines.append(f"{done_label}:")
                 store(item.dest); kinds[item.dest] = "unknown"
                 continue
             if operator == "+" and kinds.get(left) == "text" and kinds.get(right) == "text":
-                lines.extend(["    mov x0, #4096", "    bl _malloc"]); store(item.dest)
-                load(item.dest, "x0"); load(left, "x1"); lines.append("    bl _strcpy")
-                load(item.dest, "x0"); load(right, "x1"); lines.append("    bl _strcat")
+                load(left, "x0"); load(right, "x1"); lines.append("    bl _kuro_concat_text")
+                store(item.dest)
                 kinds[item.dest] = "text"
                 continue
             if kinds.get(left) == "float" or kinds.get(right) == "float":
@@ -1462,7 +1508,9 @@ def emit_macos_arm64(ir: IRProgram) -> str:
     return "\n".join(lines) + "\n"
 
 
-def emit_x86_64_linux(ir: IRProgram) -> str:
+def emit_x86_64_linux(
+    ir: IRProgram, *, text_heap_capacity: int | None = None
+) -> str:
     """Emit the portable integer/text/control-flow subset for Linux x86-64.
 
     Values live in a real stack frame and branches target emitted labels. No
@@ -1470,6 +1518,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     integer formatting use Linux syscalls directly. Complex heap values,
     floating point, and unsupported call forms remain explicit capability errors below.
     """
+    text_heap_capacity = _resolve_text_heap_capacity(text_heap_capacity)
     items = ir.main
     # Captured closure objects reserve a 16-byte header and up to 30 numeric
     # captures. Linux brk grows their process-local heap one page at a time.
@@ -2436,7 +2485,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     "    mov %r9, %rax", "    call _kuro_strlen", "    mov %rax, %r11",
                     "    mov %r10, %rax", "    add %r11, %rax",
                     "    mov .Lkuro_text_heap_cursor(%rip), %rdx", "    mov %rdx, %rcx", "    add %rax, %rcx", "    inc %rcx",
-                    f"    cmp ${NATIVE_TEXT_HEAP_CAPACITY}, %rcx", "    ja .Lkuro_overflow",
+                    f"    cmp ${text_heap_capacity}, %rcx", "    ja .Lkuro_overflow",
                     "    lea .Lkuro_text_heap(%rip), %rdi", "    add %rdx, %rdi", "    mov %r8, %rsi", "    mov %r10, %rcx", "    rep movsb",
                     "    mov %r9, %rsi", "    mov %r11, %rcx", "    rep movsb",
                     "    movb $0, (%rdi)", "    lea .Lkuro_text_heap(%rip), %rsi", "    mov %rdi, %rcx", "    sub %rsi, %rcx", "    inc %rcx",
@@ -2685,7 +2734,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 "    mov %r8, %rax", "    call _kuro_strlen", "    cmp %rax, %r9", "    ja .Lkuro_bounds",
                 "    sub %r9, %rax", "    mov %rax, %r10",
                 "    mov .Lkuro_text_heap_cursor(%rip), %rdx", "    mov %rdx, %rcx", "    add %r10, %rcx", "    inc %rcx",
-                f"    cmp ${NATIVE_TEXT_HEAP_CAPACITY}, %rcx", "    ja .Lkuro_overflow",
+                f"    cmp ${text_heap_capacity}, %rcx", "    ja .Lkuro_overflow",
                 "    lea .Lkuro_text_heap(%rip), %rdi", "    add %rdx, %rdi", "    lea (%r8,%r9,1), %rsi",
                 "    mov %r10, %rcx", "    rep movsb", "    movb $0, (%rdi)",
                 "    lea .Lkuro_text_heap(%rip), %rsi", "    mov %rdi, %rcx", "    sub %rsi, %rcx", "    inc %rcx",
@@ -3350,7 +3399,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                         "    mov %r9, %rax", "    call _kuro_strlen", "    mov %rax, %r11",
                         "    mov %r10, %rax", "    add %r11, %rax",
                         "    mov .Lkuro_text_heap_cursor(%rip), %rdx", "    mov %rdx, %rcx", "    add %rax, %rcx", "    inc %rcx",
-                        f"    cmp ${NATIVE_TEXT_HEAP_CAPACITY}, %rcx", "    ja .Lkuro_overflow",
+                        f"    cmp ${text_heap_capacity}, %rcx", "    ja .Lkuro_overflow",
                         "    lea .Lkuro_text_heap(%rip), %rdi", "    add %rdx, %rdi",
                         "    mov %r8, %rsi", "    mov %r10, %rcx", "    rep movsb",
                         "    mov %r9, %rsi", "    mov %r11, %rcx", "    rep movsb", "    movb $0, (%rdi)",
@@ -3372,7 +3421,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                         "    mov %r9, %rax", "    call _kuro_strlen", "    mov %rax, %r11",
                         "    mov %r10, %rax", "    add %r11, %rax",
                         "    mov .Lkuro_text_heap_cursor(%rip), %rdx", "    mov %rdx, %rcx", "    add %rax, %rcx", "    inc %rcx",
-                        f"    cmp ${NATIVE_TEXT_HEAP_CAPACITY}, %rcx", "    ja .Lkuro_overflow",
+                        f"    cmp ${text_heap_capacity}, %rcx", "    ja .Lkuro_overflow",
                         "    lea .Lkuro_text_heap(%rip), %rdi", "    add %rdx, %rdi", "    mov %r8, %rsi", "    mov %r10, %rcx", "    rep movsb",
                         "    mov %r9, %rsi", "    mov %r11, %rcx", "    rep movsb", "    movb $0, (%rdi)",
                         "    lea .Lkuro_text_heap(%rip), %rsi", "    mov %rdi, %rcx", "    sub %rsi, %rcx", "    inc %rcx", "    mov %rcx, .Lkuro_text_heap_cursor(%rip)",
@@ -3629,7 +3678,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                     "    mov %r8, %rax", "    call _kuro_strlen", "    cmp %rax, %r9", "    ja .Lkuro_bounds",
                     "    sub %r9, %rax", "    mov %rax, %r10",
                     "    mov .Lkuro_text_heap_cursor(%rip), %rdx", "    mov %rdx, %rcx", "    add %r10, %rcx", "    inc %rcx",
-                    f"    cmp ${NATIVE_TEXT_HEAP_CAPACITY}, %rcx", "    ja .Lkuro_overflow",
+                    f"    cmp ${text_heap_capacity}, %rcx", "    ja .Lkuro_overflow",
                     "    lea .Lkuro_text_heap(%rip), %rdi", "    add %rdx, %rdi", "    lea (%r8,%r9,1), %rsi",
                     "    mov %r10, %rcx", "    rep movsb", "    movb $0, (%rdi)",
                     "    lea .Lkuro_text_heap(%rip), %rsi", "    mov %rdi, %rcx", "    sub %rsi, %rcx", "    inc %rcx",
@@ -4027,7 +4076,7 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     for label in function_char_buffers.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 1"])
     lines.extend(["    .p2align 4", f".Lkuro_char_heap: .zero {NATIVE_INPUT_CAPACITY * 2}", "    .p2align 3", ".Lkuro_char_heap_cursor: .zero 8"])
-    lines.extend(["    .p2align 4", f".Lkuro_text_heap: .zero {NATIVE_TEXT_HEAP_CAPACITY}", "    .p2align 3", ".Lkuro_text_heap_cursor: .zero 8"])
+    lines.extend(["    .p2align 4", f".Lkuro_text_heap: .zero {text_heap_capacity}", "    .p2align 3", ".Lkuro_text_heap_cursor: .zero 8"])
     for label in function_concat_buffers.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 4096"])
     for label in concat_buffers.values():
@@ -4075,7 +4124,9 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
     return "\n".join(lines) + "\n"
 
 
-def emit_x86_64_macos(ir: IRProgram) -> str:
+def emit_x86_64_macos(
+    ir: IRProgram, *, text_heap_capacity: int | None = None
+) -> str:
     """Adapt the freestanding x86-64 lowering to Darwin's syscall ABI.
 
     The instruction/data ABI is deliberately shared with Linux.  Darwin
@@ -4084,7 +4135,7 @@ def emit_x86_64_macos(ir: IRProgram) -> str:
     the emitted AT&T code.  Keeping this as a narrow ABI adapter means the
     language lowering itself stays platform-independent.
     """
-    assembly = emit_x86_64_linux(ir)
+    assembly = emit_x86_64_linux(ir, text_heap_capacity=text_heap_capacity)
     assembly = assembly.replace(".section .text", ".section __TEXT,__text")
     assembly = assembly.replace(".section .bss", ".section __DATA,__bss")
     assembly = assembly.replace(".section .rodata", ".section __TEXT,__const")
@@ -4108,8 +4159,15 @@ def emit_x86_64_macos(ir: IRProgram) -> str:
     return "\n".join(lines) + "\n"
 
 
-def build_native(ir: IRProgram, output: str | Path, target: str | None = None) -> Path:
+def build_native(
+    ir: IRProgram,
+    output: str | Path,
+    target: str | None = None,
+    *,
+    text_heap_capacity: int | None = None,
+) -> Path:
     """Build a native image for an explicit or host-selected Kuro target."""
+    text_heap_capacity = _resolve_text_heap_capacity(text_heap_capacity)
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
     assembly = destination.with_suffix(".s")
@@ -4118,13 +4176,19 @@ def build_native(ir: IRProgram, output: str | Path, target: str | None = None) -
         assembly.write_text(emit_macos_arm64(ir), encoding="utf-8")
         command = ["clang", str(assembly), "-o", str(destination)]
     elif selected == "x86_64-macos":
-        assembly.write_text(emit_x86_64_macos(ir), encoding="utf-8")
+        assembly.write_text(
+            emit_x86_64_macos(ir, text_heap_capacity=text_heap_capacity),
+            encoding="utf-8",
+        )
         command = [
             "clang", "-target", "x86_64-apple-macos",
             "-nostdlib", "-Wl,-e,_start", str(assembly), "-lSystem", "-o", str(destination),
         ]
     elif selected == "x86_64-linux":
-        assembly.write_text(emit_x86_64_linux(ir), encoding="utf-8")
+        assembly.write_text(
+            emit_x86_64_linux(ir, text_heap_capacity=text_heap_capacity),
+            encoding="utf-8",
+        )
         # The Linux image is freestanding: no libc startup or foreign runtime
         # is linked. Kuro's emitted _start performs the exit syscall itself.
         _link_x86_64_linux(assembly, destination)

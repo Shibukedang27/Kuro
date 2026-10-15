@@ -185,6 +185,13 @@ def compile_program_to_codegen(program: str, target: str = "aarch64-macos"):
     return tokens, run_codegen(bytecode, target=target)
 
 
+def _bytecode_for_token_limit(if_count: int, print_count: int) -> list[str]:
+    return (
+        ["BC_CONST", "1", "BC_IF_BEGIN", "BC_IF_END"] * if_count
+        + ["BC_CONST", "1", "BC_PRINT"] * print_count
+    )
+
+
 def test_kuro_native_codegen_emits_length_for_multichar_literal():
     env = run_codegen('"BC_CONST", "hello", "BC_PRINT"')
 
@@ -205,6 +212,23 @@ def test_kuro_native_codegen_rejects_unsupported_literal_length():
     env = run_literal_codegen("a" * 1000)
 
     assert env["NativeFailed"] == 1
+
+
+def test_kuro_native_codegen_enforces_exact_4096_token_boundary():
+    accepted_tokens = _bytecode_for_token_limit(if_count=1021, print_count=4)
+    rejected_tokens = _bytecode_for_token_limit(if_count=1022, print_count=3)
+    assert len(accepted_tokens) == 4096
+    assert len(rejected_tokens) == 4097
+
+    accepted_bytecode = ", ".join(json.dumps(token) for token in accepted_tokens)
+    accepted = run_codegen(accepted_bytecode)
+    assert accepted["NativeFailed"] == 0
+    assert "L_kuro_else_1020:" in accepted["NativeOut"]
+
+    rejected_bytecode = ", ".join(json.dumps(token) for token in rejected_tokens)
+    rejected = run_codegen(rejected_bytecode)
+    assert rejected["NativeFailed"] == 1
+    assert rejected["NativeOut"] == ""
 
 
 def test_kuro_native_codegen_converts_three_digit_lengths():
@@ -1357,7 +1381,7 @@ def test_kuro_native_codegen_rejects_malformed_while(bytecode):
     assert run_codegen(bytecode)["NativeFailed"] == 1
 
 
-def test_native_codegen_source_emits_with_macos_arm64_backend():
+def test_native_codegen_source_emits_with_macos_arm64_backend(tmp_path):
     from compiler.native import emit_macos_arm64
     from compiler.pipeline import compile_source
     from compiler.self_host import native_codegen_source
@@ -1368,6 +1392,22 @@ def test_native_codegen_source_emits_with_macos_arm64_backend():
 
     assert assembly.startswith(".section __TEXT,__text")
     assert "_kuro_print_int:" in assembly
+    assert "_kuro_concat_text:" in assembly
+    assert "bl _kuro_concat_text" in assembly
+    assert "add x0, x0, #1" in assembly
+
+    object_file = tmp_path / "native-codegen-arm64.o"
+    subprocess.run(
+        [
+            "clang", "-target", "arm64-apple-macos11", "-c", "-x",
+            "assembler", "-", "-o", str(object_file),
+        ],
+        input=assembly,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert object_file.stat().st_size > 0
 
 
 @requires_macos_arm64
@@ -1389,6 +1429,37 @@ def test_native_kuro_codegen_image_consumes_artifact(tmp_path):
     assembly.write_text(generated.stdout, encoding="utf-8")
     subprocess.run(["clang", str(assembly), "-o", str(executable)], check=True)
     assert subprocess.run([str(executable)], capture_output=True, text=True, check=True).stdout == "Kuro image"
+
+    accepted_tokens = _bytecode_for_token_limit(if_count=1021, print_count=4)
+    boundary = subprocess.run(
+        [str(codegen)],
+        input="kuro.bytecode/1\n" + "\n".join(accepted_tokens) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=180,
+        check=False,
+    )
+    assert boundary.returncode == 0, boundary.stderr
+    assert "L_kuro_else_1020:" in boundary.stdout
+    boundary_assembly = tmp_path / "generated-boundary.s"
+    boundary_executable = tmp_path / "generated-boundary"
+    boundary_assembly.write_text(boundary.stdout, encoding="utf-8")
+    subprocess.run(
+        ["clang", str(boundary_assembly), "-o", str(boundary_executable)],
+        check=True,
+    )
+
+    rejected_tokens = _bytecode_for_token_limit(if_count=1022, print_count=3)
+    assert len(rejected_tokens) == 4097
+    rejected_boundary = subprocess.run(
+        [str(codegen)],
+        input="kuro.bytecode/1\n" + "\n".join(rejected_tokens) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert rejected_boundary.returncode == 1
+    assert rejected_boundary.stdout == ""
 
     rejected = subprocess.run(
         [str(codegen)], input="wrong\nBC_PRINT\n", capture_output=True, text=True
@@ -1457,6 +1528,46 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
         input=generated.stdout, capture_output=True, text=True, check=True,
     )
     assert object_file.read_bytes()[:4] == b"\x7fELF"
+
+
+def test_kuro_owned_x86_linux_codegen_enforces_4096_token_boundary(tmp_path, x86_linux_codegen):
+    accepted_tokens = _bytecode_for_token_limit(if_count=1021, print_count=4)
+    rejected_tokens = _bytecode_for_token_limit(if_count=1022, print_count=3)
+    assert len(accepted_tokens) == 4096
+    assert len(rejected_tokens) == 4097
+
+    def generate(tokens: list[str]):
+        return subprocess.run(
+            [str(x86_linux_codegen)],
+            input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+    accepted = generate(accepted_tokens)
+    assert accepted.returncode == 0, accepted.stderr
+    assert accepted.stderr == ""
+    assert "L_kuro_else_1020:" in accepted.stdout
+    object_file = tmp_path / "native-codegen-4096-tokens.o"
+    subprocess.run(
+        [
+            "clang", "-target", "x86_64-unknown-linux-gnu", "-c",
+            "-x", "assembler", "-", "-o", str(object_file),
+        ],
+        input=accepted.stdout,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
+    assert object_file.read_bytes()[:4] == b"\x7fELF"
+
+    rejected = generate(rejected_tokens)
+    assert rejected.returncode == 1
+    assert rejected.stdout == ""
+    assert rejected.stderr == ""
 
 
 @pytest.mark.skipif(

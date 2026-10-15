@@ -176,14 +176,20 @@ def build_native_codegen(
 
     ``target`` selects the CPU/OS running the generator image; output_target
     selects the assembly it emits. These are independent when cross-building.
+    The generator receives a larger bounded text heap for its accumulated output.
     """
-    from .native import build_native
+    from .native import NATIVE_CODEGEN_TEXT_HEAP_CAPACITY, build_native
     from .pipeline import compile_source
 
     result = compile_source(native_codegen_source(output_target))
     if not result.ok:
         raise SelfHostError(result.diags.render_all())
-    return build_native(result.ir, output, target=target)
+    return build_native(
+        result.ir,
+        output,
+        target=target,
+        text_heap_capacity=NATIVE_CODEGEN_TEXT_HEAP_CAPACITY,
+    )
 
 
 def native_compiler_source(source: str | None = None) -> str:

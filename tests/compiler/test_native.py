@@ -7,7 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from compiler.native import NativeBackendError, build_native, emit_x86_64_linux, emit_x86_64_macos
+from compiler.native import (
+    NATIVE_CODEGEN_TEXT_HEAP_CAPACITY,
+    NATIVE_TEXT_HEAP_CAPACITY,
+    NativeBackendError,
+    build_native,
+    emit_x86_64_linux,
+    emit_x86_64_macos,
+)
 from compiler.pipeline import compile_source, run_source
 
 
@@ -55,6 +62,33 @@ def test_x86_64_linux_backend_emits_linux_syscall_assembly():
     assert ".globl _start" in assembly
     assert "mov $60, %eax" in assembly  # Linux exit syscall, no libc startup
     assert "portable" not in assembly  # data is emitted as UTF-8 byte values
+
+
+def test_x86_64_linux_text_heap_override_is_opt_in():
+    result = compile_source('Left = "native"; Right = " codegen"; Combined = Left + Right; Print Combined.')
+    assert result.ok
+
+    default_assembly = emit_x86_64_linux(result.ir)
+    codegen_assembly = emit_x86_64_linux(
+        result.ir, text_heap_capacity=NATIVE_CODEGEN_TEXT_HEAP_CAPACITY
+    )
+    assert f".Lkuro_text_heap: .zero {NATIVE_TEXT_HEAP_CAPACITY}" in default_assembly
+    assert (
+        f".Lkuro_text_heap: .zero {NATIVE_CODEGEN_TEXT_HEAP_CAPACITY}"
+        in codegen_assembly
+    )
+    assert f"cmp ${NATIVE_CODEGEN_TEXT_HEAP_CAPACITY}, %rcx" in codegen_assembly
+
+
+def test_x86_64_linux_text_heap_override_rejects_oversized_capacity():
+    result = compile_source('Print "capacity guard".')
+    assert result.ok
+
+    with pytest.raises(NativeBackendError, match="native text heap capacity"):
+        emit_x86_64_linux(
+            result.ir,
+            text_heap_capacity=NATIVE_CODEGEN_TEXT_HEAP_CAPACITY + 1,
+        )
 
 
 def test_x86_64_linux_backend_lowers_variables_and_control_flow():
