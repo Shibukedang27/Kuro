@@ -2040,12 +2040,17 @@ Action EmitStraightIntegerProgram;
                 NativeStoreKindIndex = NativeStackDepth - 1;
                 Get NativeStackKinds NativeStoreKindIndex;
                 NativeStoreValueKind = @_;
-                If NativeStoreValueKind is equal to "D" and NativeVariableName is not equal to "_";
-                    NativeFailed = 1;
-                Done.
                 If NativeFunctionMode is equal to 1;
                     Call NativeFindFunctionParamType NativeVariableName, 0;
-                    If @_ is equal to "Decimals";
+                    NativeVariableKind = @_;
+                    If NativeVariableKind is equal to "Decimals" and NativeStoreValueKind is not equal to "D";
+                        NativeFailed = 1;
+                    Done.
+                    If NativeStoreValueKind is equal to "D" and NativeVariableName is not equal to "_" and NativeVariableKind is not equal to "Decimals";
+                        NativeFailed = 1;
+                    Done.
+                Else;
+                    If NativeStoreValueKind is equal to "D" and NativeVariableName is not equal to "_";
                         NativeFailed = 1;
                     Done.
                 Done.
