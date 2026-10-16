@@ -2219,12 +2219,25 @@ Action EmitStraightIntegerProgram;
             If NativeStraightPos is less than NativeStraightEnd and NativeStackDepth is greater than 0;
                 Get BytecodeOut NativeStraightPos;
                 NativeVariableName = @_;
-                Call NativeRejectDecimalTop;
+                NativeMutationValueIndex = NativeStackDepth - 1;
+                Get NativeStackKinds NativeMutationValueIndex;
+                NativeMutationValueKind = @_;
+                NativeMutationTargetKind = "I";
                 If NativeFunctionMode is equal to 1;
                     Call NativeFindFunctionParamType NativeVariableName, 0;
                     If @_ is equal to "Decimals";
+                        NativeMutationTargetKind = "D";
+                    Done.
+                Done.
+                If NativeMutationTargetKind is equal to "D";
+                    If NativeStraightOp is equal to "BC_UPDATE" and NativeMutationValueKind is not equal to "D";
                         NativeFailed = 1;
                     Done.
+                    If NativeStraightOp is equal to "BC_ADD" and NativeMutationValueKind is not equal to "D" and NativeMutationValueKind is not equal to "I";
+                        NativeFailed = 1;
+                    Done.
+                Else;
+                    Call NativeRejectDecimalTop;
                 Done.
                 Add 1 to NativeStraightPos;
                 NativeVariableWasNew = 0;
@@ -2275,32 +2288,50 @@ Action EmitStraightIntegerProgram;
                     Call NativeLengthToText NativeVariableOffset;
                     NativeVariableOffsetText = @_;
                     If NativeX86 is equal to 1;
-                        NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n";
-                        If NativeStraightOp is equal to "BC_ADD" and NativeVariableWasNew is equal to 0;
+                        If NativeMutationTargetKind is equal to "D" and NativeStraightOp is equal to "BC_ADD";
+                            Call NativeEmitNumericFloatOperand NativeStackOffsetText, NativeMutationValueKind, "%xmm0", "%rax";
                             If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
-                                NativeOut = NativeOut + "    add " + NativeVariableOffsetText + "(%r15), %rax\n";
+                                NativeOut = NativeOut + "    addsd " + NativeVariableOffsetText + "(%r15), %xmm0\n    movsd %xmm0, " + NativeVariableOffsetText + "(%r15)\n";
                             Else;
-                                NativeOut = NativeOut + "    add " + NativeVariableOffsetText + "(%rsp), %rax\n";
+                                NativeOut = NativeOut + "    addsd " + NativeVariableOffsetText + "(%rsp), %xmm0\n    movsd %xmm0, " + NativeVariableOffsetText + "(%rsp)\n";
                             Done.
-                        Done.
-                        If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
-                            NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%r15)\n";
                         Else;
-                            NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
+                            NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n";
+                            If NativeStraightOp is equal to "BC_ADD" and NativeVariableWasNew is equal to 0;
+                                If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                                    NativeOut = NativeOut + "    add " + NativeVariableOffsetText + "(%r15), %rax\n";
+                                Else;
+                                    NativeOut = NativeOut + "    add " + NativeVariableOffsetText + "(%rsp), %rax\n";
+                                Done.
+                            Done.
+                            If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                                NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%r15)\n";
+                            Else;
+                                NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
+                            Done.
                         Done.
                     Else;
-                        NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n";
-                        If NativeStraightOp is equal to "BC_ADD" and NativeVariableWasNew is equal to 0;
+                        If NativeMutationTargetKind is equal to "D" and NativeStraightOp is equal to "BC_ADD";
+                            Call NativeEmitNumericFloatOperand NativeStackOffsetText, NativeMutationValueKind, "d0", "x0";
                             If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
-                                NativeOut = NativeOut + "    ldr x1, [x19, #" + NativeVariableOffsetText + "]\n    add x0, x1, x0\n";
+                                NativeOut = NativeOut + "    ldr d1, [x19, #" + NativeVariableOffsetText + "]\n    fadd d0, d1, d0\n    str d0, [x19, #" + NativeVariableOffsetText + "]\n";
                             Else;
-                                NativeOut = NativeOut + "    ldr x1, [sp, #" + NativeVariableOffsetText + "]\n    add x0, x1, x0\n";
+                                NativeOut = NativeOut + "    ldr d1, [sp, #" + NativeVariableOffsetText + "]\n    fadd d0, d1, d0\n    str d0, [sp, #" + NativeVariableOffsetText + "]\n";
                             Done.
-                        Done.
-                        If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
-                            NativeOut = NativeOut + "    str x0, [x19, #" + NativeVariableOffsetText + "]\n";
                         Else;
-                            NativeOut = NativeOut + "    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
+                            NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n";
+                            If NativeStraightOp is equal to "BC_ADD" and NativeVariableWasNew is equal to 0;
+                                If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                                    NativeOut = NativeOut + "    ldr x1, [x19, #" + NativeVariableOffsetText + "]\n    add x0, x1, x0\n";
+                                Else;
+                                    NativeOut = NativeOut + "    ldr x1, [sp, #" + NativeVariableOffsetText + "]\n    add x0, x1, x0\n";
+                                Done.
+                            Done.
+                            If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                                NativeOut = NativeOut + "    str x0, [x19, #" + NativeVariableOffsetText + "]\n";
+                            Else;
+                                NativeOut = NativeOut + "    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
+                            Done.
                         Done.
                     Done.
                     NativeStackDepth = NativeStackDepth - 1;
