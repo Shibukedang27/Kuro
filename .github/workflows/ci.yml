@@ -53,6 +53,9 @@ jobs:
       - name: Install Kuro
         run: python -m pip install -e .
 
+      - name: Install ARM64 freestanding test tools
+        run: sudo apt-get update -qq && sudo apt-get install -y qemu-user lld
+
       - name: Run portable language and toolchain tests
         run: >-
           python -m pytest -q

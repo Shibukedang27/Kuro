@@ -1358,6 +1358,7 @@ def test_kuro_native_codegen_rejects_mismatched_decimal_action_parameter_mutatio
     [
         ("x86_64-linux", "x86_64-unknown-linux-gnu", ".section .text", ".section .rodata"),
         ("x86_64-macos", "x86_64-apple-macos", ".section __TEXT,__text", ".section __TEXT,__const"),
+        ("aarch64-macos", "arm64-apple-macos11", ".section __TEXT,__text", ".section __TEXT,__const"),
     ],
 )
 def test_kuro_native_codegen_emits_freestanding_decimal_printing(target, triple, text_section, data_section, tmp_path):
@@ -1368,11 +1369,17 @@ def test_kuro_native_codegen_emits_freestanding_decimal_printing(target, triple,
     _, env = compile_program_to_codegen(source, target=target)
 
     assert env["NativeFailed"] == 0
-    assert "call _kuro_print_float" in env["NativeOut"]
-    assert "_kuro_print_float:" in env["NativeOut"]
+    call = "bl" if target == "aarch64-macos" else "call"
+    assert f"{call} _kuro_print_float" in env["NativeOut"]
+    assert env["NativeOut"].count("_kuro_print_float:") == 1
     assert text_section in env["NativeOut"]
     assert data_section in env["NativeOut"]
-    assert ".Lkuro_float_pow10_ext:" in env["NativeOut"]
+    if target == "aarch64-macos":
+        assert "bl _kuro_decimal_format" in env["NativeOut"]
+        assert "_printf" not in env["NativeOut"]
+        assert "_malloc" not in env["NativeOut"]
+    else:
+        assert ".Lkuro_float_pow10_ext:" in env["NativeOut"]
     assembly = tmp_path / f"decimal-print-{target}.s"
     object_file = tmp_path / f"decimal-print-{target}.o"
     assembly.write_text(env["NativeOut"], encoding="utf-8")
@@ -1385,19 +1392,16 @@ def test_kuro_native_codegen_emits_freestanding_decimal_printing(target, triple,
     assert object_file.stat().st_size > 0
 
 
-def test_kuro_native_codegen_rejects_decimal_printing_on_arm64():
+def test_kuro_native_codegen_uses_arm64_decimal_printer_for_computed_values():
     _, env = compile_program_to_codegen("Print 1.25 + 0.0.\n", target="aarch64-macos")
 
-    assert env["NativeFailed"] == 1
-    assert env["NativeOut"] == ""
+    assert env["NativeFailed"] == 0
+    assert "bl _kuro_print_float" in env["NativeOut"]
+    assert "mov x16, #4\n    svc #0x80" in env["NativeOut"]
 
 
-@pytest.mark.skipif(
-    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
-    reason="requires a Linux x86-64 execution host",
-)
-def test_kuro_owned_x86_linux_codegen_runs_decimal_printing(tmp_path, x86_linux_codegen):
-    tokens = [
+def decimal_printing_bytecode():
+    return [
         "BC_FUNC_BEGIN", "Echo", "BC_PARAM", "Value", "Decimals",
         "BC_LOADVAR", "Value", "BC_PRINT", "BC_LOADVAR", "Value", "BC_RETURN", "BC_FUNC_END",
         "BC_CALL_BEGIN", "Echo", "BC_CONST", "2.5", "BC_CALL_END",
@@ -1413,6 +1417,20 @@ def test_kuro_owned_x86_linux_codegen_runs_decimal_printing(tmp_path, x86_linux_
         "BC_CONST", "0.0", "BC_CONST", "1.0", "BC_BINOP", "-", "BC_CONST", "0.0", "BC_BINOP", "/", "BC_PRINT",
         "BC_CONST", "0.0", "BC_CONST", "0.0", "BC_BINOP", "/", "BC_PRINT",
     ]
+
+
+DECIMAL_PRINTING_OUTPUT = (
+    "2.5\n2.5\n1.25\n1.0\n0.30000000000000004\n1e-05\n1e+16\n-1.5\n"
+    "-0.0\ninf\n-inf\nnan\n"
+)
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+def test_kuro_owned_x86_linux_codegen_runs_decimal_printing(tmp_path, x86_linux_codegen):
+    tokens = decimal_printing_bytecode()
     generated = subprocess.run(
         [str(x86_linux_codegen)],
         input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
@@ -1434,10 +1452,7 @@ def test_kuro_owned_x86_linux_codegen_runs_decimal_printing(tmp_path, x86_linux_
     )
     result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=5, check=True)
 
-    assert result.stdout == (
-        "2.5\n2.5\n1.25\n1.0\n0.30000000000000004\n1e-05\n1e+16\n-1.5\n"
-        "-0.0\ninf\n-inf\nnan\n"
-    )
+    assert result.stdout == DECIMAL_PRINTING_OUTPUT
     assert result.stderr == ""
 
 
@@ -1736,6 +1751,30 @@ def test_native_kuro_codegen_image_consumes_artifact(tmp_path):
     subprocess.run(["clang", str(assembly), "-o", str(executable)], check=True)
     assert subprocess.run([str(executable)], capture_output=True, text=True, check=True).stdout == "Kuro image"
 
+    # This uses the same fresh Kuro generator image, not the Python emitter.
+    decimal = subprocess.run(
+        [str(codegen)],
+        input="kuro.bytecode/1\n" + "\n".join(decimal_printing_bytecode()) + "\n",
+        capture_output=True, text=True, timeout=60, check=True,
+    )
+    assert "bl _kuro_decimal_format" in decimal.stdout
+    assert "_printf" not in decimal.stdout
+    decimal_image = tmp_path / "generated-decimal"
+    subprocess.run(
+        ["clang", "-nostdlib", "-Wl,-e,_main", "-x", "assembler", "-",
+         "-lSystem", "-o", str(decimal_image)],
+        input=decimal.stdout, capture_output=True, text=True, check=True,
+    )
+    printed = subprocess.run(
+        [str(decimal_image)], capture_output=True, text=True, timeout=5, check=True,
+    )
+    assert printed.stdout == DECIMAL_PRINTING_OUTPUT
+    assert printed.stderr == ""
+    # No libc import is allowed even though the development linker is hosted.
+    imports = subprocess.run(
+        ["nm", "-u", str(decimal_image)], capture_output=True, text=True, check=True,
+    ).stdout
+    assert imports.strip() == ""
     accepted_tokens = _bytecode_for_token_limit(if_count=1021, print_count=4)
     boundary = subprocess.run(
         [str(codegen)],
