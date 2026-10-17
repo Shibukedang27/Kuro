@@ -1,5 +1,7 @@
 # Freestanding ARM64 Decimal printing
 
+[PR #65](https://github.com/Shibukedang27/Kuro/pull/65), stacked on PR #64; open and unmerged.
+
 The Kuro-authored native generator now lowers computed Decimal `BC_PRINT` for Apple ARM64, including printing inside an Action and printing a returned Decimal. Generated programs use a repository-owned formatter and Darwin write syscalls, not `printf`, libc allocation, or a Python formatter.
 
 ## What changed and why
