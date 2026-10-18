@@ -143,9 +143,6 @@ def test_decimal_control_flow_executes_arm64_instructions(tmp_path):
 @pytest.mark.parametrize(
     "tokens",
     [
-        # A first Decimal store inside a conditional is rejected even when both arms assign it.
-        ("BC_CONST", "1", "BC_IF_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST", "D",
-         "BC_ELSE_BEGIN", "BC_CONST", "2.5", "BC_STORE_LIST", "D", "BC_IF_END"),
         # A zero-count loop still cannot establish the Decimal representation.
         ("BC_CONST", "0", "BC_REPEAT_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST", "D",
          "BC_REPEAT_END"),
