@@ -256,6 +256,10 @@ NativeCurrentFunctionLocalCount = 0;
 NativeGlobalVariableNames is Text;
 NativeGlobalVariableCount = 0;
 NativeGlobalVariableName is Text;
+NativeGlobalVariableKinds is Text;
+NativeGlobalStoredKind is Text;
+NativeGlobalKindPosition = 0;
+NativeHasControlFlow = 0;
 NativeGlobalCurrentName is Text;
 NativeGlobalNamePosition = 0;
 NativeGlobalSearchIndex = 0;
@@ -347,6 +351,7 @@ Action NativeRegisterGlobalVariable Name: Text;
         If NativeGlobalVariableCount is less than 64;
             NativeGlobalVariableSlot = NativeGlobalVariableCount;
             Append Name to NativeGlobalVariableNames;
+            Append "?" to NativeGlobalVariableKinds;
             Add 1 to NativeGlobalVariableCount;
         Else;
             NativeGlobalVariableSlot = -1;
@@ -354,6 +359,31 @@ Action NativeRegisterGlobalVariable Name: Text;
         Done.
     Done.
     Return NativeGlobalVariableSlot;
+Done.
+
+# Only straight-line, function-free named slots gain Decimal kinds here.
+# Reject kind changes rather than guessing branch/call-dependent representations.
+Action NativeCheckGlobalStoreKind Slot: Integers, Kind: Text;
+    If Slot is greater than or equal to 0;
+        NativeGlobalKindPosition = Slot + 1;
+        Get NativeGlobalVariableKinds NativeGlobalKindPosition;
+        NativeGlobalStoredKind = @_;
+        If Kind is equal to "D";
+            If NativeFunctionCount is greater than 0 or NativeHasControlFlow is equal to 1;
+                NativeFailed = 1;
+            Done.
+            If NativeGlobalStoredKind is not equal to "?" and NativeGlobalStoredKind is not equal to "D";
+                NativeFailed = 1;
+            Done.
+        Else;
+            If NativeGlobalStoredKind is equal to "D";
+                NativeFailed = 1;
+            Done.
+        Done.
+        If NativeFailed is equal to 0;
+            Set NativeGlobalVariableKinds NativeGlobalKindPosition to Kind;
+        Done.
+    Done.
 Done.
 
 Action NativeFindFunctionParamSlot Name: Text, Index: Integers;
@@ -1230,7 +1260,9 @@ Done.
 
 Action NativePrepareProgram;
     NativeGlobalVariableNames = "";
+    NativeGlobalVariableKinds = "";
     NativeGlobalVariableCount = 0;
+    NativeHasControlFlow = 0;
     NativePreparePos = 0;
     Length BytecodeOut;
     NativePrepareLength = @_;
@@ -1503,6 +1535,9 @@ Action NativePrepareProgram;
                 NativeFailed = 1;
             Done.
         Else;
+            If NativePrepareOp is equal to "BC_IF_BEGIN" or NativePrepareOp is equal to "BC_REPEAT_BEGIN" or NativePrepareOp is equal to "BC_WHILE_BEGIN";
+                NativeHasControlFlow = 1;
+            Done.
             If NativePrepareOp is equal to "BC_STORE_LIST" or NativePrepareOp is equal to "BC_UPDATE" or NativePrepareOp is equal to "BC_ADD";
                 NativePrepareGlobalNamePos = NativePreparePos + 1;
                 Get BytecodeOut NativePrepareGlobalNamePos;
@@ -2102,10 +2137,6 @@ Action EmitStraightIntegerProgram;
                     If NativeStoreValueKind is equal to "D" and NativeVariableName is not equal to "_" and NativeVariableKind is not equal to "Decimals";
                         NativeFailed = 1;
                     Done.
-                Else;
-                    If NativeStoreValueKind is equal to "D" and NativeVariableName is not equal to "_";
-                        NativeFailed = 1;
-                    Done.
                 Done.
                 Add 1 to NativeStraightPos;
                 NativeVariableIsGlobal = 0;
@@ -2114,6 +2145,9 @@ Action EmitStraightIntegerProgram;
                     NativeVariableSlot = @_;
                     If NativeVariableSlot is less than 0;
                         NativeFailed = 1;
+                    Done.
+                    If NativeVariableName is not equal to "_";
+                        Call NativeCheckGlobalStoreKind NativeVariableSlot, NativeStoreValueKind;
                     Done.
                 Else;
                     Call NativeFindFunctionParamSlot NativeVariableName, 0;
@@ -2233,6 +2267,19 @@ Action EmitStraightIntegerProgram;
                 Else;
                     If NativeVariableName is equal to "_";
                         NativeVariableKind = NativeMainUnderscoreKind;
+                    Else;
+                        If NativeVariableSlot is greater than or equal to 0;
+                            NativeGlobalKindPosition = NativeVariableSlot + 1;
+                            Get NativeGlobalVariableKinds NativeGlobalKindPosition;
+                            If @_ is equal to "D";
+                                NativeVariableKind = "D";
+                            Else;
+                                # A read before a first store observes the legacy Integer zero.
+                                If @_ is equal to "?";
+                                    Set NativeGlobalVariableKinds NativeGlobalKindPosition to "I";
+                                Done.
+                            Done.
+                        Done.
                     Done.
                 Done.
                 If NativeVariableSlot is less than 0;
@@ -2280,6 +2327,20 @@ Action EmitStraightIntegerProgram;
                     Call NativeFindFunctionParamType NativeVariableName, 0;
                     If @_ is equal to "Decimals";
                         NativeMutationTargetKind = "D";
+                    Done.
+                Else;
+                    If NativeVariableName is not equal to "_";
+                        Call NativeFindGlobalVariable NativeVariableName, 0;
+                        NativeMutationGlobalSlot = @_;
+                        If NativeMutationGlobalSlot is greater than or equal to 0;
+                            NativeGlobalKindPosition = NativeMutationGlobalSlot + 1;
+                            Get NativeGlobalVariableKinds NativeGlobalKindPosition;
+                            If @_ is equal to "D";
+                                NativeMutationTargetKind = "D";
+                            Else;
+                                Call NativeCheckGlobalStoreKind NativeMutationGlobalSlot, NativeMutationValueKind;
+                            Done.
+                        Done.
                     Done.
                 Done.
                 If NativeMutationTargetKind is equal to "D";
