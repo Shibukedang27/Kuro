@@ -261,6 +261,7 @@ NativeGlobalStoredKind is Text;
 NativeGlobalKindPosition = 0;
 NativeHasControlFlow = 0;
 NativeControlFlowDepth = 0;
+NativeIfDepth = 0;
 NativeGlobalCurrentName is Text;
 NativeGlobalNamePosition = 0;
 NativeGlobalSearchIndex = 0;
@@ -314,6 +315,16 @@ NativeParamTypeNextIndex = 0;
 NativeVariableIsGlobal = 0;
 NativeIfLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeIfElseSeen = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeIfJoinEntryKinds is Text;
+NativeIfJoinThenKinds is Text;
+NativeIfJoinEntryKind is Text;
+NativeIfJoinThenKind is Text;
+NativeIfJoinElseKind is Text;
+NativeIfJoinSlot = 0;
+NativeIfJoinSlotPosition = 0;
+NativeIfJoinStoreAllowed = 0;
+NativeIfJoinHasElse = 0;
+NativeIfJoinUnknownRead = 0;
 NativeRepeatLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeRepeatStackDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeWhileLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -362,8 +373,8 @@ Action NativeRegisterGlobalVariable Name: Text;
     Return NativeGlobalVariableSlot;
 Done.
 
-# Function-free named slots may gain Decimal kinds before control flow.
-# Within control flow, an established Decimal slot must remain Decimal.
+# Function-free slots may first gain Decimal kinds before control flow or in
+# both direct arms of a top-level If/Else; established Decimal kinds stay fixed.
 Action NativeCheckGlobalStoreKind Slot: Integers, Kind: Text;
     If Slot is greater than or equal to 0;
         NativeGlobalKindPosition = Slot + 1;
@@ -374,7 +385,13 @@ Action NativeCheckGlobalStoreKind Slot: Integers, Kind: Text;
                 NativeFailed = 1;
             Else;
                 If NativeControlFlowDepth is greater than 0 and NativeGlobalStoredKind is not equal to "D";
-                    NativeFailed = 1;
+                    NativeIfJoinStoreAllowed = 0;
+                    If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to 1 and NativeIfDepth is equal to 1;
+                        NativeIfJoinStoreAllowed = 1;
+                    Done.
+                    If NativeIfJoinStoreAllowed is equal to 0;
+                        NativeFailed = 1;
+                    Done.
                 Done.
             Done.
             If NativeGlobalStoredKind is not equal to "?" and NativeGlobalStoredKind is not equal to "D";
@@ -1267,6 +1284,8 @@ Action NativePrepareProgram;
     NativeGlobalVariableNames = "";
     NativeGlobalVariableKinds = "";
     NativeGlobalVariableCount = 0;
+    NativeIfJoinEntryKinds = "";
+    NativeIfJoinThenKinds = "";
     NativeHasControlFlow = 0;
     NativePreparePos = 0;
     Length BytecodeOut;
@@ -1959,6 +1978,16 @@ Action EmitStraightIntegerProgram;
                 NativeIfLabelText = @_;
                 Set NativeIfLabels NativeIfDepth to NativeIfCounter;
                 Set NativeIfElseSeen NativeIfDepth to 0;
+                If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to 0 and NativeIfDepth is equal to 0;
+                    NativeIfJoinEntryKinds = "";
+                    NativeIfJoinSlot = 0;
+                    While NativeIfJoinSlot is less than NativeGlobalVariableCount;
+                        NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
+                        Get NativeGlobalVariableKinds NativeIfJoinSlotPosition;
+                        Append @_ to NativeIfJoinEntryKinds;
+                        Add 1 to NativeIfJoinSlot;
+                    Done.
+                Done.
                 If NativeX86 is equal to 1;
                     NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n    test %rax, %rax\n    jz L_kuro_else_" + NativeIfLabelText + "\n";
                 Else;
@@ -1980,6 +2009,23 @@ Action EmitStraightIntegerProgram;
                 Get NativeIfElseSeen NativeIfIndex;
                 If @_ is equal to 0;
                     Set NativeIfElseSeen NativeIfIndex to 1;
+                    If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to 1 and NativeIfDepth is equal to 1;
+                        NativeIfJoinThenKinds = "";
+                        NativeIfJoinSlot = 0;
+                        While NativeIfJoinSlot is less than NativeGlobalVariableCount;
+                            NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
+                            Get NativeGlobalVariableKinds NativeIfJoinSlotPosition;
+                            Append @_ to NativeIfJoinThenKinds;
+                            Add 1 to NativeIfJoinSlot;
+                        Done.
+                        NativeIfJoinSlot = 0;
+                        While NativeIfJoinSlot is less than NativeGlobalVariableCount;
+                            NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
+                            Get NativeIfJoinEntryKinds NativeIfJoinSlotPosition;
+                            Set NativeGlobalVariableKinds NativeIfJoinSlotPosition to @_;
+                            Add 1 to NativeIfJoinSlot;
+                        Done.
+                    Done.
                     Get NativeIfLabels NativeIfIndex;
                     Call NativeLengthToText @_;
                     NativeIfLabelText = @_;
@@ -2003,6 +2049,54 @@ Action EmitStraightIntegerProgram;
                 Get NativeIfLabels NativeIfIndex;
                 Call NativeLengthToText @_;
                 NativeIfLabelText = @_;
+                If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to 1 and NativeIfDepth is equal to 1;
+                    Get NativeIfElseSeen NativeIfIndex;
+                    NativeIfJoinHasElse = @_;
+                    If NativeIfJoinHasElse is equal to 0;
+                        NativeIfJoinThenKinds = "";
+                        NativeIfJoinSlot = 0;
+                        While NativeIfJoinSlot is less than NativeGlobalVariableCount;
+                            NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
+                            Get NativeGlobalVariableKinds NativeIfJoinSlotPosition;
+                            Append @_ to NativeIfJoinThenKinds;
+                            Add 1 to NativeIfJoinSlot;
+                        Done.
+                    Done.
+                    NativeIfJoinSlot = 0;
+                    While NativeIfJoinSlot is less than NativeGlobalVariableCount;
+                        NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
+                        Get NativeIfJoinEntryKinds NativeIfJoinSlotPosition;
+                        NativeIfJoinEntryKind = @_;
+                        Get NativeIfJoinThenKinds NativeIfJoinSlotPosition;
+                        NativeIfJoinThenKind = @_;
+                        NativeIfJoinElseKind = NativeIfJoinEntryKind;
+                        If NativeIfJoinHasElse is equal to 1;
+                            NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
+                            Get NativeGlobalVariableKinds NativeIfJoinSlotPosition;
+                            NativeIfJoinElseKind = @_;
+                        Done.
+                        If NativeIfJoinEntryKind is equal to "?";
+                            If NativeIfJoinThenKind is equal to "D" or NativeIfJoinElseKind is equal to "D";
+                                If NativeIfJoinThenKind is not equal to "D" or NativeIfJoinElseKind is not equal to "D";
+                                    NativeFailed = 1;
+                                Done.
+                            Done.
+                            If NativeIfJoinThenKind is not equal to "?" and NativeIfJoinElseKind is not equal to "?" and NativeIfJoinThenKind is not equal to NativeIfJoinElseKind;
+                                NativeFailed = 1;
+                            Done.
+                            If NativeIfJoinThenKind is not equal to "?" and NativeIfJoinThenKind is equal to NativeIfJoinElseKind;
+                                NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
+                                Set NativeGlobalVariableKinds NativeIfJoinSlotPosition to NativeIfJoinThenKind;
+                            Else;
+                                If NativeIfJoinElseKind is not equal to "?";
+                                    NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
+                                    Set NativeGlobalVariableKinds NativeIfJoinSlotPosition to NativeIfJoinElseKind;
+                                Done.
+                            Done.
+                        Done.
+                        Add 1 to NativeIfJoinSlot;
+                    Done.
+                Done.
                 Get NativeIfElseSeen NativeIfIndex;
                 If @_ is equal to 1;
                     NativeOut = NativeOut + "L_kuro_endif_" + NativeIfLabelText + ":\n";
@@ -2307,7 +2401,15 @@ Action EmitStraightIntegerProgram;
                             Else;
                                 # A read before a first store observes the legacy Integer zero.
                                 If @_ is equal to "?";
-                                    Set NativeGlobalVariableKinds NativeGlobalKindPosition to "I";
+                                    NativeIfJoinUnknownRead = 0;
+                                    If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to 1 and NativeIfDepth is equal to 1;
+                                        NativeIfJoinUnknownRead = 1;
+                                    Done.
+                                    If NativeIfJoinUnknownRead is equal to 1;
+                                        NativeFailed = 1;
+                                    Else;
+                                        Set NativeGlobalVariableKinds NativeGlobalKindPosition to "I";
+                                    Done.
                                 Done.
                             Done.
                         Done.

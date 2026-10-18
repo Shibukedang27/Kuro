@@ -1439,6 +1439,13 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
         generator, tmp_path, target, decimal_control_flow_bytecode(),
         DECIMAL_CONTROL_FLOW_OUTPUT, "control-flow",
     )
+    from test_native_branch_joins import (
+        BRANCH_JOIN_OUTPUT, branch_join_bytecode, branch_join_rejection_cases,
+    )
+
+    assert_compiled_decimal_program(
+        generator, tmp_path, target, branch_join_bytecode(), BRANCH_JOIN_OUTPUT, "branch-joins",
+    )
     for suffix in (
         ["BC_CONST", "1", "BC_STORE_LIST", "Balance"],
         ["BC_CONST_TEXT", "text", "BC_ADD", "Balance"],
@@ -1462,6 +1469,23 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
         assert rejected.returncode == 1
         assert rejected.stdout == ""
         assert rejected.stderr == ""
+
+    rejection_cases = branch_join_rejection_cases()
+    for name in (
+        "then-only-decimal", "else-only-decimal", "decimal-without-else",
+        "decimal-integer-join", "integer-decimal-join", "decimal-text-join",
+        "text-decimal-join", "integer-text-join", "text-integer-join",
+    ):
+        rejected = subprocess.run(
+            [str(generator)],
+            input="kuro.bytecode/1\n" + "\n".join(
+                ["BC_CONST", "1.25", "BC_STORE_LIST", "Balance", *rejection_cases[name]]
+            ) + "\n",
+            capture_output=True, text=True, timeout=30,
+        )
+        assert rejected.returncode == 1, name
+        assert rejected.stdout == "", name
+        assert rejected.stderr == "", name
 
 
 def assert_compiled_decimal_program(generator, tmp_path, target, tokens, expected, name):

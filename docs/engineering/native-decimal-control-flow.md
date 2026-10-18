@@ -37,6 +37,8 @@ Cross-assembly covers Linux x86-64, macOS x86-64, and macOS ARM64. Linux native 
 
 ## Next path
 
+The follow-up [bounded both-arm initialization design](native-definite-branch-joins.md) implements the first top-level, function-free `If/Else` slice. The rejection boundaries and verification above describe PR #67 itself, not the follow-up.
+
 Add bounded definite-assignment/kind joins for first initialization in both branch arms, with explicit handling of skipped branches and loop backedges. Separately analyze Action-shared slots and initialization across calls rather than relaxing the Action guard. Broader native compiler/runtime lowering, formatter parity, and bootstrap performance remain open.
 
 A clean checkout still cannot rebuild native production images independently of Python. Generated images are still constructed with host assemblers/linkers. Repository-owned object/executable construction, broader runtime/standard-library parity, and genuine target validation remain necessary. Keep this PR and the dependency stack open and unmerged.
