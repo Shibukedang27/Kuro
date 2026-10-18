@@ -1428,13 +1428,50 @@ DECIMAL_PRINTING_OUTPUT = (
 def assert_compiled_decimal_storage(generator, tmp_path, target):
     from test_native_decimal_storage import decimal_storage_bytecode, DECIMAL_STORAGE_OUTPUT
 
+    assert_compiled_decimal_program(
+        generator, tmp_path, target, decimal_storage_bytecode(), DECIMAL_STORAGE_OUTPUT, "storage"
+    )
+    from test_native_decimal_control_flow import (
+        decimal_control_flow_bytecode, DECIMAL_CONTROL_FLOW_OUTPUT,
+    )
+
+    assert_compiled_decimal_program(
+        generator, tmp_path, target, decimal_control_flow_bytecode(),
+        DECIMAL_CONTROL_FLOW_OUTPUT, "control-flow",
+    )
+    for suffix in (
+        ["BC_CONST", "1", "BC_STORE_LIST", "Balance"],
+        ["BC_CONST_TEXT", "text", "BC_ADD", "Balance"],
+        ["BC_CONST", "0", "BC_IF_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST", "Fresh", "BC_IF_END"],
+        ["BC_CONST", "0", "BC_REPEAT_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST", "Fresh", "BC_REPEAT_END"],
+        ["BC_CONST", "0", "BC_IF_BEGIN", "BC_CONST", "1", "BC_STORE_LIST", "Balance", "BC_IF_END"],
+        ["BC_CONST", "1", "BC_IF_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST", "_",
+         "BC_ELSE_BEGIN", "BC_CONST", "2", "BC_STORE_LIST", "_", "BC_IF_END", "BC_LOADVAR", "_", "BC_PRINT"],
+        ["BC_CONST", "0", "BC_REPEAT_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST", "_",
+         "BC_REPEAT_END", "BC_LOADVAR", "_", "BC_PRINT"],
+        ["BC_CONST", "1.5", "BC_STORE_LIST", "_", "BC_CONST", "1", "BC_IF_BEGIN",
+         "BC_CONST", "2", "BC_UPDATE", "_", "BC_IF_END"],
+        ["BC_LOADVAR", "Balance", "BC_CONST", "1", "BC_IF_BEGIN", "BC_IF_END", "BC_PRINT"],
+        ["BC_FUNC_BEGIN", "Unused", "BC_FUNC_END"],
+    ):
+        tokens = ["BC_CONST", "1.25", "BC_STORE_LIST", "Balance", *suffix]
+        rejected = subprocess.run(
+            [str(generator)], input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+            capture_output=True, text=True, timeout=30,
+        )
+        assert rejected.returncode == 1
+        assert rejected.stdout == ""
+        assert rejected.stderr == ""
+
+
+def assert_compiled_decimal_program(generator, tmp_path, target, tokens, expected, name):
     generated = subprocess.run(
         [str(generator)],
-        input="kuro.bytecode/1\n" + "\n".join(decimal_storage_bytecode()) + "\n",
+        input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
         capture_output=True, text=True, timeout=30, check=True,
     )
     assert generated.stderr == ""
-    executable = tmp_path / f"decimal-storage-{target}"
+    executable = tmp_path / f"decimal-{name}-{target}"
     link = ["clang", "-nostdlib"]
     if target == "aarch64-macos":
         link += ["-Wl,-e,_main", "-lSystem"]
@@ -1447,26 +1484,12 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
     result = subprocess.run(
         [str(executable)], capture_output=True, text=True, timeout=5, check=True,
     )
-    assert result.stdout == DECIMAL_STORAGE_OUTPUT
+    assert result.stdout == expected
     assert result.stderr == ""
     undefined = subprocess.run(
         ["nm", "-u", str(executable)], capture_output=True, text=True, check=True,
     )
     assert undefined.stdout.strip() == ""
-    for suffix in (
-        ["BC_CONST", "1", "BC_STORE_LIST", "Balance"],
-        ["BC_CONST_TEXT", "text", "BC_ADD", "Balance"],
-        ["BC_CONST", "1", "BC_IF_BEGIN", "BC_IF_END"],
-        ["BC_FUNC_BEGIN", "Unused", "BC_FUNC_END"],
-    ):
-        tokens = ["BC_CONST", "1.25", "BC_STORE_LIST", "Balance", *suffix]
-        rejected = subprocess.run(
-            [str(generator)], input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
-            capture_output=True, text=True, timeout=30,
-        )
-        assert rejected.returncode == 1
-        assert rejected.stdout == ""
-        assert rejected.stderr == ""
 
 
 @pytest.mark.skipif(

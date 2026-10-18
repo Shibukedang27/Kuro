@@ -340,3 +340,19 @@ def test_kuro_vm_matches_host_for_named_decimal_storage_and_mutation():
     assert failed in (None, 0)
     assert output == [3.75, 1.25, 2.5, 3.0]
     assert hosted.stdout == "".join(f"{value}\n" for value in output)
+
+
+def test_kuro_vm_matches_host_for_decimal_control_flow_globals():
+    from test_native_decimal_control_flow import (
+        DECIMAL_CONTROL_FLOW_OUTPUT,
+        DECIMAL_CONTROL_FLOW_PROGRAM,
+    )
+
+    hosted = run_source(DECIMAL_CONTROL_FLOW_PROGRAM)
+    assert hosted.ok, hosted.compile.diags.render_all() if not hosted.compile.ok else hosted.runtime_error
+    env = run_kuro_vm_environment(DECIMAL_CONTROL_FLOW_PROGRAM)
+
+    assert env["VMFailed"] in (None, 0)
+    assert env["VMOutput"] == [2.0, 3.0, 3.5, 5.0, 2.0, 1.75, 2, -0.0]
+    assert hosted.stdout == DECIMAL_CONTROL_FLOW_OUTPUT
+    assert hosted.stdout == "".join(f"{value}\n" for value in env["VMOutput"])

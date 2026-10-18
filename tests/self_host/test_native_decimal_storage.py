@@ -182,15 +182,11 @@ def test_decimal_global_storage_rejects_prior_type_conflicts_and_invalid_mutatio
 @pytest.mark.parametrize(
     "suffix",
     [
-        ("BC_CONST", "1", "BC_IF_BEGIN", "BC_IF_END"),
-        ("BC_CONST", "1", "BC_REPEAT_BEGIN", "BC_REPEAT_END"),
-        ("BC_CONST", "0", "BC_STORE_LIST", "Condition", "BC_WHILE_BEGIN",
-         "BC_LOADVAR", "Condition", "BC_CONST", "1", "BC_CMP", "lt", "BC_WHILE_TEST", "BC_WHILE_END"),
         ("BC_FUNC_BEGIN", "DoNothing", "BC_FUNC_END"),
     ],
 )
 @pytest.mark.parametrize("target", ["x86_64-linux", "x86_64-macos", "aarch64-macos"])
-def test_decimal_global_storage_is_rejected_with_control_flow_or_actions_even_after_store(suffix, target):
+def test_decimal_global_storage_is_rejected_with_actions_even_after_store(suffix, target):
     env = _bytecode("BC_CONST", "1.5", "BC_STORE_LIST", "D", *suffix, target=target)
     assert env["NativeFailed"] == 1
     assert env["NativeOut"] == ""
