@@ -1,6 +1,6 @@
 # First Decimal initialization in both branch arms
 
-This increment is stacked on [PR #67](https://github.com/Shibukedang27/Kuro/pull/67), whose checkout and remote head were verified as `eab3eae360aea5e38f6b1f652db38a9c3df49fb9`, open and unmerged, based on `feat/native-decimal-global-storage`. All eight checks on that base head succeeded. This is a bounded Kuro-authored native-generator improvement, not completion of toolchain independence.
+[PR #68](https://github.com/Shibukedang27/Kuro/pull/68) is open/unmerged, stacked on [PR #67](https://github.com/Shibukedang27/Kuro/pull/67), whose checkout and remote head were verified as `eab3eae360aea5e38f6b1f652db38a9c3df49fb9`, open and unmerged, based on `feat/native-decimal-global-storage`. All eight checks on that base head succeeded. This is a bounded Kuro-authored native-generator improvement, not completion of toolchain independence.
 
 ## What changed and why
 
