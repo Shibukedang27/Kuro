@@ -1,6 +1,6 @@
 # Named Decimal storage and mutation
 
-This slice builds on PR #65. It gives function-free, straight-line programs named scalar Decimal storage in the Kuro-owned native generator. It is not completion of compiler or toolchain independence.
+[PR #66](https://github.com/Shibukedang27/Kuro/pull/66) is stacked on PR #65 (`6fbe66e`). It gives function-free, straight-line programs named scalar Decimal storage in the Kuro-owned native generator. It is not completion of compiler or toolchain independence.
 
 ## What changed and why
 
@@ -22,6 +22,7 @@ These restrictions deliberately avoid pretending emission order is execution ord
 
 - Native-codegen, initial storage regressions, and VM gate: **208 passed, 18 skipped in 2734.33s (45m34s)**. This includes a fresh Linux compiled Kuro generator; its fixture setup took **2683.85s (44m44s)**. No generator implementation changed during this gate.
 - The subsequently strengthened storage/VM gate: **77 passed in 17.12s** (**54 storage cases plus 23 VM cases**), including three-target rejection cases and ARM64 instruction execution. These overlap the preceding gate; the counts must not be added together.
+- Final portable language/toolchain suite: **613 passed in 45.53s**.
 - Linux backend/CLI subset: **12 passed**, 69 deselected. Existing hosted/cross-target native regressions: **110 passed, 5 skipped**, 62 deselected.
 - Source programs pass through the self-hosted compiler driver and Kuro-authored generator, then assemble for Linux x86-64, macOS x86-64, and macOS ARM64. Linux hosted-emitter output and fresh compiled-Kuro-generator output execute with exact stdout `3.75`, `1.25`, `2.5`, `3.0`, and `-0.0`, one value per line. This exercises nonzero Integer and Decimal addends, copy independence, computed replacement, reassignment, and signed-zero storage.
 - The emitted ARM64 storage/mutation/formatter instructions execute under qemu after adapting only Mach-O sections/relocations, entry naming, and Darwin syscall numbers to Linux ELF. Its static image has no undefined symbols. This is instruction-level execution evidence, **not Darwin runtime verification**.
