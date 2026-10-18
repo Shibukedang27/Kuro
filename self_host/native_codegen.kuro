@@ -260,6 +260,7 @@ NativeGlobalVariableKinds is Text;
 NativeGlobalStoredKind is Text;
 NativeGlobalKindPosition = 0;
 NativeHasControlFlow = 0;
+NativeControlFlowDepth = 0;
 NativeGlobalCurrentName is Text;
 NativeGlobalNamePosition = 0;
 NativeGlobalSearchIndex = 0;
@@ -361,16 +362,20 @@ Action NativeRegisterGlobalVariable Name: Text;
     Return NativeGlobalVariableSlot;
 Done.
 
-# Only straight-line, function-free named slots gain Decimal kinds here.
-# Reject kind changes rather than guessing branch/call-dependent representations.
+# Function-free named slots may gain Decimal kinds before control flow.
+# Within control flow, an established Decimal slot must remain Decimal.
 Action NativeCheckGlobalStoreKind Slot: Integers, Kind: Text;
     If Slot is greater than or equal to 0;
         NativeGlobalKindPosition = Slot + 1;
         Get NativeGlobalVariableKinds NativeGlobalKindPosition;
         NativeGlobalStoredKind = @_;
         If Kind is equal to "D";
-            If NativeFunctionCount is greater than 0 or NativeHasControlFlow is equal to 1;
+            If NativeFunctionCount is greater than 0;
                 NativeFailed = 1;
+            Else;
+                If NativeControlFlowDepth is greater than 0 and NativeGlobalStoredKind is not equal to "D";
+                    NativeFailed = 1;
+                Done.
             Done.
             If NativeGlobalStoredKind is not equal to "?" and NativeGlobalStoredKind is not equal to "D";
                 NativeFailed = 1;
@@ -1578,6 +1583,7 @@ Action EmitStraightIntegerProgram;
     NativeIfDepth = 0;
     NativeRepeatDepth = 0;
     NativeWhileDepth = 0;
+    NativeControlFlowDepth = 0;
     NativeX86 = 0;
     NativeOut = ".section __TEXT,__text\n.globl _main\n_main:\n    sub sp, sp, #2048\n    mov x19, sp\n";
     If NativeTarget is equal to "x86_64-macos" or NativeTarget is equal to "x86_64-linux";
@@ -1636,6 +1642,20 @@ Action EmitStraightIntegerProgram;
         NativeStraightOp = @_;
         Add 1 to NativeStraightPos;
         NativeStraightKnown = 0;
+
+        # Function-free source regions join at statement boundaries, not value stacks.
+        If NativeFunctionMode is equal to 0 and NativeFunctionCount is equal to 0;
+            If NativeStraightOp is equal to "BC_IF_BEGIN" or NativeStraightOp is equal to "BC_REPEAT_BEGIN";
+                If NativeStackDepth is not equal to 1;
+                    NativeFailed = 1;
+                Done.
+            Done.
+            If NativeStraightOp is equal to "BC_ELSE_BEGIN" or NativeStraightOp is equal to "BC_IF_END" or NativeStraightOp is equal to "BC_REPEAT_END" or NativeStraightOp is equal to "BC_WHILE_BEGIN" or NativeStraightOp is equal to "BC_WHILE_END";
+                If NativeStackDepth is not equal to 0;
+                    NativeFailed = 1;
+                Done.
+            Done.
+        Done.
 
         If NativeStraightOp is equal to "BC_FUNC_BEGIN";
             NativeStraightKnown = 1;
@@ -1947,6 +1967,7 @@ Action EmitStraightIntegerProgram;
                 NativeStackDepth = NativeStackDepth - 1;
                 Add 1 to NativeIfDepth;
                 Add 1 to NativeIfCounter;
+                Add 1 to NativeControlFlowDepth;
             Else;
                 NativeFailed = 1;
             Done.
@@ -1989,6 +2010,7 @@ Action EmitStraightIntegerProgram;
                     NativeOut = NativeOut + "L_kuro_else_" + NativeIfLabelText + ":\n";
                 Done.
                 NativeIfDepth = NativeIfDepth - 1;
+                NativeControlFlowDepth = NativeControlFlowDepth - 1;
             Else;
                 NativeFailed = 1;
             Done.
@@ -2017,6 +2039,7 @@ Action EmitStraightIntegerProgram;
                 Done.
                 Add 1 to NativeRepeatDepth;
                 Add 1 to NativeRepeatCounter;
+                Add 1 to NativeControlFlowDepth;
             Else;
                 NativeFailed = 1;
             Done.
@@ -2040,6 +2063,7 @@ Action EmitStraightIntegerProgram;
                         NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeRepeatOffsetText + "]\n    sub x0, x0, #1\n    str x0, [sp, #" + NativeRepeatOffsetText + "]\n    b L_kuro_repeat_" + NativeRepeatLabelText + "\nL_kuro_endrepeat_" + NativeRepeatLabelText + ":\n";
                     Done.
                     NativeRepeatDepth = NativeRepeatDepth - 1;
+                    NativeControlFlowDepth = NativeControlFlowDepth - 1;
                 Else;
                     NativeFailed = 1;
                 Done.
@@ -2059,6 +2083,7 @@ Action EmitStraightIntegerProgram;
                 NativeOut = NativeOut + "L_kuro_while_" + NativeWhileLabelText + ":\n";
                 Add 1 to NativeWhileDepth;
                 Add 1 to NativeWhileCounter;
+                Add 1 to NativeControlFlowDepth;
             Else;
                 NativeFailed = 1;
             Done.
@@ -2112,6 +2137,7 @@ Action EmitStraightIntegerProgram;
                         NativeOut = NativeOut + "    b L_kuro_while_" + NativeWhileLabelText + "\nL_kuro_endwhile_" + NativeWhileLabelText + ":\n";
                     Done.
                     NativeWhileDepth = NativeWhileDepth - 1;
+                    NativeControlFlowDepth = NativeControlFlowDepth - 1;
                 Else;
                     NativeFailed = 1;
                 Done.
@@ -2148,6 +2174,11 @@ Action EmitStraightIntegerProgram;
                     Done.
                     If NativeVariableName is not equal to "_";
                         Call NativeCheckGlobalStoreKind NativeVariableSlot, NativeStoreValueKind;
+                    Else;
+                        # The special result slot also needs an invariant across skipped paths.
+                        If NativeControlFlowDepth is greater than 0 and NativeStoreValueKind is not equal to NativeMainUnderscoreKind;
+                            NativeFailed = 1;
+                        Done.
                     Done.
                 Else;
                     Call NativeFindFunctionParamSlot NativeVariableName, 0;
@@ -2339,6 +2370,13 @@ Action EmitStraightIntegerProgram;
                                 NativeMutationTargetKind = "D";
                             Else;
                                 Call NativeCheckGlobalStoreKind NativeMutationGlobalSlot, NativeMutationValueKind;
+                            Done.
+                        Done.
+                    Else;
+                        # Main result-slot mutation still uses the Integer lowering.
+                        If NativeControlFlowDepth is greater than 0;
+                            If NativeMainUnderscoreKind is not equal to "I" or NativeMutationValueKind is not equal to "I";
+                                NativeFailed = 1;
                             Done.
                         Done.
                     Done.
