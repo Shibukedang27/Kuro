@@ -324,3 +324,19 @@ def test_kuro_vm_clears_stale_decimal_display_after_integer_overwrite():
     env = run_kuro_vm_environment("Amounts = 1.25, 2.5; Set Amounts 0 to 7; Print Amounts.")
     assert env["VMOutput"] == [7, 2.5]
     assert env["VMOutputDisplay"] == ["", "2.5"]
+
+
+def test_kuro_vm_matches_host_for_named_decimal_storage_and_mutation():
+    source = (
+        "Balance = 1.25;\nCopy = Balance;\n"
+        "Add 2 to Balance;\nAdd 0.5 to Balance;\n"
+        "Print Balance.\nPrint Copy.\n"
+        "Update Balance to Copy * 2;\nPrint Balance.\n"
+        "Balance = Balance + 0.5;\nPrint Balance.\n"
+    )
+    hosted = run_source(source)
+    assert hosted.ok
+    output, failed = run_kuro_vm(source)
+    assert failed in (None, 0)
+    assert output == [3.75, 1.25, 2.5, 3.0]
+    assert hosted.stdout == "".join(f"{value}\n" for value in output)

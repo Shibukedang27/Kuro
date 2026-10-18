@@ -1425,6 +1425,50 @@ DECIMAL_PRINTING_OUTPUT = (
 )
 
 
+def assert_compiled_decimal_storage(generator, tmp_path, target):
+    from test_native_decimal_storage import decimal_storage_bytecode, DECIMAL_STORAGE_OUTPUT
+
+    generated = subprocess.run(
+        [str(generator)],
+        input="kuro.bytecode/1\n" + "\n".join(decimal_storage_bytecode()) + "\n",
+        capture_output=True, text=True, timeout=30, check=True,
+    )
+    assert generated.stderr == ""
+    executable = tmp_path / f"decimal-storage-{target}"
+    link = ["clang", "-nostdlib"]
+    if target == "aarch64-macos":
+        link += ["-Wl,-e,_main", "-lSystem"]
+    else:
+        link += ["-target", "x86_64-unknown-linux-gnu", "-Wl,-e,_start"]
+    subprocess.run(
+        [*link, "-x", "assembler", "-", "-o", str(executable)],
+        input=generated.stdout, capture_output=True, text=True, check=True,
+    )
+    result = subprocess.run(
+        [str(executable)], capture_output=True, text=True, timeout=5, check=True,
+    )
+    assert result.stdout == DECIMAL_STORAGE_OUTPUT
+    assert result.stderr == ""
+    undefined = subprocess.run(
+        ["nm", "-u", str(executable)], capture_output=True, text=True, check=True,
+    )
+    assert undefined.stdout.strip() == ""
+    for suffix in (
+        ["BC_CONST", "1", "BC_STORE_LIST", "Balance"],
+        ["BC_CONST_TEXT", "text", "BC_ADD", "Balance"],
+        ["BC_CONST", "1", "BC_IF_BEGIN", "BC_IF_END"],
+        ["BC_FUNC_BEGIN", "Unused", "BC_FUNC_END"],
+    ):
+        tokens = ["BC_CONST", "1.25", "BC_STORE_LIST", "Balance", *suffix]
+        rejected = subprocess.run(
+            [str(generator)], input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+            capture_output=True, text=True, timeout=30,
+        )
+        assert rejected.returncode == 1
+        assert rejected.stdout == ""
+        assert rejected.stderr == ""
+
+
 @pytest.mark.skipif(
     platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
     reason="requires a Linux x86-64 execution host",
@@ -1454,6 +1498,14 @@ def test_kuro_owned_x86_linux_codegen_runs_decimal_printing(tmp_path, x86_linux_
 
     assert result.stdout == DECIMAL_PRINTING_OUTPUT
     assert result.stderr == ""
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+def test_kuro_owned_x86_linux_codegen_runs_decimal_storage(tmp_path, x86_linux_codegen):
+    assert_compiled_decimal_storage(x86_linux_codegen, tmp_path, "x86_64-linux")
 
 
 @pytest.mark.skipif(
@@ -1775,6 +1827,7 @@ def test_native_kuro_codegen_image_consumes_artifact(tmp_path):
         ["nm", "-u", str(decimal_image)], capture_output=True, text=True, check=True,
     ).stdout
     assert imports.strip() == ""
+    assert_compiled_decimal_storage(codegen, tmp_path, "aarch64-macos")
     accepted_tokens = _bytecode_for_token_limit(if_count=1021, print_count=4)
     boundary = subprocess.run(
         [str(codegen)],
