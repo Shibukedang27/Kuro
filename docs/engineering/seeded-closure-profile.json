@@ -1,0 +1,266 @@
+{
+  "baseline_head": "6043938e2e14fd97ad4f2b430573945deabce1dd",
+  "measurements": {
+    "seeded-before": {
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "platform": "Linux-6.18.38+-x86_64-with-glibc2.39",
+      "size": 200,
+      "head": "6043938e2e14fd97ad4f2b430573945deabce1dd",
+      "compiler_dirty": false,
+      "source_sha256": "ccc1342299b750815fe9c79414b40635b03f3f2acb31efaef47b23cc8551b6e3",
+      "function_instructions": {
+        "MakeAdder": 807,
+        "AddBase": 4
+      },
+      "instrumented": false,
+      "profiled": false,
+      "emit_seconds": [
+        1.901212812983431,
+        1.9137458530021831,
+        1.9699256740277633
+      ],
+      "assembly_bytes": 104608,
+      "assembly_sha256": "196b658c231a28e7d50fceea30157754652bbdb3a9e3b487ccada0b7a5041263"
+    },
+    "seeded-independent-before": {
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "platform": "Linux-6.18.38+-x86_64-with-glibc2.39",
+      "size": 200,
+      "head": "6043938e2e14fd97ad4f2b430573945deabce1dd",
+      "compiler_dirty": false,
+      "source_sha256": "ccc1342299b750815fe9c79414b40635b03f3f2acb31efaef47b23cc8551b6e3",
+      "function_instructions": {
+        "MakeAdder": 807,
+        "AddBase": 4
+      },
+      "instrumented": false,
+      "profiled": false,
+      "cfg_cache_experiment": false,
+      "emit_seconds": [
+        1.8801377129275352
+      ],
+      "assembly_bytes": 104608,
+      "assembly_sha256": "196b658c231a28e7d50fceea30157754652bbdb3a9e3b487ccada0b7a5041263"
+    },
+    "seeded-counts-before": {
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "platform": "Linux-6.18.38+-x86_64-with-glibc2.39",
+      "size": 200,
+      "head": "6043938e2e14fd97ad4f2b430573945deabce1dd",
+      "compiler_dirty": false,
+      "source_sha256": "ccc1342299b750815fe9c79414b40635b03f3f2acb31efaef47b23cc8551b6e3",
+      "function_instructions": {
+        "MakeAdder": 807,
+        "AddBase": 4
+      },
+      "instrumented": true,
+      "profiled": true,
+      "emit_seconds": [
+        2.2490710359998047
+      ],
+      "assembly_bytes": 104608,
+      "assembly_sha256": "196b658c231a28e7d50fceea30157754652bbdb3a9e3b487ccada0b7a5041263",
+      "counts_total_across_repetitions": {
+        "analyzer_calls": 2,
+        "cfg_builds": 2,
+        "body_visits": 1614,
+        "copied_names": 1300884,
+        "deep_target_copies": 1300884,
+        "merge_attempts": 0,
+        "merged_names": 0,
+        "merge_updates": 0
+      }
+    },
+    "seeded-cfg-before": {
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "platform": "Linux-6.18.38+-x86_64-with-glibc2.39",
+      "size": 200,
+      "head": "6043938e2e14fd97ad4f2b430573945deabce1dd",
+      "compiler_dirty": false,
+      "source_sha256": "ccc1342299b750815fe9c79414b40635b03f3f2acb31efaef47b23cc8551b6e3",
+      "function_instructions": {
+        "MakeAdder": 807,
+        "AddBase": 4
+      },
+      "instrumented": false,
+      "profiled": false,
+      "cfg_cache_experiment": true,
+      "emit_seconds": [
+        2.065648488001898,
+        2.1344736859900877,
+        1.9997701379470527
+      ],
+      "assembly_bytes": 104608,
+      "assembly_sha256": "196b658c231a28e7d50fceea30157754652bbdb3a9e3b487ccada0b7a5041263"
+    },
+    "seeded-cfg-counts-before": {
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "platform": "Linux-6.18.38+-x86_64-with-glibc2.39",
+      "size": 200,
+      "head": "6043938e2e14fd97ad4f2b430573945deabce1dd",
+      "compiler_dirty": false,
+      "source_sha256": "ccc1342299b750815fe9c79414b40635b03f3f2acb31efaef47b23cc8551b6e3",
+      "function_instructions": {
+        "MakeAdder": 807,
+        "AddBase": 4
+      },
+      "instrumented": true,
+      "profiled": false,
+      "cfg_cache_experiment": true,
+      "emit_seconds": [
+        2.1474371339427307
+      ],
+      "assembly_bytes": 104608,
+      "assembly_sha256": "196b658c231a28e7d50fceea30157754652bbdb3a9e3b487ccada0b7a5041263",
+      "counts_total_across_repetitions": {
+        "analyzer_calls": 2,
+        "cfg_builds": 1,
+        "body_visits": 1614,
+        "copied_names": 1300884,
+        "deep_target_copies": 1300884,
+        "merge_attempts": 0,
+        "merged_names": 0,
+        "merge_updates": 0
+      }
+    },
+    "seeded-after": {
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "platform": "Linux-6.18.38+-x86_64-with-glibc2.39",
+      "size": 200,
+      "head": "6043938e2e14fd97ad4f2b430573945deabce1dd",
+      "compiler_dirty": true,
+      "source_sha256": "ccc1342299b750815fe9c79414b40635b03f3f2acb31efaef47b23cc8551b6e3",
+      "function_instructions": {
+        "MakeAdder": 807,
+        "AddBase": 4
+      },
+      "instrumented": false,
+      "profiled": false,
+      "cfg_cache_experiment": false,
+      "emit_seconds": [
+        0.027446512947790325,
+        0.02703048405237496,
+        0.02750637603458017
+      ],
+      "assembly_bytes": 104608,
+      "assembly_sha256": "196b658c231a28e7d50fceea30157754652bbdb3a9e3b487ccada0b7a5041263"
+    },
+    "seeded-counts-after": {
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "platform": "Linux-6.18.38+-x86_64-with-glibc2.39",
+      "size": 200,
+      "head": "6043938e2e14fd97ad4f2b430573945deabce1dd",
+      "compiler_dirty": true,
+      "source_sha256": "ccc1342299b750815fe9c79414b40635b03f3f2acb31efaef47b23cc8551b6e3",
+      "function_instructions": {
+        "MakeAdder": 807,
+        "AddBase": 4
+      },
+      "instrumented": true,
+      "profiled": true,
+      "cfg_cache_experiment": false,
+      "emit_seconds": [
+        0.07512715097982436
+      ],
+      "assembly_bytes": 104608,
+      "assembly_sha256": "196b658c231a28e7d50fceea30157754652bbdb3a9e3b487ccada0b7a5041263",
+      "counts_total_across_repetitions": {
+        "analyzer_calls": 2,
+        "cfg_builds": 2,
+        "body_visits": 1614,
+        "copied_names": 1300884,
+        "deep_target_copies": 0,
+        "merge_attempts": 0,
+        "merged_names": 0,
+        "merge_updates": 0
+      }
+    },
+    "seeded-large-before": {
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "platform": "Linux-6.18.38+-x86_64-with-glibc2.39",
+      "size": 400,
+      "head": "6043938e2e14fd97ad4f2b430573945deabce1dd",
+      "compiler_dirty": false,
+      "source_sha256": "a59fa46f3d599d1eed9ec7a0c0d302f52a20b12ab8e3682e1ff0208eac07242b",
+      "function_instructions": {
+        "MakeAdder": 1607,
+        "AddBase": 4
+      },
+      "instrumented": false,
+      "profiled": false,
+      "cfg_cache_experiment": false,
+      "emit_seconds": [
+        11.254181680036709,
+        10.497865949058905,
+        10.056340673007071
+      ],
+      "assembly_bytes": 173608,
+      "assembly_sha256": "044b63c270bc54650ce54eee342c4280cd55683658c3cddb444a390dc43ccbd0"
+    },
+    "seeded-large-after": {
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "platform": "Linux-6.18.38+-x86_64-with-glibc2.39",
+      "size": 400,
+      "head": "6043938e2e14fd97ad4f2b430573945deabce1dd",
+      "compiler_dirty": true,
+      "source_sha256": "a59fa46f3d599d1eed9ec7a0c0d302f52a20b12ab8e3682e1ff0208eac07242b",
+      "function_instructions": {
+        "MakeAdder": 1607,
+        "AddBase": 4
+      },
+      "instrumented": false,
+      "profiled": false,
+      "cfg_cache_experiment": false,
+      "emit_seconds": [
+        0.12799100996926427,
+        0.1295965489698574,
+        0.13020145508926362
+      ],
+      "assembly_bytes": 173608,
+      "assembly_sha256": "044b63c270bc54650ce54eee342c4280cd55683658c3cddb444a390dc43ccbd0"
+    }
+  },
+  "original_native_sha256": "1ba3b87db9440bf3f23baa652fa2f8a612f3c1956590267999813602b4151e88",
+  "optimized_native_sha256": "32a4944bac3c3b619e85435f6dd2ccd2cdbd3b974baa498c50bcbb400fe3bd45",
+  "branch_loop_cfg_fixture": {
+    "before": {
+      "analyzer_calls": 29,
+      "cfg_builds": 29,
+      "body_visits": 262,
+      "copied_names": 1410,
+      "deep_target_copies": 1410,
+      "merge_attempts": 52,
+      "merged_names": 276,
+      "merge_updates": 44
+    },
+    "after": {
+      "analyzer_calls": 29,
+      "cfg_builds": 29,
+      "body_visits": 262,
+      "copied_names": 1410,
+      "deep_target_copies": 0,
+      "merge_attempts": 52,
+      "merged_names": 276,
+      "merge_updates": 44
+    },
+    "assembly_bytes": 40874,
+    "assembly_sha256": "cee1b988f6a53458960bce6f158ad9a509e898a0fa86193f9ccc2ddda7a8e492",
+    "all_non_copy_counters_identical": true
+  },
+  "unchanged_hosted_generator": {
+    "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+    "platform": "Linux-6.18.38+-x86_64-with-glibc2.39",
+    "root": "/workspace/Kuro",
+    "output_target": "x86_64-linux",
+    "host_image_target": "x86_64-linux",
+    "profile_enabled": false,
+    "head": "6043938e2e14fd97ad4f2b430573945deabce1dd",
+    "tracked_dirty": true,
+    "compile_seconds": 0.15614735300187021,
+    "functions": 39,
+    "function_instructions": 9143,
+    "emit_seconds": 0.6134862260660157,
+    "assembly_bytes": 1896239,
+    "assembly_sha256": "715a594ad187ee9ad837ae425a23215f00b5606e09f687c7cf5b267283834c68"
+  }
+}

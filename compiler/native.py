@@ -2075,10 +2075,11 @@ def emit_x86_64_linux(
             incoming = states[index]
             if incoming is None:
                 continue
-            state = {
-                name: (set(targets), is_known)
-                for name, (targets, is_known) in incoming.items()
-            }
+            # Target sets in states are read-only: transfers replace tuples,
+            # merges allocate new sets, and RETURN updates a separate set.
+            # Copy the mapping, not every target set; never mutate a shared
+            # target set in place (including empty/unknown facts).
+            state = incoming.copy()
             item = body[index]
             if item.op == "LOADVAR" and item.dest:
                 source = item.args[0]
@@ -2113,10 +2114,7 @@ def emit_x86_64_linux(
             for successor in successors[index]:
                 current = states[successor]
                 if current is None:
-                    states[successor] = {
-                        name: (set(targets), is_known)
-                        for name, (targets, is_known) in state.items()
-                    }
+                    states[successor] = state.copy()
                     pending.append(successor)
                     continue
                 merged: dict[str, tuple[set[str], bool]] = {}
