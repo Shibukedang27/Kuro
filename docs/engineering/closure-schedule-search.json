@@ -1,0 +1,317 @@
+{
+  "scope": "bounded empirical search; absence of mismatch is not proof",
+  "seed_start": 0,
+  "seed_count": 100,
+  "fixed_case_count": 8,
+  "generated_case_count": 400,
+  "case_count": 408,
+  "schedules": [
+    "lifo_forward",
+    "fifo_forward",
+    "lifo_reverse",
+    "fifo_reverse"
+  ],
+  "totals": {
+    "case_schedule_pairs": 1632,
+    "summary_compared": 1632,
+    "return_accumulators_compared": 1632,
+    "outcomes_compared": 1632,
+    "production_invocations": 4888,
+    "normalized_invocations": 4888,
+    "return_events": 15300,
+    "return_value_mismatches": 415
+  },
+  "mismatch_count": 207,
+  "mismatch_counts": {
+    "outcome": 0,
+    "final_summary": 28,
+    "return_accumulator_sequence": 207
+  },
+  "final_summary_counterexample_found": true,
+  "summary_counterexamples": [
+    {
+      "case": "minimal_final_summary_counterexample",
+      "schedule": "lifo_reverse",
+      "production_summary_sha256": "36dd0f845187bdf1f55dd8d4dfc960856d802c7161e4d1ad80098d2d6cbbfa0e",
+      "normalized_summary_sha256": "88d42c82f35d58404f55148bd87e1483df9d60eae32c1295569218ae24ef6bda"
+    },
+    {
+      "case": "adversarial_6",
+      "schedule": "lifo_reverse",
+      "production_summary_sha256": "3432e36800686cd1cbf9382fcc196c0b9fc1b1b1ca756255a300025d1ae5d655",
+      "normalized_summary_sha256": "4dffd54bdb8ffa594bd2064d5fa9f5cbbf2183c257ed7cf8cbffff60c6e40881"
+    },
+    {
+      "case": "adversarial_7",
+      "schedule": "lifo_reverse",
+      "production_summary_sha256": "fc1009c7febc4aa85206f933868fef7ad33ccbf752cbe85c94a4333a7dc90356",
+      "normalized_summary_sha256": "51fd5f6e00e732f1e1e4b6946e0ffe365921cf3b85d41133a857e197798d1ccc"
+    },
+    {
+      "case": "adversarial_13",
+      "schedule": "lifo_reverse",
+      "production_summary_sha256": "109e70ac1df197df6d8cced6e0de9425c227ff44e6651d681f6994e851db151e",
+      "normalized_summary_sha256": "6645629bb0dac7d42b3117a159f83d1a056acaf8bf53d4602e1163b4851871ec"
+    },
+    {
+      "case": "adversarial_17",
+      "schedule": "lifo_reverse",
+      "production_summary_sha256": "807f2e7027c7349f0682d516e5a69302c63230ac439f9a933dab1235e1f7230a",
+      "normalized_summary_sha256": "76a002681323dbc1313e961110fc3de26e27ed77f6964b60528d4cacbee7d698"
+    },
+    {
+      "case": "adversarial_21",
+      "schedule": "lifo_reverse",
+      "production_summary_sha256": "7854a3ebf9a8487b04669b82f08be87fb8076ce010e107a0349feb2d3f13ca46",
+      "normalized_summary_sha256": "c149c6009489ebf6395a8eb0b114eada795300605cb6d09e8671cd4e95ed0523"
+    },
+    {
+      "case": "adversarial_23",
+      "schedule": "lifo_reverse",
+      "production_summary_sha256": "1d0c9829b8c76db6cdc94090768abe98fea69149f7d7c8b206fc3e22802f1a49",
+      "normalized_summary_sha256": "4f053a2477c72947e676e924d76d7995e6fbe534e8babd54c31348e01f85b192"
+    },
+    {
+      "case": "adversarial_27",
+      "schedule": "lifo_reverse",
+      "production_summary_sha256": "877fdfdf9635212e252aabe25cbf725a54b411cc5d2d2aa885f96bf6e1cd4a3d",
+      "normalized_summary_sha256": "4bb7020f5a3d195df61054d561a38174589ae8f191b66b772d595fa6e0f9def0"
+    },
+    {
+      "case": "adversarial_30",
+      "schedule": "lifo_reverse",
+      "production_summary_sha256": "9e745f5bf6af6bc63c374912fdff46e1ad4b3e00f17ceec7e921eb1b44ab57e1",
+      "normalized_summary_sha256": "694f3c559d0e5af474dfd2d8787084f867fe14aa15b1f25bf88446bfba089072"
+    },
+    {
+      "case": "adversarial_32",
+      "schedule": "lifo_reverse",
+      "production_summary_sha256": "223fe9626bc215eeae8490d398c08df6af4bd7a4be09d1d7f741d14dea1d5409",
+      "normalized_summary_sha256": "f31997a5ef9c1dcc9674da49d36e35a5591c936b4bcaf8f26959ba923f6241fe"
+    }
+  ],
+  "mismatches": [
+    {
+      "case": "multiple_backedges_and_missing_name_join",
+      "schedule": "lifo_forward",
+      "outcomes_equal": true,
+      "production_outcome": {
+        "kind": "assembly",
+        "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+        "bytes": 36453
+      },
+      "normalized_outcome": {
+        "kind": "assembly",
+        "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+        "bytes": 36453
+      },
+      "summaries_equal": true,
+      "production_summary_sha256": "8bb1b83df974293428edc48507d04971249840314a0749fffb562ba3d2944b30",
+      "normalized_summary_sha256": "8bb1b83df974293428edc48507d04971249840314a0749fffb562ba3d2944b30",
+      "return_accumulators_equal": false,
+      "aligned_return_value_mismatch_count": 2,
+      "production_returns_sha256": "8ab244dbabbb668ae10ff7b0ee172acaa960db96a24f36692d78f4634848cdaf",
+      "normalized_returns_sha256": "f8f5342a4c76f6437090bbec2d6a6a9188a9cab47fd1d2297071511386180ee1"
+    },
+    {
+      "case": "multiple_backedges_and_missing_name_join",
+      "schedule": "fifo_forward",
+      "outcomes_equal": true,
+      "production_outcome": {
+        "kind": "assembly",
+        "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+        "bytes": 36453
+      },
+      "normalized_outcome": {
+        "kind": "assembly",
+        "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+        "bytes": 36453
+      },
+      "summaries_equal": true,
+      "production_summary_sha256": "8bb1b83df974293428edc48507d04971249840314a0749fffb562ba3d2944b30",
+      "normalized_summary_sha256": "8bb1b83df974293428edc48507d04971249840314a0749fffb562ba3d2944b30",
+      "return_accumulators_equal": false,
+      "aligned_return_value_mismatch_count": 2,
+      "production_returns_sha256": "875961426d5aae2eb318b33f99abe514e629638ade2db4f40b8d90136aa2908f",
+      "normalized_returns_sha256": "f8f5342a4c76f6437090bbec2d6a6a9188a9cab47fd1d2297071511386180ee1"
+    },
+    {
+      "case": "multiple_backedges_and_missing_name_join",
+      "schedule": "lifo_reverse",
+      "outcomes_equal": true,
+      "production_outcome": {
+        "kind": "assembly",
+        "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+        "bytes": 36453
+      },
+      "normalized_outcome": {
+        "kind": "assembly",
+        "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+        "bytes": 36453
+      },
+      "summaries_equal": true,
+      "production_summary_sha256": "8bb1b83df974293428edc48507d04971249840314a0749fffb562ba3d2944b30",
+      "normalized_summary_sha256": "8bb1b83df974293428edc48507d04971249840314a0749fffb562ba3d2944b30",
+      "return_accumulators_equal": false,
+      "aligned_return_value_mismatch_count": 2,
+      "production_returns_sha256": "f8f5342a4c76f6437090bbec2d6a6a9188a9cab47fd1d2297071511386180ee1",
+      "normalized_returns_sha256": "7d54b93c4b06376d8b7ffefdc371ee3a1c77a8fdf1dd4c188a24cdc5471510ee"
+    },
+    {
+      "case": "multiple_backedges_and_missing_name_join",
+      "schedule": "fifo_reverse",
+      "outcomes_equal": true,
+      "production_outcome": {
+        "kind": "assembly",
+        "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+        "bytes": 36453
+      },
+      "normalized_outcome": {
+        "kind": "assembly",
+        "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+        "bytes": 36453
+      },
+      "summaries_equal": true,
+      "production_summary_sha256": "8bb1b83df974293428edc48507d04971249840314a0749fffb562ba3d2944b30",
+      "normalized_summary_sha256": "8bb1b83df974293428edc48507d04971249840314a0749fffb562ba3d2944b30",
+      "return_accumulators_equal": false,
+      "aligned_return_value_mismatch_count": 2,
+      "production_returns_sha256": "9134915d343ed29f8c2b79bc9f27c5dcf5954ff362aaf3e4b1cd910d07b3bc50",
+      "normalized_returns_sha256": "f8f5342a4c76f6437090bbec2d6a6a9188a9cab47fd1d2297071511386180ee1"
+    },
+    {
+      "case": "minimal_same_order_return_accumulator",
+      "schedule": "lifo_forward",
+      "outcomes_equal": true,
+      "production_outcome": {
+        "kind": "native-error",
+        "type": "compiler.native.NativeBackendError",
+        "text": "x86_64-linux Invoke requires closures with statically known targets"
+      },
+      "normalized_outcome": {
+        "kind": "native-error",
+        "type": "compiler.native.NativeBackendError",
+        "text": "x86_64-linux Invoke requires closures with statically known targets"
+      },
+      "summaries_equal": true,
+      "production_summary_sha256": "1d4d45735772142e2901949784ce5c6ae34bf9f8e617b972228e3358575b8c71",
+      "normalized_summary_sha256": "1d4d45735772142e2901949784ce5c6ae34bf9f8e617b972228e3358575b8c71",
+      "return_accumulators_equal": false,
+      "aligned_return_value_mismatch_count": 1,
+      "production_returns_sha256": "73540662e7b1d07c500c7eaee1c64a1e05b8e730aef4f610b7e8e43b29ca466a",
+      "normalized_returns_sha256": "cab0a69d7851eca5879d2b713b5fe0854129f2f4b85c75f44226a3c27b631889"
+    },
+    {
+      "case": "minimal_same_order_return_accumulator",
+      "schedule": "fifo_reverse",
+      "outcomes_equal": true,
+      "production_outcome": {
+        "kind": "native-error",
+        "type": "compiler.native.NativeBackendError",
+        "text": "x86_64-linux Invoke requires closures with statically known targets"
+      },
+      "normalized_outcome": {
+        "kind": "native-error",
+        "type": "compiler.native.NativeBackendError",
+        "text": "x86_64-linux Invoke requires closures with statically known targets"
+      },
+      "summaries_equal": true,
+      "production_summary_sha256": "1d4d45735772142e2901949784ce5c6ae34bf9f8e617b972228e3358575b8c71",
+      "normalized_summary_sha256": "1d4d45735772142e2901949784ce5c6ae34bf9f8e617b972228e3358575b8c71",
+      "return_accumulators_equal": false,
+      "aligned_return_value_mismatch_count": 1,
+      "production_returns_sha256": "73540662e7b1d07c500c7eaee1c64a1e05b8e730aef4f610b7e8e43b29ca466a",
+      "normalized_returns_sha256": "cab0a69d7851eca5879d2b713b5fe0854129f2f4b85c75f44226a3c27b631889"
+    },
+    {
+      "case": "minimal_final_summary_counterexample",
+      "schedule": "lifo_reverse",
+      "outcomes_equal": true,
+      "production_outcome": {
+        "kind": "native-error",
+        "type": "compiler.native.NativeBackendError",
+        "text": "x86_64-linux Invoke requires closures with statically known targets"
+      },
+      "normalized_outcome": {
+        "kind": "native-error",
+        "type": "compiler.native.NativeBackendError",
+        "text": "x86_64-linux Invoke requires closures with statically known targets"
+      },
+      "summaries_equal": false,
+      "production_summary_sha256": "36dd0f845187bdf1f55dd8d4dfc960856d802c7161e4d1ad80098d2d6cbbfa0e",
+      "normalized_summary_sha256": "88d42c82f35d58404f55148bd87e1483df9d60eae32c1295569218ae24ef6bda",
+      "return_accumulators_equal": false,
+      "aligned_return_value_mismatch_count": 3,
+      "production_returns_sha256": "6f6fdc85be1fdef44900321a131f377ec3b6036fee84f8ca9eecac710605f650",
+      "normalized_returns_sha256": "e1afe7e64c7038cb7ab188ea0bf310ab4516a0ffaaf386285f6ba35e4d854f98"
+    },
+    {
+      "case": "adversarial_0",
+      "schedule": "fifo_forward",
+      "outcomes_equal": true,
+      "production_outcome": {
+        "kind": "native-error",
+        "type": "compiler.native.NativeBackendError",
+        "text": "x86_64-linux Invoke requires closures with statically known targets"
+      },
+      "normalized_outcome": {
+        "kind": "native-error",
+        "type": "compiler.native.NativeBackendError",
+        "text": "x86_64-linux Invoke requires closures with statically known targets"
+      },
+      "summaries_equal": true,
+      "production_summary_sha256": "b454e2aac1915e2915b99ad595fe10f66e62bab79839a0e36ffa6555ca17b3cd",
+      "normalized_summary_sha256": "b454e2aac1915e2915b99ad595fe10f66e62bab79839a0e36ffa6555ca17b3cd",
+      "return_accumulators_equal": false,
+      "aligned_return_value_mismatch_count": 6,
+      "production_returns_sha256": "1fb41bcab369ba41c620a7318d8e166f57872bab46cb5ae51efbe2ea5da03137",
+      "normalized_returns_sha256": "488b2dd0c6e028d473d54861c6c0f2f15824741d9db31fd4fe588afd0b4d7494"
+    },
+    {
+      "case": "adversarial_0",
+      "schedule": "fifo_reverse",
+      "outcomes_equal": true,
+      "production_outcome": {
+        "kind": "native-error",
+        "type": "compiler.native.NativeBackendError",
+        "text": "x86_64-linux Invoke requires closures with statically known targets"
+      },
+      "normalized_outcome": {
+        "kind": "native-error",
+        "type": "compiler.native.NativeBackendError",
+        "text": "x86_64-linux Invoke requires closures with statically known targets"
+      },
+      "summaries_equal": true,
+      "production_summary_sha256": "b454e2aac1915e2915b99ad595fe10f66e62bab79839a0e36ffa6555ca17b3cd",
+      "normalized_summary_sha256": "b454e2aac1915e2915b99ad595fe10f66e62bab79839a0e36ffa6555ca17b3cd",
+      "return_accumulators_equal": false,
+      "aligned_return_value_mismatch_count": 6,
+      "production_returns_sha256": "90de0e61c2bca0c376888aae1b934a7d21d1281e19329b186b3960c5633b1d81",
+      "normalized_returns_sha256": "06884273ac3747d38fd624185ba8c4c65a35a785be553941e4280f2d70113271"
+    },
+    {
+      "case": "adversarial_2",
+      "schedule": "lifo_forward",
+      "outcomes_equal": true,
+      "production_outcome": {
+        "kind": "native-error",
+        "type": "compiler.native.NativeBackendError",
+        "text": "x86_64-linux Invoke requires closures with statically known targets"
+      },
+      "normalized_outcome": {
+        "kind": "native-error",
+        "type": "compiler.native.NativeBackendError",
+        "text": "x86_64-linux Invoke requires closures with statically known targets"
+      },
+      "summaries_equal": true,
+      "production_summary_sha256": "c7299bf1bc9e941a2e67000f7cbdb1c490205a1ab96cdbf6c19ca04b0a007d3d",
+      "normalized_summary_sha256": "c7299bf1bc9e941a2e67000f7cbdb1c490205a1ab96cdbf6c19ca04b0a007d3d",
+      "return_accumulators_equal": false,
+      "aligned_return_value_mismatch_count": 0,
+      "production_returns_sha256": "05159311c41bad8aa21409a78a257b27ce8acad528d0681aa05417048f074577",
+      "normalized_returns_sha256": "c384c606c19a09f1477381bc600522fbb2ee9a2bfe8471290640db61ebb7135c"
+    }
+  ],
+  "first_mismatch_truncated": true,
+  "corpus_sha256": "4f651f48b86809479669563d295540c540127bf18456cb8dce6108082425f8f9"
+}

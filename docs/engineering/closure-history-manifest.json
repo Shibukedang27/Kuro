@@ -1,0 +1,19 @@
+{
+  "base_head": "cb35b2216cf998f44b0f386a876e68265ed5df9d",
+  "production_changed": false,
+  "sha256": {
+    "compiler/native.py": "32a4944bac3c3b619e85435f6dd2ccd2cdbd3b974baa498c50bcbb400fe3bd45",
+    "scripts/audit_normalized_closures.py": "23dc1e3c2f47e661cf44062c76b1ef270edebeffe79017a09d0a9a76287a7b81",
+    "scripts/replay_closure_queue.py": "f5c6a3b45f62c33f1685d9140bfd41581a06c1e6d224b4472b440dee1cf3d395",
+    "scripts/profile_sparse_closures.py": "18cc39886d023303fdb42826d6791edc586436dfa9461a82f29628b9cd3d9e4c",
+    "scripts/closure_queue_cases.py": "286339d3f53db1c207e39a71fa21dfa7420e905fe8debf41e3d1f2eed3fc4a2a",
+    "scripts/simulate_closure_history.py": "e7ba542d2712bee8970285c6c675775002c2f4f036ceb15f34c3ca7b87df882a",
+    "scripts/audit_presence_closures.py": "9326db5e53d14b474df2efb70ab7e166862604227103c01649436e0bc4014f61",
+    "scripts/search_closure_schedules.py": "c9545daa9324fe0ca6f05452f41cd24b4a7e441e6e558806370907c1f5d3d1cf",
+    "docs/engineering/closure-history.json": "3bf214c0d29dfbebc9e00d51a2e78270804ba24ee35cbc1db84c5d0bd02fa340",
+    "docs/engineering/closure-history-evidence.json.gz": "b0405eb4d41d87533fefd30258c0cac9176347dcff1dbb1a07f0bc7ab7752f4a",
+    "docs/engineering/closure-presence-storage.json": "985545534284ebbe26b64c9ccfc7c03b37299d25125303abb195705270858f39",
+    "docs/engineering/closure-schedule-search.json": "5a5a66015625b2967ce62aca10b1935eea4b22697e4ab341ed66261f60cf7414",
+    "docs/engineering/closure-summary-counterexample.json": "1d801b7e87d7c516383570b56993337bbfdb6c3c81bff38dbc11a19f5d61dce7"
+  }
+}
