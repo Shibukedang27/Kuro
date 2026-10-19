@@ -1523,7 +1523,38 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
         assert rejected.stdout == ""
         assert rejected.stderr == ""
 
-    rejection_cases = branch_join_rejection_cases()
+    from test_native_loop_init import (
+        EXACT_ONCE_REPEAT_OUTPUT, exact_once_repeat_bytecode, loop_init_rejection_cases,
+        LOOP_SEMANTICS_PROGRAM, LOOP_SEMANTICS_OUTPUT, NEGATIVE_REPEAT_PROGRAM,
+        loop_init_boundary_bytecode,
+    )
+
+    assert_compiled_decimal_program(
+        generator, tmp_path, target, exact_once_repeat_bytecode(),
+        EXACT_ONCE_REPEAT_OUTPUT, "exact-once-repeat",
+    )
+    assert_compiled_decimal_program(
+        generator, tmp_path, target, loop_init_boundary_bytecode(), "1.5\n", "repeat-boundary",
+    )
+    for invalid in (loop_init_boundary_bytecode(depth=17),
+                    loop_init_boundary_bytecode(global_count=65)):
+        rejected = subprocess.run(
+            [str(generator)], input="kuro.bytecode/1\n" + "\n".join(invalid) + "\n",
+            capture_output=True, text=True, timeout=30,
+        )
+        assert rejected.returncode == 1
+        assert rejected.stdout == rejected.stderr == ""
+    for name, source, expected in (
+        ("loop-semantics", LOOP_SEMANTICS_PROGRAM, LOOP_SEMANTICS_OUTPUT),
+        ("negative-repeat-existing-divergence", NEGATIVE_REPEAT_PROGRAM, "0\n"),
+    ):
+        compiled = compile_with_kuro_driver(source)
+        assert_compiled_decimal_program(
+            generator, tmp_path, target, [str(token) for token in compiled["CompilerOutput"]],
+            expected, name,
+        )
+
+    rejection_cases = {**branch_join_rejection_cases(), **loop_init_rejection_cases()}
     for name, tokens in rejection_cases.items():
         rejected = subprocess.run(
             [str(generator)],
