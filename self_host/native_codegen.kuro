@@ -325,6 +325,14 @@ NativeIfJoinSlotPosition = 0;
 NativeIfJoinStoreAllowed = 0;
 NativeIfJoinHasElse = 0;
 NativeIfJoinUnknownRead = 0;
+NativeIfJoinFrameAllowed = 0;
+NativeIfJoinSnapshotPosition = 0;
+NativeIfJoinSnapshotCount = 0;
+NativeRegionKinds is Text;
+NativeRegionKind is Text;
+NativeRegionPosition = 0;
+NativeRegionCount = 0;
+NativeRegionTop is Text;
 NativeRepeatLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeRepeatStackDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeWhileLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -374,7 +382,7 @@ Action NativeRegisterGlobalVariable Name: Text;
 Done.
 
 # Function-free slots may first gain Decimal kinds before control flow or in
-# both direct arms of a top-level If/Else; established Decimal kinds stay fixed.
+# every path of bounded If/Else trees; established Decimal kinds stay fixed.
 Action NativeCheckGlobalStoreKind Slot: Integers, Kind: Text;
     If Slot is greater than or equal to 0;
         NativeGlobalKindPosition = Slot + 1;
@@ -386,7 +394,7 @@ Action NativeCheckGlobalStoreKind Slot: Integers, Kind: Text;
             Else;
                 If NativeControlFlowDepth is greater than 0 and NativeGlobalStoredKind is not equal to "D";
                     NativeIfJoinStoreAllowed = 0;
-                    If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to 1 and NativeIfDepth is equal to 1;
+                    If NativeIfJoinFrameAllowed is equal to 1;
                         NativeIfJoinStoreAllowed = 1;
                     Done.
                     If NativeIfJoinStoreAllowed is equal to 0;
@@ -1286,6 +1294,7 @@ Action NativePrepareProgram;
     NativeGlobalVariableCount = 0;
     NativeIfJoinEntryKinds = "";
     NativeIfJoinThenKinds = "";
+    NativeIfJoinSnapshotCount = 0;
     NativeHasControlFlow = 0;
     NativePreparePos = 0;
     Length BytecodeOut;
@@ -1603,6 +1612,8 @@ Action EmitStraightIntegerProgram;
     NativeRepeatDepth = 0;
     NativeWhileDepth = 0;
     NativeControlFlowDepth = 0;
+    NativeRegionKinds = "";
+    NativeRegionCount = 0;
     NativeX86 = 0;
     NativeOut = ".section __TEXT,__text\n.globl _main\n_main:\n    sub sp, sp, #2048\n    mov x19, sp\n";
     If NativeTarget is equal to "x86_64-macos" or NativeTarget is equal to "x86_64-linux";
@@ -1661,7 +1672,62 @@ Action EmitStraightIntegerProgram;
         NativeStraightOp = @_;
         Add 1 to NativeStraightPos;
         NativeStraightKnown = 0;
-
+        # Only a tree of If regions can establish a fresh Decimal kind. Preserve
+        # the earlier direct top-level join behavior when Actions are present.
+        NativeIfJoinFrameAllowed = 0;
+        If NativeFunctionMode is equal to 0 and NativeIfDepth is greater than 0;
+            If NativeControlFlowDepth is equal to NativeIfDepth and NativeRepeatDepth is equal to 0 and NativeWhileDepth is equal to 0;
+                If NativeFunctionCount is equal to 0 or NativeIfDepth is equal to 1;
+                    NativeIfJoinFrameAllowed = 1;
+                Done.
+            Done.
+        Done.
+        # Raw bytecode must describe properly nested statement regions. Separate
+        # construct depths alone cannot distinguish crossed If/loop delimiters.
+        If NativeFunctionMode is equal to 0 and NativeFunctionCount is equal to 0;
+            # Keep all markers one character: the hosted bootstrap tracks Text
+            # lengths in emission order, not through branch-sensitive joins.
+            NativeRegionKind = "?";
+            If NativeStraightOp is equal to "BC_IF_BEGIN";
+                NativeRegionKind = "I";
+            Done.
+            If NativeStraightOp is equal to "BC_REPEAT_BEGIN";
+                NativeRegionKind = "R";
+            Done.
+            If NativeStraightOp is equal to "BC_WHILE_BEGIN";
+                NativeRegionKind = "W";
+            Done.
+            If NativeRegionKind is not equal to "?";
+                NativeRegionPosition = NativeControlFlowDepth + 1;
+                If NativeControlFlowDepth is equal to NativeRegionCount;
+                    Append NativeRegionKind to NativeRegionKinds;
+                    Add 1 to NativeRegionCount;
+                Else;
+                    Set NativeRegionKinds NativeRegionPosition to NativeRegionKind;
+                Done.
+            Done.
+            NativeRegionKind = "?";
+            If NativeStraightOp is equal to "BC_ELSE_BEGIN" or NativeStraightOp is equal to "BC_IF_END";
+                NativeRegionKind = "I";
+            Done.
+            If NativeStraightOp is equal to "BC_REPEAT_END";
+                NativeRegionKind = "R";
+            Done.
+            If NativeStraightOp is equal to "BC_WHILE_TEST" or NativeStraightOp is equal to "BC_WHILE_END";
+                NativeRegionKind = "W";
+            Done.
+            If NativeRegionKind is not equal to "?";
+                If NativeControlFlowDepth is greater than 0;
+                    Get NativeRegionKinds NativeControlFlowDepth;
+                    NativeRegionTop = @_;
+                    If NativeRegionTop is not equal to NativeRegionKind;
+                        NativeFailed = 1;
+                    Done.
+                Else;
+                    NativeFailed = 1;
+                Done.
+            Done.
+        Done.
         # Function-free source regions join at statement boundaries, not value stacks.
         If NativeFunctionMode is equal to 0 and NativeFunctionCount is equal to 0;
             If NativeStraightOp is equal to "BC_IF_BEGIN" or NativeStraightOp is equal to "BC_REPEAT_BEGIN";
@@ -1978,14 +2044,23 @@ Action EmitStraightIntegerProgram;
                 NativeIfLabelText = @_;
                 Set NativeIfLabels NativeIfDepth to NativeIfCounter;
                 Set NativeIfElseSeen NativeIfDepth to 0;
-                If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to 0 and NativeIfDepth is equal to 0;
-                    NativeIfJoinEntryKinds = "";
-                    NativeIfJoinSlot = 0;
-                    While NativeIfJoinSlot is less than NativeGlobalVariableCount;
-                        NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
-                        Get NativeGlobalVariableKinds NativeIfJoinSlotPosition;
-                        Append @_ to NativeIfJoinEntryKinds;
-                        Add 1 to NativeIfJoinSlot;
+                If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to NativeIfDepth and NativeRepeatDepth is equal to 0 and NativeWhileDepth is equal to 0;
+                    If NativeFunctionCount is equal to 0 or NativeIfDepth is equal to 0;
+                        # Flattened frame/slot collections retain scalar Text values,
+                        # not unsupported arrays of snapshot strings. Allocate on demand.
+                        While NativeIfJoinSnapshotCount is less than (NativeIfDepth + 1) * NativeGlobalVariableCount;
+                            Append "?" to NativeIfJoinEntryKinds;
+                            Append "?" to NativeIfJoinThenKinds;
+                            Add 1 to NativeIfJoinSnapshotCount;
+                        Done.
+                        NativeIfJoinSlot = 0;
+                        While NativeIfJoinSlot is less than NativeGlobalVariableCount;
+                            NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
+                            NativeIfJoinSnapshotPosition = NativeIfDepth * NativeGlobalVariableCount + NativeIfJoinSlotPosition;
+                            Get NativeGlobalVariableKinds NativeIfJoinSlotPosition;
+                            Set NativeIfJoinEntryKinds NativeIfJoinSnapshotPosition to @_;
+                            Add 1 to NativeIfJoinSlot;
+                        Done.
                     Done.
                 Done.
                 If NativeX86 is equal to 1;
@@ -2009,19 +2084,20 @@ Action EmitStraightIntegerProgram;
                 Get NativeIfElseSeen NativeIfIndex;
                 If @_ is equal to 0;
                     Set NativeIfElseSeen NativeIfIndex to 1;
-                    If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to 1 and NativeIfDepth is equal to 1;
-                        NativeIfJoinThenKinds = "";
+                    If NativeIfJoinFrameAllowed is equal to 1;
                         NativeIfJoinSlot = 0;
                         While NativeIfJoinSlot is less than NativeGlobalVariableCount;
                             NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
+                            NativeIfJoinSnapshotPosition = NativeIfIndex * NativeGlobalVariableCount + NativeIfJoinSlotPosition;
                             Get NativeGlobalVariableKinds NativeIfJoinSlotPosition;
-                            Append @_ to NativeIfJoinThenKinds;
+                            Set NativeIfJoinThenKinds NativeIfJoinSnapshotPosition to @_;
                             Add 1 to NativeIfJoinSlot;
                         Done.
                         NativeIfJoinSlot = 0;
                         While NativeIfJoinSlot is less than NativeGlobalVariableCount;
                             NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
-                            Get NativeIfJoinEntryKinds NativeIfJoinSlotPosition;
+                            NativeIfJoinSnapshotPosition = NativeIfIndex * NativeGlobalVariableCount + NativeIfJoinSlotPosition;
+                            Get NativeIfJoinEntryKinds NativeIfJoinSnapshotPosition;
                             Set NativeGlobalVariableKinds NativeIfJoinSlotPosition to @_;
                             Add 1 to NativeIfJoinSlot;
                         Done.
@@ -2049,25 +2125,27 @@ Action EmitStraightIntegerProgram;
                 Get NativeIfLabels NativeIfIndex;
                 Call NativeLengthToText @_;
                 NativeIfLabelText = @_;
-                If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to 1 and NativeIfDepth is equal to 1;
+                If NativeIfJoinFrameAllowed is equal to 1;
                     Get NativeIfElseSeen NativeIfIndex;
                     NativeIfJoinHasElse = @_;
                     If NativeIfJoinHasElse is equal to 0;
-                        NativeIfJoinThenKinds = "";
+                        # The absent Else path is exactly the region-entry state.
                         NativeIfJoinSlot = 0;
                         While NativeIfJoinSlot is less than NativeGlobalVariableCount;
                             NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
+                            NativeIfJoinSnapshotPosition = NativeIfIndex * NativeGlobalVariableCount + NativeIfJoinSlotPosition;
                             Get NativeGlobalVariableKinds NativeIfJoinSlotPosition;
-                            Append @_ to NativeIfJoinThenKinds;
+                            Set NativeIfJoinThenKinds NativeIfJoinSnapshotPosition to @_;
                             Add 1 to NativeIfJoinSlot;
                         Done.
                     Done.
                     NativeIfJoinSlot = 0;
                     While NativeIfJoinSlot is less than NativeGlobalVariableCount;
                         NativeIfJoinSlotPosition = NativeIfJoinSlot + 1;
-                        Get NativeIfJoinEntryKinds NativeIfJoinSlotPosition;
+                        NativeIfJoinSnapshotPosition = NativeIfIndex * NativeGlobalVariableCount + NativeIfJoinSlotPosition;
+                        Get NativeIfJoinEntryKinds NativeIfJoinSnapshotPosition;
                         NativeIfJoinEntryKind = @_;
-                        Get NativeIfJoinThenKinds NativeIfJoinSlotPosition;
+                        Get NativeIfJoinThenKinds NativeIfJoinSnapshotPosition;
                         NativeIfJoinThenKind = @_;
                         NativeIfJoinElseKind = NativeIfJoinEntryKind;
                         If NativeIfJoinHasElse is equal to 1;
@@ -2402,7 +2480,7 @@ Action EmitStraightIntegerProgram;
                                 # A read before a first store observes the legacy Integer zero.
                                 If @_ is equal to "?";
                                     NativeIfJoinUnknownRead = 0;
-                                    If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to 1 and NativeIfDepth is equal to 1;
+                                    If NativeIfJoinFrameAllowed is equal to 1;
                                         NativeIfJoinUnknownRead = 1;
                                     Done.
                                     If NativeIfJoinUnknownRead is equal to 1;
