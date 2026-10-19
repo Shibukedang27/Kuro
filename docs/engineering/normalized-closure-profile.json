@@ -1,0 +1,441 @@
+{
+  "metadata": {
+    "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+    "platform": "Linux-6.18.38+-x86_64-with-glibc2.39",
+    "head": "bdbfe1b2e7599b3d29a52929459e8c3d68f402ab",
+    "production_sha256": "32a4944bac3c3b619e85435f6dd2ccd2cdbd3b974baa498c50bcbb400fe3bd45",
+    "scripts_sha256": {
+      "profile_normalized_closures.py": "84f22d398644936ba310c3fcb233f3257587002cc476ab277e50cb5553167edc",
+      "audit_normalized_closures.py": "2f042edf212f76c11eab3c35f465d3234be11c6b4c239213ee86202eb27afdc6",
+      "profile_sparse_closures.py": "18cc39886d023303fdb42826d6791edc586436dfa9461a82f29628b9cd3d9e4c"
+    },
+    "compiler_dirty": false,
+    "hash_seed": "0",
+    "cpu": 0,
+    "random_cases": 8,
+    "seed": 7319,
+    "timing_allocation_separate": true,
+    "final_audit_script_sha256": "23dc1e3c2f47e661cf44062c76b1ef270edebeffe79017a09d0a9a76287a7b81"
+  },
+  "sizes": {
+    "80": {
+      "all_full_outputs_equal": true,
+      "samples": [
+        {
+          "mode": "production",
+          "size": 80,
+          "allocation_sample": false,
+          "emit_seconds": 1.722880977904424,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 32140,
+          "assembly_bytes": 85510,
+          "assembly_sha256": "644da9482236a1c5d78ba3daf13a8ce3d3161c1b524dcb9eeb5c75dd045e384d",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211484,
+          "repetition": 0
+        },
+        {
+          "mode": "legacy",
+          "size": 80,
+          "allocation_sample": false,
+          "emit_seconds": 2.071490930975415,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 41512,
+          "assembly_bytes": 85510,
+          "assembly_sha256": "644da9482236a1c5d78ba3daf13a8ce3d3161c1b524dcb9eeb5c75dd045e384d",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211487,
+          "repetition": 0
+        },
+        {
+          "mode": "normalized",
+          "size": 80,
+          "allocation_sample": false,
+          "emit_seconds": 0.17676679196301848,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 34812,
+          "assembly_bytes": 85510,
+          "assembly_sha256": "644da9482236a1c5d78ba3daf13a8ce3d3161c1b524dcb9eeb5c75dd045e384d",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211518,
+          "repetition": 0
+        },
+        {
+          "mode": "legacy",
+          "size": 80,
+          "allocation_sample": false,
+          "emit_seconds": 2.0545107029611245,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 41308,
+          "assembly_bytes": 85510,
+          "assembly_sha256": "644da9482236a1c5d78ba3daf13a8ce3d3161c1b524dcb9eeb5c75dd045e384d",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211519,
+          "repetition": 1
+        },
+        {
+          "mode": "normalized",
+          "size": 80,
+          "allocation_sample": false,
+          "emit_seconds": 0.1835033040260896,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 34832,
+          "assembly_bytes": 85510,
+          "assembly_sha256": "644da9482236a1c5d78ba3daf13a8ce3d3161c1b524dcb9eeb5c75dd045e384d",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211522,
+          "repetition": 1
+        },
+        {
+          "mode": "production",
+          "size": 80,
+          "allocation_sample": false,
+          "emit_seconds": 1.7226106399903074,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 32120,
+          "assembly_bytes": 85510,
+          "assembly_sha256": "644da9482236a1c5d78ba3daf13a8ce3d3161c1b524dcb9eeb5c75dd045e384d",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211525,
+          "repetition": 1
+        },
+        {
+          "mode": "normalized",
+          "size": 80,
+          "allocation_sample": false,
+          "emit_seconds": 0.18041119701229036,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 34960,
+          "assembly_bytes": 85510,
+          "assembly_sha256": "644da9482236a1c5d78ba3daf13a8ce3d3161c1b524dcb9eeb5c75dd045e384d",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211537,
+          "repetition": 2
+        },
+        {
+          "mode": "production",
+          "size": 80,
+          "allocation_sample": false,
+          "emit_seconds": 1.6522805499844253,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 32208,
+          "assembly_bytes": 85510,
+          "assembly_sha256": "644da9482236a1c5d78ba3daf13a8ce3d3161c1b524dcb9eeb5c75dd045e384d",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211538,
+          "repetition": 2
+        },
+        {
+          "mode": "legacy",
+          "size": 80,
+          "allocation_sample": false,
+          "emit_seconds": 2.0561298460233957,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 41376,
+          "assembly_bytes": 85510,
+          "assembly_sha256": "644da9482236a1c5d78ba3daf13a8ce3d3161c1b524dcb9eeb5c75dd045e384d",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211542,
+          "repetition": 2
+        },
+        {
+          "mode": "production",
+          "size": 80,
+          "allocation_sample": true,
+          "emit_seconds": 49.98479997902177,
+          "traced_current_bytes": 227407,
+          "traced_peak_bytes": 11076472,
+          "process_peak_rss_kib": 41652,
+          "assembly_bytes": 85510,
+          "assembly_sha256": "644da9482236a1c5d78ba3daf13a8ce3d3161c1b524dcb9eeb5c75dd045e384d",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211552,
+          "repetition": null
+        },
+        {
+          "mode": "legacy",
+          "size": 80,
+          "allocation_sample": true,
+          "emit_seconds": 63.00443131104112,
+          "traced_current_bytes": 218015,
+          "traced_peak_bytes": 14829112,
+          "process_peak_rss_kib": 48664,
+          "assembly_bytes": 85510,
+          "assembly_sha256": "644da9482236a1c5d78ba3daf13a8ce3d3161c1b524dcb9eeb5c75dd045e384d",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211773,
+          "repetition": null
+        },
+        {
+          "mode": "normalized",
+          "size": 80,
+          "allocation_sample": true,
+          "emit_seconds": 8.304937790031545,
+          "traced_current_bytes": 214479,
+          "traced_peak_bytes": 1387808,
+          "process_peak_rss_kib": 34920,
+          "assembly_bytes": 85510,
+          "assembly_sha256": "644da9482236a1c5d78ba3daf13a8ce3d3161c1b524dcb9eeb5c75dd045e384d",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211913,
+          "repetition": null
+        }
+      ]
+    },
+    "160": {
+      "all_full_outputs_equal": true,
+      "samples": [
+        {
+          "mode": "production",
+          "size": 160,
+          "allocation_sample": false,
+          "emit_seconds": 11.371774986037053,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 56524,
+          "assembly_bytes": 106824,
+          "assembly_sha256": "0a5907faf39c0feba981eb0f49d6889060ccde11eb4542908084787e92e2538f",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211925,
+          "repetition": 0
+        },
+        {
+          "mode": "legacy",
+          "size": 160,
+          "allocation_sample": false,
+          "emit_seconds": 20.481499367044307,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 73460,
+          "assembly_bytes": 106824,
+          "assembly_sha256": "0a5907faf39c0feba981eb0f49d6889060ccde11eb4542908084787e92e2538f",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211945,
+          "repetition": 0
+        },
+        {
+          "mode": "normalized",
+          "size": 160,
+          "allocation_sample": false,
+          "emit_seconds": 0.81959161197301,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 34884,
+          "assembly_bytes": 106824,
+          "assembly_sha256": "0a5907faf39c0feba981eb0f49d6889060ccde11eb4542908084787e92e2538f",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211984,
+          "repetition": 0
+        },
+        {
+          "mode": "legacy",
+          "size": 160,
+          "allocation_sample": false,
+          "emit_seconds": 18.73840246105101,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 72480,
+          "assembly_bytes": 106824,
+          "assembly_sha256": "0a5907faf39c0feba981eb0f49d6889060ccde11eb4542908084787e92e2538f",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1211987,
+          "repetition": 1
+        },
+        {
+          "mode": "normalized",
+          "size": 160,
+          "allocation_sample": false,
+          "emit_seconds": 0.8030350499320775,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 34904,
+          "assembly_bytes": 106824,
+          "assembly_sha256": "0a5907faf39c0feba981eb0f49d6889060ccde11eb4542908084787e92e2538f",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1212041,
+          "repetition": 1
+        },
+        {
+          "mode": "production",
+          "size": 160,
+          "allocation_sample": false,
+          "emit_seconds": 9.964159136987291,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 56996,
+          "assembly_bytes": 106824,
+          "assembly_sha256": "0a5907faf39c0feba981eb0f49d6889060ccde11eb4542908084787e92e2538f",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1212044,
+          "repetition": 1
+        },
+        {
+          "mode": "normalized",
+          "size": 160,
+          "allocation_sample": false,
+          "emit_seconds": 0.8761840759543702,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 35056,
+          "assembly_bytes": 106824,
+          "assembly_sha256": "0a5907faf39c0feba981eb0f49d6889060ccde11eb4542908084787e92e2538f",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1212058,
+          "repetition": 2
+        },
+        {
+          "mode": "production",
+          "size": 160,
+          "allocation_sample": false,
+          "emit_seconds": 11.130384068004787,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 56916,
+          "assembly_bytes": 106824,
+          "assembly_sha256": "0a5907faf39c0feba981eb0f49d6889060ccde11eb4542908084787e92e2538f",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1212059,
+          "repetition": 2
+        },
+        {
+          "mode": "legacy",
+          "size": 160,
+          "allocation_sample": false,
+          "emit_seconds": 21.299829278956167,
+          "traced_current_bytes": null,
+          "traced_peak_bytes": null,
+          "process_peak_rss_kib": 72680,
+          "assembly_bytes": 106824,
+          "assembly_sha256": "0a5907faf39c0feba981eb0f49d6889060ccde11eb4542908084787e92e2538f",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1212072,
+          "repetition": 2
+        },
+        {
+          "mode": "production",
+          "size": 160,
+          "allocation_sample": true,
+          "emit_seconds": 245.18840237800032,
+          "traced_current_bytes": 261153,
+          "traced_peak_bytes": 34476028,
+          "process_peak_rss_kib": 81388,
+          "assembly_bytes": 106824,
+          "assembly_sha256": "0a5907faf39c0feba981eb0f49d6889060ccde11eb4542908084787e92e2538f",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1212106,
+          "repetition": null
+        },
+        {
+          "mode": "legacy",
+          "size": 160,
+          "allocation_sample": true,
+          "emit_seconds": 315.2613981900504,
+          "traced_current_bytes": 251809,
+          "traced_peak_bytes": 48921020,
+          "process_peak_rss_kib": 114200,
+          "assembly_bytes": 106824,
+          "assembly_sha256": "0a5907faf39c0feba981eb0f49d6889060ccde11eb4542908084787e92e2538f",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1212568,
+          "repetition": null
+        },
+        {
+          "mode": "normalized",
+          "size": 160,
+          "allocation_sample": true,
+          "emit_seconds": 32.28253491700161,
+          "traced_current_bytes": 257929,
+          "traced_peak_bytes": 3522764,
+          "process_peak_rss_kib": 35096,
+          "assembly_bytes": 106824,
+          "assembly_sha256": "0a5907faf39c0feba981eb0f49d6889060ccde11eb4542908084787e92e2538f",
+          "hash_seed": "0",
+          "cpu_affinity": [
+            0
+          ],
+          "pid": 1213084,
+          "repetition": null
+        }
+      ]
+    }
+  },
+  "description": "Test-only explicit plain-dictionary normalization. Fresh processes pinned to CPU 0, hash seed 0, cyclic mode ordering; full assembly byte equality before digests; separate tracemalloc samples. No compiler/runtime changes. Measured script hash predates trace/comparator, fixture, and fail-closed preflight-only strengthening; normalized untraced emitter AST transformation is unchanged. No complete scheduling simulation is claimed."
+}
