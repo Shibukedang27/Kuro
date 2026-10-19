@@ -31,4 +31,4 @@ release-check: doctor test
 	echo "Kuro native developer release verified"
 
 clean-generated:
-	find dist -type f -name '*.s' -delete
+	git clean -fd -- 'dist/*.s'
