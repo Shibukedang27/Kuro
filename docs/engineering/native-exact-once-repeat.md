@@ -1,6 +1,6 @@
 # Decimal initialization in an exact-once Repeat
 
-This increment starts directly from [PR #77](https://github.com/Shibukedang27/Kuro/pull/77), verified open/unmerged at `83aa221805b1c5ab4ff1c6249c51998ad52fb013`, with all eight checks successful. It is a deliberately smaller step than general loop definite-assignment analysis. Full clean-checkout Python-free compiler/runtime construction and repository-owned assembler/linker remain unfinished.
+This increment is [PR #78](https://github.com/Shibukedang27/Kuro/pull/78), open/unmerged and stacked directly on [PR #77](https://github.com/Shibukedang27/Kuro/pull/77), verified open/unmerged at `83aa221805b1c5ab4ff1c6249c51998ad52fb013`, with all eight checks successful. It is a deliberately smaller step than general loop definite-assignment analysis. Full clean-checkout Python-free compiler/runtime construction and repository-owned assembler/linker remain unfinished.
 
 ## What is accepted
 
@@ -54,7 +54,14 @@ The raw negative corpus covers skipped zero/negative counts, Repeat 2, variable/
 
 The existing [fresh-generator storage gate](../../tests/self_host/test_native_codegen.py) also runs the new source fixture, semantic probes and rejection corpus through a newly built Kuro generator. That shared gate preserves storage, invariant control flow, all eight nested If outcomes, the 16-depth/64-slot snapshot fixture and depth-17/slot-65 rejection tests. Genuine Darwin execution remains a macOS CI gate, distinct from Linux execution, cross-assembly and ARM64 instruction emulation.
 
-The corrected final-source focused gate passed **148 tests in 67.08s**, including the fresh Linux generator, 28 new raw loop rejections, all 36 inherited raw branch rejections, all eight nested branch outcomes, and the new loop/slot plus inherited If/slot/token bounds. A prior inherited-only branch/control-flow run passed **219 tests in 50.69s**; these counts overlap and must not be added. The full local suite is still running at this checkpoint; its final result will be recorded before acceptance. Acceptance also requires all eight checks at the final documentation-updated review head; pending, cancelled, timed-out and earlier-head results do not count. Keep the PR directly stacked on #77, open and unmerged.
+The corrected final-source focused gate passed **148 tests in 67.08s**, including the fresh Linux generator, 28 new raw loop rejections, all 36 inherited raw branch rejections, all eight nested branch outcomes, and the new loop/slot plus inherited If/slot/token bounds. The **full local suite passed 1,204 tests, with 20 skipped, in 541.77s (9m01s)**. A prior inherited-only branch/control-flow run passed **219 tests in 50.69s**; these counts overlap and must not be added. No existing test was removed or weakened.
+
+```sh
+.venv/bin/python -m pytest -q tests/self_host/test_native_loop_init.py tests/self_host/test_native_branch_joins.py tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_runs_decimal_storage tests/self_host/test_native_codegen.py::test_kuro_native_codegen_keeps_if_depth_limit_at_sixteen tests/self_host/test_native_codegen.py::test_kuro_native_codegen_keeps_global_slot_limit_at_sixty_four tests/self_host/test_native_codegen.py::test_kuro_native_codegen_enforces_exact_4096_token_boundary tests/self_host/test_native_codegen.py::test_native_codegen_source_emits_with_macos_arm64_backend --durations=10
+.venv/bin/python -m pytest -q --durations=20
+```
+
+Acceptance requires all eight checks at the final documentation-updated review head; pending, cancelled, timed-out and earlier-head results do not count. The PR's exact-head check record is authoritative. Keep PR #78 directly stacked on #77, open and unmerged.
 
 ## Next work
 
