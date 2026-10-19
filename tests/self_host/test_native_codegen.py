@@ -231,6 +231,36 @@ def test_kuro_native_codegen_enforces_exact_4096_token_boundary():
     assert rejected["NativeOut"] == ""
 
 
+def nested_boundary_bytecode(depth=16, global_count=64):
+    # Keep 63 slots established and one fresh: all 16 x 64 snapshot positions
+    # are exercised without exceeding the separate 4096-token program limit.
+    tokens = [
+        token for index in range(global_count - 1)
+        for token in ("BC_CONST", "1", "BC_STORE_LIST", f"Slot{index}")
+    ]
+    tokens += ["BC_CONST", "1", "BC_IF_BEGIN"] * depth
+    tokens += ["BC_CONST", "2.5", "BC_STORE_LIST", "Fresh"]
+    for _ in range(depth):
+        tokens += ["BC_ELSE_BEGIN", "BC_CONST", "3.5", "BC_STORE_LIST", "Fresh", "BC_IF_END"]
+    return [*tokens, "BC_LOADVAR", "Fresh", "BC_PRINT"]
+
+
+def test_kuro_native_codegen_keeps_if_depth_limit_at_sixteen():
+    accepted = run_codegen(", ".join(json.dumps(token) for token in nested_boundary_bytecode()))
+    rejected = run_codegen(", ".join(json.dumps(token) for token in nested_boundary_bytecode(depth=17)))
+    assert accepted["NativeFailed"] == 0
+    assert rejected["NativeFailed"] == 1
+    assert rejected["NativeOut"] == ""
+
+
+def test_kuro_native_codegen_keeps_global_slot_limit_at_sixty_four():
+    accepted = run_codegen(", ".join(json.dumps(token) for token in nested_boundary_bytecode()))
+    rejected = run_codegen(", ".join(json.dumps(token) for token in nested_boundary_bytecode(global_count=65)))
+    assert accepted["NativeFailed"] == 0
+    assert rejected["NativeFailed"] == 1
+    assert rejected["NativeOut"] == ""
+
+
 def test_kuro_native_codegen_converts_three_digit_lengths():
     env = run_literal_codegen("x" * 137)
 
@@ -1441,11 +1471,34 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
     )
     from test_native_branch_joins import (
         BRANCH_JOIN_OUTPUT, branch_join_bytecode, branch_join_rejection_cases,
+        nested_branch_join_output, nested_branch_join_program,
     )
 
     assert_compiled_decimal_program(
         generator, tmp_path, target, branch_join_bytecode(), BRANCH_JOIN_OUTPUT, "branch-joins",
     )
+    from compiler.self_host import compile_with_kuro_driver
+
+    for outer in (1, 2):
+        for middle in (1, 2):
+            for inner in (1, 2):
+                nested = compile_with_kuro_driver(nested_branch_join_program(outer, middle, inner))
+                nested_tokens = [str(token) for token in nested["CompilerOutput"]]
+                assert_compiled_decimal_program(
+                    generator, tmp_path, target, nested_tokens,
+                    nested_branch_join_output(outer, middle, inner),
+                    f"nested-branch-joins-{outer}-{middle}-{inner}",
+                )
+    assert_compiled_decimal_program(
+        generator, tmp_path, target, nested_boundary_bytecode(), "2.5\n", "nested-boundary",
+    )
+    for invalid in (nested_boundary_bytecode(depth=17), nested_boundary_bytecode(global_count=65)):
+        rejected = subprocess.run(
+            [str(generator)], input="kuro.bytecode/1\n" + "\n".join(invalid) + "\n",
+            capture_output=True, text=True, timeout=30,
+        )
+        assert rejected.returncode == 1
+        assert rejected.stdout == rejected.stderr == ""
     for suffix in (
         ["BC_CONST", "1", "BC_STORE_LIST", "Balance"],
         ["BC_CONST_TEXT", "text", "BC_ADD", "Balance"],
@@ -1471,16 +1524,10 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
         assert rejected.stderr == ""
 
     rejection_cases = branch_join_rejection_cases()
-    for name in (
-        "then-only-decimal", "else-only-decimal", "decimal-without-else",
-        "decimal-integer-join", "integer-decimal-join", "decimal-text-join",
-        "text-decimal-join", "integer-text-join", "text-integer-join",
-    ):
+    for name, tokens in rejection_cases.items():
         rejected = subprocess.run(
             [str(generator)],
-            input="kuro.bytecode/1\n" + "\n".join(
-                ["BC_CONST", "1.25", "BC_STORE_LIST", "Balance", *rejection_cases[name]]
-            ) + "\n",
+            input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
             capture_output=True, text=True, timeout=30,
         )
         assert rejected.returncode == 1, name
