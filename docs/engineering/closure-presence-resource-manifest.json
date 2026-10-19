@@ -1,0 +1,32 @@
+{
+  "base_pr": 75,
+  "base_head": "5a13fdcdeac0bda001aa36d7b7851d012de91995",
+  "production_changed": false,
+  "production_promotion_allowed": false,
+  "expanded_comparisons": 1756,
+  "all_expanded_checks_passed": true,
+  "timing_samples": 60,
+  "allocation_samples": 6,
+  "limitations": [
+    "finite generated corpus",
+    "same-host timing only",
+    "single allocation pair per size at hash seed zero",
+    "tracemalloc not total native allocation",
+    "RSS includes preparation",
+    "dict adapter not full mapping abstraction"
+  ],
+  "sha256": {
+    "compiler/native.py": "32a4944bac3c3b619e85435f6dd2ccd2cdbd3b974baa498c50bcbb400fe3bd45",
+    "scripts/audit_expanded_presence.py": "f64edc324105dd792f5c18a85baead5c6999ff4e69755c3010b9b63f9ecfaec0",
+    "scripts/profile_presence_closures.py": "2c2a12fd330c8ebb64fe71d3e37a6bc43f07a955359931fe7d144e58ac465a60",
+    "scripts/audit_presence_closures.py": "9326db5e53d14b474df2efb70ab7e166862604227103c01649436e0bc4014f61",
+    "tests/compiler/test_expanded_presence.py": "9de039381996f3937dad53c502f597a6d2afbfcc99b8b33f75aa3424cbb75b39",
+    "tests/compiler/test_profile_presence.py": "4e9e92b855e27a74df0d9489ded4ae82afe51b90a1ac28af85b452b4223dc23b",
+    "docs/engineering/closure-presence-resource-audit.md": "987960c8445a6bed3f4c97648bae1ca9515d2407598283eaf55f66d8b81c19c7",
+    "docs/engineering/closure-presence-expanded-summary.json": "e65cc8c2ca6bfbf10f8e55da4acb98774e7f6f9b8027f64498597a59729cf776",
+    "docs/engineering/closure-presence-expanded.json.gz": "1c00e646e628c3ffc2755da23d64990c5419a7c5add395539f2a5d8b335063ac",
+    "docs/engineering/closure-presence-resources.json": "b3f43f0f04bc574f69d8e67c45b80b0f15ddf56d5c646179da48bcaf92f06e81",
+    "docs/engineering/closure-presence-initial-profiler.py.gz": "6ad1bba4be0d8a189cbb34665fa6a4813a5becbc1967d793471c541e01cbd8f7",
+    "docs/engineering/independence-status.md": "5fa55eb6f6a646112560ce76a733c7c3dccb83713050f6673489d739d24acaa1"
+  }
+}

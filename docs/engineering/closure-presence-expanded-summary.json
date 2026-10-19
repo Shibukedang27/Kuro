@@ -1,0 +1,109 @@
+{
+  "scope": "bounded empirical comparison; not a proof of scheduling equivalence or promotion authorization",
+  "start_seed": 0,
+  "seed_count": 100,
+  "case_count": 439,
+  "order_count": 4,
+  "comparison_count": 1756,
+  "orders": [
+    "lifo_forward",
+    "fifo_forward",
+    "lifo_reverse",
+    "fifo_reverse"
+  ],
+  "all_comparisons_passed": true,
+  "all_outcomes_equal": true,
+  "all_raw_dense_states_equal": true,
+  "all_invocation_summaries_equal": true,
+  "all_chronological_events_equal": true,
+  "all_production_replays_valid": true,
+  "all_presence_replays_valid": true,
+  "all_production_invocation_validations_valid": true,
+  "all_presence_invocation_validations_valid": true,
+  "all_presence_storage_accounting_valid": true,
+  "observed_coverage": {
+    "recursive_installed_summary_changes": 832,
+    "alias_operations": 75897,
+    "alias_fact_preservations": 75897,
+    "missing_name_loads": 12308,
+    "unknown_return_events": 10035,
+    "unknown_all_path_summaries": 2104,
+    "static_backedges": 1924,
+    "observed_backedge_merges": 10125
+  },
+  "coverage_requirements_observed": {
+    "recursive_installed_summary_changes": true,
+    "alias_operations": true,
+    "alias_fact_preservations": true,
+    "missing_name_loads": true,
+    "unknown_return_events": true,
+    "unknown_all_path_summaries": true,
+    "static_backedges": true,
+    "observed_backedge_merges": true
+  },
+  "all_required_coverage_observed": true,
+  "aggregate_storage_counts": {
+    "expected_copy_calls": 389925,
+    "dense_copy_presence_slots": 4374322,
+    "candidate_expected_stored_fact_slots": 2121831,
+    "first_reach_copy_count": 124692,
+    "actual_copy_calls": 389925,
+    "actual_copy_presence_slots": 4374322,
+    "actual_copy_nondefault_fact_slots": 2121831,
+    "actual_copy_elided_presence_slots": 2252491,
+    "final_state_maps": 129980,
+    "final_dense_presence_slots": 1358272,
+    "final_nondefault_fact_slots": 720444,
+    "final_elided_presence_slots": 637828,
+    "elided_default_write_count": 1216980,
+    "accounting_valid": 1756
+  },
+  "frontend_source_fixtures": {
+    "frontend_ir_returned_closure_capture": {
+      "source_sha256": "c53162507dd1e6cc9b18e6e88e055c52f412a71dd009b9dbba9e7474abf86db2",
+      "ir_sha256": "ef5c1fecacda03f4010c533733a82ebf68d99a3b5d26f24cbe3d65c64d9c447b"
+    },
+    "frontend_ir_returned_closure_branch": {
+      "source_sha256": "060d7f150612d5e2ce1bca69c65a89d6132f74b9230b591696b718dc7d0ced05",
+      "ir_sha256": "2d9edff7690835d0fe6aa717efb601068b60af7d998d016b41cf15084444638a"
+    }
+  },
+  "aggregate_trace_counts": {
+    "invocations": 10352,
+    "visits": 530466,
+    "returns": 31892
+  },
+  "aggregate_outcome_kind_counts": {
+    "by_mode": {
+      "production": {
+        "assembly": 476,
+        "native-error": 1280
+      },
+      "presence": {
+        "assembly": 476,
+        "native-error": 1280
+      }
+    },
+    "combined": {
+      "assembly": 952,
+      "native-error": 2560
+    },
+    "by_classification": {
+      "successful_assembly": {
+        "assembly": 952
+      },
+      "rejection": {
+        "native-error": 2560
+      },
+      "unexpected_exception": {},
+      "other": {},
+      "analyzed": {
+        "assembly": 952,
+        "native-error": 2560
+      },
+      "nonanalyzed": {}
+    }
+  },
+  "failure_count": 0,
+  "evidence_file": "closure-presence-expanded.json.gz"
+}
