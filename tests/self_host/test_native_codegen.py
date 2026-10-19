@@ -280,6 +280,56 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path):
     assert object_file.read_bytes()[:4] == b"\x7fELF"
 
 
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+@pytest.mark.parametrize(
+    ("tokens", "expected"),
+    [
+        (["BC_CONST", "6", "BC_CONST", "7", "BC_BINOP", "*", "BC_PRINT"], "42\n"),
+        (
+            [
+                "BC_CONST", "0", "BC_STORE_LIST", "N", "BC_WHILE_BEGIN",
+                "BC_LOADVAR", "N", "BC_CONST", "3", "BC_CMP", "lt", "BC_WHILE_TEST",
+                "BC_LOADVAR", "N", "BC_PRINT", "BC_CONST", "1", "BC_ADD", "N", "BC_WHILE_END",
+            ],
+            "0\n1\n2\n",
+        ),
+    ],
+)
+def test_kuro_owned_x86_linux_codegen_links_and_runs(tmp_path, tokens, expected):
+    from compiler.self_host import build_native_codegen
+
+    generator = tmp_path / "kuro-codegen-linux"
+    executable = tmp_path / "kuro-generated-linux"
+    build_native_codegen(generator, output_target="x86_64-linux")
+    generated = subprocess.run(
+        [str(generator)],
+        input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    subprocess.run(
+        [
+            "clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
+            "-Wl,-e,_start", "-x", "assembler", "-", "-o", str(executable),
+        ],
+        input=generated.stdout,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [str(executable)], capture_output=True, text=True, timeout=5, check=False
+    )
+    assert result.returncode == 0
+    assert result.stdout == expected
+    assert result.stderr == ""
+
+
 def test_native_kuro_codegen_rejects_unknown_output_target(tmp_path):
     from compiler.self_host import SelfHostError, build_native_codegen
 
