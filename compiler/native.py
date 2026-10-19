@@ -2132,9 +2132,32 @@ def emit_x86_64_linux(
                     pending.append(successor)
         return returned, all_returns_known, saw_return
 
+    # Only constructors and calls with a currently known closure return can
+    # introduce a target. Without either seed every target set stays empty,
+    # regardless of CFG reachability or the all-paths-known flag, so the old
+    # analysis could not add this function to updated_returns. Cache only the
+    # immutable call-site facts; recheck known returns on every fixed-point
+    # round (including recursive/forward calls), never cache dataflow results.
+    closure_return_constructors = {
+        name for name, _ in function_closure_construction_targets
+    }
+    closure_return_callees = {
+        function.name: {
+            item.args[0] for item in function.body
+            if item.op == "CALL" and item.dest
+        }
+        for function in ir.functions.values()
+    }
     for _ in range(len(ir.functions) + 1):
         updated_returns: dict[str, set[str]] = {}
         for function in ir.functions.values():
+            if (
+                function.name not in closure_return_constructors
+                and function_return_closure_targets.keys().isdisjoint(
+                    closure_return_callees[function.name]
+                )
+            ):
+                continue
             targets, all_known, saw_return = analyze_action_closure_returns(
                 function, function_return_closure_targets
             )
