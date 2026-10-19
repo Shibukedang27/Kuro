@@ -1913,6 +1913,17 @@ def test_native_kuro_codegen_image_consumes_artifact(tmp_path):
     assert rejected.stdout == ""
 
 
+@pytest.fixture(scope="module")
+def x86_macos_codegen(tmp_path_factory):
+    from compiler.self_host import build_native_codegen
+
+    # Only the immutable executable is shared; every case starts a new process
+    # and keeps its generated assembly and output image in its own tmp_path.
+    generator = tmp_path_factory.mktemp("kuro-codegen-macos-x86") / "kuro-codegen-x86"
+    build_native_codegen(generator, target="x86_64-macos", output_target="x86_64-macos")
+    return generator
+
+
 @pytest.mark.skipif(platform.system() != "Darwin", reason="requires macOS x86-64 linking")
 @pytest.mark.parametrize(
     ("tokens", "expected"),
@@ -1930,12 +1941,11 @@ def test_native_kuro_codegen_image_consumes_artifact(tmp_path):
           "BC_WHILE_END"], "0\n1\n2\n"),
     ],
 )
-def test_native_kuro_codegen_image_emits_executable_x86_macos(tmp_path, tokens, expected):
-    from compiler.self_host import build_native_codegen
-
-    generator = tmp_path / "kuro-codegen-x86"
+def test_native_kuro_codegen_image_emits_executable_x86_macos(
+    tmp_path, x86_macos_codegen, tokens, expected
+):
+    generator = x86_macos_codegen
     executable = tmp_path / "kuro-generated-x86"
-    build_native_codegen(generator, target="x86_64-macos", output_target="x86_64-macos")
     generated = subprocess.run(
         [str(generator)], input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
         capture_output=True, text=True, timeout=10, check=True,
