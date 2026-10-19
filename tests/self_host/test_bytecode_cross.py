@@ -27,6 +27,20 @@ def test_bytecode_encoder_consumes_operands_by_opcode_contract():
     assert out == ["BC_CONST", "7", "BC_STORE_LIST", "N", "BC_PRINT"]
 
 
+def test_bytecode_encoder_emits_stack_bounded_multi_value_store():
+    out, failed = encode([
+        "MULTI_BEGIN",
+        "CONST", "a", "CONST", "b", "CONST", "c",
+        "STORE_MULTI", "Items", "PRINT",
+    ])
+    assert failed in (None, 0)
+    assert out == [
+        "BC_MULTI_BEGIN",
+        "BC_CONST", "a", "BC_CONST", "b", "BC_CONST", "c",
+        "BC_STORE_MULTI", "Items", "BC_PRINT",
+    ]
+
+
 def test_bytecode_encoder_handles_functions_and_control_markers():
     out, failed = encode([
         "FUNC_BEGIN", "Add", "PARAM", "A", "Integers",

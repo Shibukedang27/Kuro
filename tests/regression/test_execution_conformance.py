@@ -50,6 +50,13 @@ CASES = [
         ["b", 3],
         id="collection-index-and-length",
     ),
+    pytest.param(
+        'Items = "a", "b", "c";\n'
+        'Print Items.\nLength Items;\nPrint @_.\nGet Items 1;\nPrint @_.',
+        "a\nb\nc\n3\nb\n",
+        ["a", "b", "c", 3, "b"],
+        id="multi-value-collection-assignment",
+    ),
 ]
 
 

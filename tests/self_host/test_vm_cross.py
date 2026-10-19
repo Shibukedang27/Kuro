@@ -163,6 +163,26 @@ def test_kuro_vm_supports_append_mutation():
     assert output == ["a", "a", "b"]
 
 
+def test_kuro_vm_preserves_multi_value_assignment_order_and_length():
+    output, failed = run_kuro_vm(
+        'Items = "a", "b", "c";\n'
+        "Print Items.\nLength Items;\nPrint @_.\nGet Items 1;\nPrint @_."
+    )
+    assert failed in (None, 0)
+    assert output == ["a", "b", "c", 3, "b"]
+
+
+def test_kuro_vm_replaces_multi_value_collections_on_reassignment():
+    output, failed = run_kuro_vm(
+        'Items = "a", "b";\n'
+        'Items = "c", "d", "e";\n'
+        "Print Items.\nLength Items;\nPrint @_ .\n"
+        'Items = "z";\nLength Items;\nPrint @_ .\nPrint Items.'
+    )
+    assert failed in (None, 0)
+    assert output == ["c", "d", "e", 3, 1, "z"]
+
+
 def test_kuro_vm_decodes_multi_digit_and_decimal_constants():
     output, failed = run_kuro_vm("Print 42.")
     assert failed in (None, 0)
