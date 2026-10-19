@@ -1,0 +1,2336 @@
+{
+  "counts": {
+    "case_schedule_pairs": 116,
+    "return_sequence_differences": 44,
+    "paired_differing_invocations": 44,
+    "production_only_return_observations": 64,
+    "paired_differing_return_observations": 40,
+    "paired_return_observations": 558,
+    "paired_invocations": 272,
+    "representation_only_dense_appends": 1200,
+    "independent_dense_events_valid": 116,
+    "independent_normalized_events_valid": 116,
+    "production_replay_valid": 116,
+    "autonomous_replay_valid": 116
+  },
+  "valid": true,
+  "scope": "bounded inherited closure queue corpus; no equivalence claim",
+  "all_histories_valid": true,
+  "equivalence_proven": false,
+  "cases": [
+    {
+      "case": "generated_0_known",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 10,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "d026a108ec15502ae041453e9640b72522aec2ad66b822d535e1ef19ca43a54e",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_0_known",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "2a8d06fdf5a7d28e56f108ab4bbd212506403cc1f19058c4be84672f238e5916",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_0_known",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 6,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "2242bce5fd73ffb498c468055c020a592087d9366f9a4bdc039962cf4acce26a",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_0_known",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 8,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "43641a116b4a3dbe68dd25409ff57e40725e1e28258f99f632ed521f9afb09bf",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_1_missing",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 6,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "bb14aa613e425b102213ee6e63dba4dbfd9ff93efcfeb3c7a663cbce87f467f0",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_1_missing",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 1,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "e99124892e340aae7215722024d520af281ace4e535330f85c28f0b70f912347",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_1_missing",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 5,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "ad319988eb70b19952989e6735facda6422943dc05134bcea2f648b709b166b2",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_1_missing",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 3,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "4ef8e509a35c3d2126447c7e6f0fe9aca493644e05f0b09c8acffd212c59b32d",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_2_scalar",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 5,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "7cd6ceaa138fd1b78feb3c3949ac49db0d891697c14d27a222e7071e13d49eb3",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_2_scalar",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "c7ac49fdd3e2df321b47048ae3b1d91488727bb14ff4b861135503be2b7b73c0",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_2_scalar",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 3,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "830a7300a694c414864eb4714fa8e3e1aab157ca62fa69469a629707bc40a856",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_2_scalar",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "fc385015c09e0a054d0a7a47645376be52adcc29b7d075b8e855ddf1096eb7f7",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_3_known",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 12,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "a11a505182248a1c082e9709697201c6abda7975b14de53b0b2f8b1337397c4f",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_3_known",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "64c808ef2c5ffb737ddfc0309129e4d41d7e79066137c11029dcf81271702aca",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_3_known",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 8,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "09d13b7e1b770fee4d907d7344d776138c3191f9b54d58698b58df12d3ac6e3f",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_3_known",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 8,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "c80d374f3ffa428bf14fff28871b1ee5cb0481e56e59a1ed4cbc816c37c56728",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_4_missing",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 6,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "432065c84159df99e1eb13c843052d602a0b160b87ebb587f3b0513b0e493640",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_4_missing",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "c2ab399e69ba34a970034b779767bfea0fc3d43a04ae7829ee1062b0dfa60723",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_4_missing",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 3,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "d4cc596b7c861a9d74c822677f4f162da38a2b2d4793f32547d070221d0d6bdb",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_4_missing",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 5,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "7f90814aff036a1e8220c6a7b5fda01a4d75d0c79ab5682fb1b56f86f1d5ed72",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_5_scalar",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "72c2795988bf9cc98c2e25f8ce510f4c3d6970823d3d83c22c1fc03f2fd71678",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_5_scalar",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "73f45292e1790743b745fd5d2b7b70a8f57b8eec51e65b7f8c03afee7f28630e",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_5_scalar",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f5dc196d82afd06b8460908245e123af44d94470b777678af9bc691ef03d4d54",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_5_scalar",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "80b6b578949a7302d9ecc04c1bac8d9a3db00e937770964fe2e9a2e459277cc8",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_6_known",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 12,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "a11a505182248a1c082e9709697201c6abda7975b14de53b0b2f8b1337397c4f",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_6_known",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "64c808ef2c5ffb737ddfc0309129e4d41d7e79066137c11029dcf81271702aca",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_6_known",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 8,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "09d13b7e1b770fee4d907d7344d776138c3191f9b54d58698b58df12d3ac6e3f",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_6_known",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 8,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "c80d374f3ffa428bf14fff28871b1ee5cb0481e56e59a1ed4cbc816c37c56728",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_7_missing",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 5,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "4386fe72ac804ea546870a9f53f37c62b242b779de869fe407eeecfbd5930e1b",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_7_missing",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 1,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "5e83cd55b4201a3b0e81de6a1692fb3cfbaa71841b2728adfc5475290228750c",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_7_missing",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "fb3e3d0f2a3106ee1389e887c2f0af98fe220f2ce749a00b4414e29c10fd69b7",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_7_missing",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 3,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "fb846e14adaff2c429c2d33de28bada2616d36f5c8c3cae036d539b4d414f683",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_8_scalar",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 5,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "7cd6ceaa138fd1b78feb3c3949ac49db0d891697c14d27a222e7071e13d49eb3",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_8_scalar",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "c7ac49fdd3e2df321b47048ae3b1d91488727bb14ff4b861135503be2b7b73c0",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_8_scalar",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 3,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "830a7300a694c414864eb4714fa8e3e1aab157ca62fa69469a629707bc40a856",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_8_scalar",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "fc385015c09e0a054d0a7a47645376be52adcc29b7d075b8e855ddf1096eb7f7",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_9_known",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 6,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "a3274e76272dc97036d01e74a5e9b68aa0e967dc3f23f07b23c26cfbd53c8ed5",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_9_known",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "adc96623b0772bf13f6daa3b4e70bbccd89898dcc218d340988662f69e3315d1",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_9_known",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 6,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "1efe65133953067d531914ef290ed5d77de7d69b8defc34c488a96f52aa8f5ef",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_9_known",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "60575c133d3d9e0ac7e911dc5a7b3f1b2a2dd005cad9b69547846309da462f29",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_10_missing",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 8,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "6f96640feab8353a3471e63bf31c9ef7720ea4349a4ac9256f462935c8e6ddd2",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_10_missing",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "d547306519253e8d8e69fcbfc5c3a9390d82a8a0af9fc753a25d46419175403b",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_10_missing",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 5,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "7b92ac91d9b91d2d2a1b004f7db39b27f7fbdaeeb1878529f0d5a3f320ec0b4c",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_10_missing",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 5,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "dfa590e7c76800c0790ed5d5e4517d5c3f78a38308c391250234cb581837f224",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_11_scalar",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 3,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "2c60f3fb77788bb77602a6fed497d1a0042ed2ab96ca6a14ffeaf3c0f4f0683c",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_11_scalar",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 1,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "6813b745e2b65889d655aff2d15b90bb83a977f0652ac6a9347fdc0d081cfea2",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_11_scalar",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 3,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f0d8c5187cebe2df17dafd6e20e11e8ea293d5bfaeedd4ac69218ee763a2abdd",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_11_scalar",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "c519895bd05dd0f3b35398913cf745e0972b89b26eb46da19374f3eba79354d4",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "multibackedge_0",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 4,
+      "paired_detail_sha256": "3ddfa0061ee417d7dbfdbddf77eab41a94bc8268a6e0defc7fda1f40a18e9000",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge0",
+            [
+              [
+                "MultiBackedge0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge0",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multibackedge_0",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 2,
+      "paired_detail_sha256": "bfb7f9a2045a464bc84c35a94a09668e3ad0cb2c4e873ea617529665d3c4dc1b",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge0",
+            [
+              [
+                "MultiBackedge0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge0",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multibackedge_0",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 2,
+      "paired_detail_sha256": "203ec1dae87e2790f788250bd9276537eaa0b4662d9abddd0b642346cc28fa70",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge0",
+            [
+              [
+                "MultiBackedge0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge0",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multibackedge_0",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 4,
+      "paired_detail_sha256": "756dc082f989229a9ea56a11c03380c0cd1f61af41d24e4e70eb2b4f71081cc7",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge0",
+            [
+              [
+                "MultiBackedge0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge0",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multibackedge_1",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 4,
+      "paired_detail_sha256": "6ee9584413ac696d1fab84ff9dc6bb68725d76df9e6eb665f83777a8847f5b01",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge1",
+            [
+              [
+                "MultiBackedge1",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge1",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multibackedge_1",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 2,
+      "paired_detail_sha256": "308a568a7f16aa4acf95b88f7610109ca0c0b6622871dfcd3a97b4c0c5da67c9",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge1",
+            [
+              [
+                "MultiBackedge1",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge1",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multibackedge_1",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 2,
+      "paired_detail_sha256": "736afb07edcf92fc6b960cb2b1ac8b3922531f1dade6aa17cb8fcd28ae98974b",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge1",
+            [
+              [
+                "MultiBackedge1",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge1",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multibackedge_1",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 4,
+      "paired_detail_sha256": "39f4b340962589ee2fbb9e0218404543b96088e5ba2cc8160106b7840096ab24",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge1",
+            [
+              [
+                "MultiBackedge1",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge1",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multibackedge_2",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 4,
+      "paired_detail_sha256": "3e86adf718d429393006e90ce604d15b4e0b514db5941369dbd94f7d45496da3",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge2",
+            [
+              [
+                "MultiBackedge2",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge2",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multibackedge_2",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 2,
+      "paired_detail_sha256": "df7853847caf2184937e454cb78a5c900f985276e79ba9325a30db101b8527e2",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge2",
+            [
+              [
+                "MultiBackedge2",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge2",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multibackedge_2",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 2,
+      "paired_detail_sha256": "450a81c1e6873c6d807da94658a68f0aaa15d1298d5dec34a30f8c3c7feb86b0",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge2",
+            [
+              [
+                "MultiBackedge2",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge2",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multibackedge_2",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 4,
+      "paired_detail_sha256": "32f4b641da8a4c93ec5ad0eb85a699ee5a8e644c76bfa9dc158b55a990df0844",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge2",
+            [
+              [
+                "MultiBackedge2",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge2",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "unreachable_scalar_return",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f8db6831e20a33ddb7cdb6f1913a9e60889563766cce53b2db352a1c7681be57",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "unreachable_scalar_return",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f8db6831e20a33ddb7cdb6f1913a9e60889563766cce53b2db352a1c7681be57",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "unreachable_scalar_return",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f8db6831e20a33ddb7cdb6f1913a9e60889563766cce53b2db352a1c7681be57",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "unreachable_scalar_return",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f8db6831e20a33ddb7cdb6f1913a9e60889563766cce53b2db352a1c7681be57",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "missing_target_return",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "c297c12c526e72544fda39aa92607ce5cc412e7b899886092d66c9492b56fb07",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "missing_target_return",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "919be338b2aec3aa78d44f927ec21cdda392dd89b2839c7d72f2f297e4038bbc",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "missing_target_return",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "8687e831f8d368c73577aa4f46ef313e11f5bfbf59bc03900df0e75a02d31230",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "missing_target_return",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "1cc4a1c5b2bd2fcf47b5e4e86155ce13fee8e25b13551f55137af4a5a2b13de8",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "overwritten_closure",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 1,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "0e4945d1e58e666a0ac8007adc53b8c843b3673f8874467013567edcfb981051",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "overwritten_closure",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 1,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "0e4945d1e58e666a0ac8007adc53b8c843b3673f8874467013567edcfb981051",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "overwritten_closure",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 1,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "0e4945d1e58e666a0ac8007adc53b8c843b3673f8874467013567edcfb981051",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "overwritten_closure",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 1,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "0e4945d1e58e666a0ac8007adc53b8c843b3673f8874467013567edcfb981051",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "loop_zero_path_unknown",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "43342a716c8176a8b35434bd066c235966dbc5c0a34bbebb0be9e5f130e1cef3",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "loop_zero_path_unknown",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "85bcc1a700d08b050199a998c9a91034f5cff2430ad14f02e511afcb07e13808",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "loop_zero_path_unknown",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 1,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f6afdca3b91bfec60e0ac04bd39131c0ca1845de890b6fb075cbca11707d040d",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "loop_zero_path_unknown",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "b86abd882665b95e29c44dc56c53b2f76ab00410189ebf76a7337fe4af00529f",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "recursive_return_calls",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 6,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "8f189da42740f9bfb732bbc58c378c9b655cbf2eca29a9857ba42bb4d91583b1",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "recursive_return_calls",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 6,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "8f189da42740f9bfb732bbc58c378c9b655cbf2eca29a9857ba42bb4d91583b1",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "recursive_return_calls",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 6,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "8f189da42740f9bfb732bbc58c378c9b655cbf2eca29a9857ba42bb4d91583b1",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "recursive_return_calls",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 6,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "8f189da42740f9bfb732bbc58c378c9b655cbf2eca29a9857ba42bb4d91583b1",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "negative_mixed_return",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "c86eed197e61b53fdeb4cb15441a4d6c25f0a648ba470ad5844b87784e015f27",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "negative_mixed_return",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "14cfba567bf6a14cfd6c497d780d50f0aed5f7f51181a9e58056139b73e081b7",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "negative_mixed_return",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "2d117f184a192d76c4a045cf48a48c95aa056fe5b2b73116b6e4642b714f8f20",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "negative_mixed_return",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f0bf52dcaf116726a8156b97e4a024232f40cc32d21f10dff3d634efe1fdf73f",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "small_recursive_join_cfg",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 4,
+      "independent_difference_count": 4,
+      "paired_differing_invocations": 4,
+      "paired_differing_return_observations": 8,
+      "paired_return_observations": 53,
+      "production_only_return_observations": 8,
+      "paired_detail_sha256": "32ce81072e8021924bd0db073d90310cc832385e9892c06c7099b1eda1d3add2",
+      "differing_invocation_keys": [
+        [
+          [
+            "SparseStress",
+            [
+              [
+                "ChainLeaf",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "ChainMiddle",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "ChainTop",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RandomGraph0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ],
+              [
+                "RecursiveA",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RecursiveB",
+                [
+                  "TargetB"
+                ]
+              ],
+              [
+                "SparseStress",
+                [
+                  "TargetA",
+                  "TargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "SparseStress",
+            [
+              [
+                "ChainLeaf",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "ChainMiddle",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RandomGraph0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ],
+              [
+                "RecursiveA",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RecursiveB",
+                [
+                  "TargetB"
+                ]
+              ],
+              [
+                "SparseStress",
+                [
+                  "TargetA",
+                  "TargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "SparseStress",
+            [
+              [
+                "ChainLeaf",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RandomGraph0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ],
+              [
+                "RecursiveA",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RecursiveB",
+                [
+                  "TargetB"
+                ]
+              ],
+              [
+                "SparseStress",
+                [
+                  "TargetA",
+                  "TargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "SparseStress",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "small_recursive_join_cfg",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 4,
+      "independent_difference_count": 4,
+      "paired_differing_invocations": 4,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 29,
+      "production_only_return_observations": 4,
+      "paired_detail_sha256": "cc9292bb82c21032a2f042c48882605dfa6a972400cdb42f01e9b6b6bef50897",
+      "differing_invocation_keys": [
+        [
+          [
+            "SparseStress",
+            [
+              [
+                "ChainLeaf",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "ChainMiddle",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "ChainTop",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RandomGraph0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ],
+              [
+                "RecursiveA",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RecursiveB",
+                [
+                  "TargetB"
+                ]
+              ],
+              [
+                "SparseStress",
+                [
+                  "TargetA",
+                  "TargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "SparseStress",
+            [
+              [
+                "ChainLeaf",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "ChainMiddle",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RandomGraph0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ],
+              [
+                "RecursiveA",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RecursiveB",
+                [
+                  "TargetB"
+                ]
+              ],
+              [
+                "SparseStress",
+                [
+                  "TargetA",
+                  "TargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "SparseStress",
+            [
+              [
+                "ChainLeaf",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RandomGraph0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ],
+              [
+                "RecursiveA",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RecursiveB",
+                [
+                  "TargetB"
+                ]
+              ],
+              [
+                "SparseStress",
+                [
+                  "TargetA",
+                  "TargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "SparseStress",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "small_recursive_join_cfg",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 45,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "25e738ecf27f04a6bae444dfc7d15abf2bb4e30d1ca67d82549fc5bfbb495b63",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "small_recursive_join_cfg",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 4,
+      "independent_difference_count": 4,
+      "paired_differing_invocations": 4,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 41,
+      "production_only_return_observations": 4,
+      "paired_detail_sha256": "968d83552752cdb45ec1e35c835ee676ba292ac868b0e5fccd3bc0d9a91beeba",
+      "differing_invocation_keys": [
+        [
+          [
+            "SparseStress",
+            [
+              [
+                "ChainLeaf",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "ChainMiddle",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "ChainTop",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RandomGraph0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ],
+              [
+                "RecursiveA",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RecursiveB",
+                [
+                  "TargetB"
+                ]
+              ],
+              [
+                "SparseStress",
+                [
+                  "TargetA",
+                  "TargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "SparseStress",
+            [
+              [
+                "ChainLeaf",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "ChainMiddle",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RandomGraph0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ],
+              [
+                "RecursiveA",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RecursiveB",
+                [
+                  "TargetB"
+                ]
+              ],
+              [
+                "SparseStress",
+                [
+                  "TargetA",
+                  "TargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "SparseStress",
+            [
+              [
+                "ChainLeaf",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RandomGraph0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ],
+              [
+                "RecursiveA",
+                [
+                  "TargetA"
+                ]
+              ],
+              [
+                "RecursiveB",
+                [
+                  "TargetB"
+                ]
+              ],
+              [
+                "SparseStress",
+                [
+                  "TargetA",
+                  "TargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "SparseStress",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multiple_backedges_and_missing_name_join",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 4,
+      "paired_detail_sha256": "3ddfa0061ee417d7dbfdbddf77eab41a94bc8268a6e0defc7fda1f40a18e9000",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge0",
+            [
+              [
+                "MultiBackedge0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge0",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multiple_backedges_and_missing_name_join",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 2,
+      "paired_detail_sha256": "bfb7f9a2045a464bc84c35a94a09668e3ad0cb2c4e873ea617529665d3c4dc1b",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge0",
+            [
+              [
+                "MultiBackedge0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge0",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multiple_backedges_and_missing_name_join",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 2,
+      "paired_detail_sha256": "203ec1dae87e2790f788250bd9276537eaa0b4662d9abddd0b642346cc28fa70",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge0",
+            [
+              [
+                "MultiBackedge0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge0",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "multiple_backedges_and_missing_name_join",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 2,
+      "independent_difference_count": 2,
+      "paired_differing_invocations": 2,
+      "paired_differing_return_observations": 2,
+      "paired_return_observations": 4,
+      "production_only_return_observations": 4,
+      "paired_detail_sha256": "756dc082f989229a9ea56a11c03380c0cd1f61af41d24e4e70eb2b4f71081cc7",
+      "differing_invocation_keys": [
+        [
+          [
+            "MultiBackedge0",
+            [
+              [
+                "MultiBackedge0",
+                [
+                  "GraphTargetA",
+                  "GraphTargetB"
+                ]
+              ]
+            ]
+          ],
+          0
+        ],
+        [
+          [
+            "MultiBackedge0",
+            []
+          ],
+          0
+        ]
+      ]
+    },
+    {
+      "case": "generated_missing_name_return_join",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 6,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "432065c84159df99e1eb13c843052d602a0b160b87ebb587f3b0513b0e493640",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_missing_name_return_join",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "c2ab399e69ba34a970034b779767bfea0fc3d43a04ae7829ee1062b0dfa60723",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_missing_name_return_join",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 3,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "d4cc596b7c861a9d74c822677f4f162da38a2b2d4793f32547d070221d0d6bdb",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "generated_missing_name_return_join",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 5,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "7f90814aff036a1e8220c6a7b5fda01a4d75d0c79ab5682fb1b56f86f1d5ed72",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "missing_target_return_path",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "c297c12c526e72544fda39aa92607ce5cc412e7b899886092d66c9492b56fb07",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "missing_target_return_path",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "919be338b2aec3aa78d44f927ec21cdda392dd89b2839c7d72f2f297e4038bbc",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "missing_target_return_path",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "8687e831f8d368c73577aa4f46ef313e11f5bfbf59bc03900df0e75a02d31230",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "missing_target_return_path",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "1cc4a1c5b2bd2fcf47b5e4e86155ce13fee8e25b13551f55137af4a5a2b13de8",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "loop_zero_path_return",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "43342a716c8176a8b35434bd066c235966dbc5c0a34bbebb0be9e5f130e1cef3",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "loop_zero_path_return",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "85bcc1a700d08b050199a998c9a91034f5cff2430ad14f02e511afcb07e13808",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "loop_zero_path_return",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 1,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f6afdca3b91bfec60e0ac04bd39131c0ca1845de890b6fb075cbca11707d040d",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "loop_zero_path_return",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "b86abd882665b95e29c44dc56c53b2f76ab00410189ebf76a7337fe4af00529f",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "unreachable_return_path",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f8db6831e20a33ddb7cdb6f1913a9e60889563766cce53b2db352a1c7681be57",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "unreachable_return_path",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f8db6831e20a33ddb7cdb6f1913a9e60889563766cce53b2db352a1c7681be57",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "unreachable_return_path",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f8db6831e20a33ddb7cdb6f1913a9e60889563766cce53b2db352a1c7681be57",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "unreachable_return_path",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "f8db6831e20a33ddb7cdb6f1913a9e60889563766cce53b2db352a1c7681be57",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "compact_sticky_return",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "ce0a23694782989fcddb7e6a9db182dacee811bef6286483946c626e495ab2cc",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "compact_sticky_return",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "d7462a2bf72f1a6db5ff254ea4bb2b74cd7f0b9e828fb3fc654ee692850e68b5",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "compact_sticky_return",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "c347cc819e54e623c2ee83f9d07a87ed59bdc16042c85606bdba747d91fbfc4a",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "compact_sticky_return",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 1,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "d62aaaf992c229a3791a36afe9e7dab56600a81109253a8f3c426d1b243b2e8a",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "swapped_predecessor_layout",
+      "schedule": "lifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "d9a153284426b0d725b742a6b71de0b6b55c7f59d1e41c092f7ff064a099084e",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "swapped_predecessor_layout",
+      "schedule": "fifo_forward",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 1,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "212543f905daf94ce5e8ae392391cacd6723bd11deaa3400629ea346f0492d77",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "swapped_predecessor_layout",
+      "schedule": "lifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 2,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "60f312060e89529869032bd8696d1ddd621d6d58dfaf3128549777759feedf0f",
+      "differing_invocation_keys": []
+    },
+    {
+      "case": "swapped_predecessor_layout",
+      "schedule": "fifo_reverse",
+      "valid": true,
+      "reference_difference_count": 0,
+      "independent_difference_count": 0,
+      "paired_differing_invocations": 0,
+      "paired_differing_return_observations": 0,
+      "paired_return_observations": 1,
+      "production_only_return_observations": 0,
+      "paired_detail_sha256": "ac71d2e8b6d8ad6a24326b1883cdf71723b2eaa725000c10f8a1b22f44e91b9e",
+      "differing_invocation_keys": []
+    }
+  ]
+}

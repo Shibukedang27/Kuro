@@ -1,0 +1,5061 @@
+{
+  "case_count": 29,
+  "order_count": 4,
+  "comparison_count": 116,
+  "orders": [
+    "lifo_forward",
+    "fifo_forward",
+    "lifo_reverse",
+    "fifo_reverse"
+  ],
+  "all_outcomes_equal": true,
+  "all_exact_invocation_summaries_equal": true,
+  "all_raw_dense_states_equal": true,
+  "all_queue_and_return_timelines_equal": true,
+  "all_production_replays_valid": true,
+  "all_presence_replays_valid": true,
+  "all_copy_accounting_valid": true,
+  "scheduling_equivalence_proven": false,
+  "production_promotion_allowed": false,
+  "aggregate_storage_copy_counts": {
+    "comparisons": 116,
+    "copy_calls": 17328,
+    "dense_copy_presence_slots": 234700,
+    "presence_copy_nondefault_fact_slots": 110874,
+    "presence_copy_elided_slots": 123826,
+    "final_dense_presence_slots": 74956,
+    "final_nondefault_fact_slots": 36856,
+    "final_elided_presence_slots": 38100,
+    "cases_with_default_elisions": 116
+  },
+  "cases": [
+    {
+      "case": "generated_0_known",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "a1b5926a8b0bcf3f1a158bc6dfdb3442681e82a8a705260078465d343901e7ef",
+          "bytes": 37031
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "a1b5926a8b0bcf3f1a158bc6dfdb3442681e82a8a705260078465d343901e7ef",
+          "bytes": 37031
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 256,
+        "dense_copy_presence_slots": 3104,
+        "candidate_expected_stored_fact_slots": 1914,
+        "first_reach_copy_count": 78,
+        "first_reach_by_invocation": {
+          "0": 39,
+          "1": 39
+        },
+        "actual_copy_calls": 256,
+        "actual_copy_presence_slots": 3104,
+        "actual_copy_nondefault_fact_slots": 1914,
+        "actual_copy_elided_presence_slots": 1190,
+        "final_state_maps": 80,
+        "final_dense_presence_slots": 920,
+        "final_nondefault_fact_slots": 640,
+        "final_elided_presence_slots": 280,
+        "elided_default_write_count": 582
+      }
+    },
+    {
+      "case": "generated_0_known",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "a1b5926a8b0bcf3f1a158bc6dfdb3442681e82a8a705260078465d343901e7ef",
+          "bytes": 37031
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "a1b5926a8b0bcf3f1a158bc6dfdb3442681e82a8a705260078465d343901e7ef",
+          "bytes": 37031
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 176,
+        "dense_copy_presence_slots": 2104,
+        "candidate_expected_stored_fact_slots": 1468,
+        "first_reach_copy_count": 78,
+        "first_reach_by_invocation": {
+          "0": 39,
+          "1": 39
+        },
+        "actual_copy_calls": 176,
+        "actual_copy_presence_slots": 2104,
+        "actual_copy_nondefault_fact_slots": 1468,
+        "actual_copy_elided_presence_slots": 636,
+        "final_state_maps": 80,
+        "final_dense_presence_slots": 920,
+        "final_nondefault_fact_slots": 640,
+        "final_elided_presence_slots": 280,
+        "elided_default_write_count": 120
+      }
+    },
+    {
+      "case": "generated_0_known",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "a1b5926a8b0bcf3f1a158bc6dfdb3442681e82a8a705260078465d343901e7ef",
+          "bytes": 37031
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "a1b5926a8b0bcf3f1a158bc6dfdb3442681e82a8a705260078465d343901e7ef",
+          "bytes": 37031
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 252,
+        "dense_copy_presence_slots": 3246,
+        "candidate_expected_stored_fact_slots": 2264,
+        "first_reach_copy_count": 78,
+        "first_reach_by_invocation": {
+          "0": 39,
+          "1": 39
+        },
+        "actual_copy_calls": 252,
+        "actual_copy_presence_slots": 3246,
+        "actual_copy_nondefault_fact_slots": 2264,
+        "actual_copy_elided_presence_slots": 982,
+        "final_state_maps": 80,
+        "final_dense_presence_slots": 920,
+        "final_nondefault_fact_slots": 640,
+        "final_elided_presence_slots": 280,
+        "elided_default_write_count": 508
+      }
+    },
+    {
+      "case": "generated_0_known",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "a1b5926a8b0bcf3f1a158bc6dfdb3442681e82a8a705260078465d343901e7ef",
+          "bytes": 37031
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "a1b5926a8b0bcf3f1a158bc6dfdb3442681e82a8a705260078465d343901e7ef",
+          "bytes": 37031
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 236,
+        "dense_copy_presence_slots": 2810,
+        "candidate_expected_stored_fact_slots": 1786,
+        "first_reach_copy_count": 78,
+        "first_reach_by_invocation": {
+          "0": 39,
+          "1": 39
+        },
+        "actual_copy_calls": 236,
+        "actual_copy_presence_slots": 2810,
+        "actual_copy_nondefault_fact_slots": 1786,
+        "actual_copy_elided_presence_slots": 1024,
+        "final_state_maps": 80,
+        "final_dense_presence_slots": 920,
+        "final_nondefault_fact_slots": 640,
+        "final_elided_presence_slots": 280,
+        "elided_default_write_count": 408
+      }
+    },
+    {
+      "case": "generated_1_missing",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 171,
+        "dense_copy_presence_slots": 2420,
+        "candidate_expected_stored_fact_slots": 1500,
+        "first_reach_copy_count": 50,
+        "first_reach_by_invocation": {
+          "0": 50
+        },
+        "actual_copy_calls": 171,
+        "actual_copy_presence_slots": 2420,
+        "actual_copy_nondefault_fact_slots": 1500,
+        "actual_copy_elided_presence_slots": 920,
+        "final_state_maps": 51,
+        "final_dense_presence_slots": 702,
+        "final_nondefault_fact_slots": 502,
+        "final_elided_presence_slots": 200,
+        "elided_default_write_count": 443
+      }
+    },
+    {
+      "case": "generated_1_missing",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 105,
+        "dense_copy_presence_slots": 1470,
+        "candidate_expected_stored_fact_slots": 1052,
+        "first_reach_copy_count": 50,
+        "first_reach_by_invocation": {
+          "0": 50
+        },
+        "actual_copy_calls": 105,
+        "actual_copy_presence_slots": 1470,
+        "actual_copy_nondefault_fact_slots": 1052,
+        "actual_copy_elided_presence_slots": 418,
+        "final_state_maps": 51,
+        "final_dense_presence_slots": 702,
+        "final_nondefault_fact_slots": 502,
+        "final_elided_presence_slots": 200,
+        "elided_default_write_count": 42
+      }
+    },
+    {
+      "case": "generated_1_missing",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 169,
+        "dense_copy_presence_slots": 2560,
+        "candidate_expected_stored_fact_slots": 1822,
+        "first_reach_copy_count": 50,
+        "first_reach_by_invocation": {
+          "0": 50
+        },
+        "actual_copy_calls": 169,
+        "actual_copy_presence_slots": 2560,
+        "actual_copy_nondefault_fact_slots": 1822,
+        "actual_copy_elided_presence_slots": 738,
+        "final_state_maps": 51,
+        "final_dense_presence_slots": 702,
+        "final_nondefault_fact_slots": 502,
+        "final_elided_presence_slots": 200,
+        "elided_default_write_count": 382
+      }
+    },
+    {
+      "case": "generated_1_missing",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 141,
+        "dense_copy_presence_slots": 1865,
+        "candidate_expected_stored_fact_slots": 1156,
+        "first_reach_copy_count": 50,
+        "first_reach_by_invocation": {
+          "0": 50
+        },
+        "actual_copy_calls": 141,
+        "actual_copy_presence_slots": 1865,
+        "actual_copy_nondefault_fact_slots": 1156,
+        "actual_copy_elided_presence_slots": 709,
+        "final_state_maps": 51,
+        "final_dense_presence_slots": 702,
+        "final_nondefault_fact_slots": 502,
+        "final_elided_presence_slots": 200,
+        "elided_default_write_count": 231
+      }
+    },
+    {
+      "case": "generated_2_scalar",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 134,
+        "dense_copy_presence_slots": 1658,
+        "candidate_expected_stored_fact_slots": 1019,
+        "first_reach_copy_count": 40,
+        "first_reach_by_invocation": {
+          "0": 40
+        },
+        "actual_copy_calls": 134,
+        "actual_copy_presence_slots": 1658,
+        "actual_copy_nondefault_fact_slots": 1019,
+        "actual_copy_elided_presence_slots": 639,
+        "final_state_maps": 41,
+        "final_dense_presence_slots": 481,
+        "final_nondefault_fact_slots": 335,
+        "final_elided_presence_slots": 146,
+        "elided_default_write_count": 324
+      }
+    },
+    {
+      "case": "generated_2_scalar",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 91,
+        "dense_copy_presence_slots": 1111,
+        "candidate_expected_stored_fact_slots": 775,
+        "first_reach_copy_count": 40,
+        "first_reach_by_invocation": {
+          "0": 40
+        },
+        "actual_copy_calls": 91,
+        "actual_copy_presence_slots": 1111,
+        "actual_copy_nondefault_fact_slots": 775,
+        "actual_copy_elided_presence_slots": 336,
+        "final_state_maps": 41,
+        "final_dense_presence_slots": 481,
+        "final_nondefault_fact_slots": 335,
+        "final_elided_presence_slots": 146,
+        "elided_default_write_count": 68
+      }
+    },
+    {
+      "case": "generated_2_scalar",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 130,
+        "dense_copy_presence_slots": 1702,
+        "candidate_expected_stored_fact_slots": 1187,
+        "first_reach_copy_count": 40,
+        "first_reach_by_invocation": {
+          "0": 40
+        },
+        "actual_copy_calls": 130,
+        "actual_copy_presence_slots": 1702,
+        "actual_copy_nondefault_fact_slots": 1187,
+        "actual_copy_elided_presence_slots": 515,
+        "final_state_maps": 41,
+        "final_dense_presence_slots": 481,
+        "final_nondefault_fact_slots": 335,
+        "final_elided_presence_slots": 146,
+        "elided_default_write_count": 269
+      }
+    },
+    {
+      "case": "generated_2_scalar",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 123,
+        "dense_copy_presence_slots": 1496,
+        "candidate_expected_stored_fact_slots": 950,
+        "first_reach_copy_count": 40,
+        "first_reach_by_invocation": {
+          "0": 40
+        },
+        "actual_copy_calls": 123,
+        "actual_copy_presence_slots": 1496,
+        "actual_copy_nondefault_fact_slots": 950,
+        "actual_copy_elided_presence_slots": 546,
+        "final_state_maps": 41,
+        "final_dense_presence_slots": 481,
+        "final_nondefault_fact_slots": 335,
+        "final_elided_presence_slots": 146,
+        "elided_default_write_count": 226
+      }
+    },
+    {
+      "case": "generated_3_known",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "bdda6db50d990889bd79801d7f225ecc726066a35134d176c955ec24311a7932",
+          "bytes": 37953
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "bdda6db50d990889bd79801d7f225ecc726066a35134d176c955ec24311a7932",
+          "bytes": 37953
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 382,
+        "dense_copy_presence_slots": 5784,
+        "candidate_expected_stored_fact_slots": 3616,
+        "first_reach_copy_count": 104,
+        "first_reach_by_invocation": {
+          "0": 52,
+          "1": 52
+        },
+        "actual_copy_calls": 382,
+        "actual_copy_presence_slots": 5784,
+        "actual_copy_nondefault_fact_slots": 3616,
+        "actual_copy_elided_presence_slots": 2168,
+        "final_state_maps": 106,
+        "final_dense_presence_slots": 1532,
+        "final_nondefault_fact_slots": 1106,
+        "final_elided_presence_slots": 426,
+        "elided_default_write_count": 1184
+      }
+    },
+    {
+      "case": "generated_3_known",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "bdda6db50d990889bd79801d7f225ecc726066a35134d176c955ec24311a7932",
+          "bytes": 37953
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "bdda6db50d990889bd79801d7f225ecc726066a35134d176c955ec24311a7932",
+          "bytes": 37953
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 230,
+        "dense_copy_presence_slots": 3452,
+        "candidate_expected_stored_fact_slots": 2500,
+        "first_reach_copy_count": 104,
+        "first_reach_by_invocation": {
+          "0": 52,
+          "1": 52
+        },
+        "actual_copy_calls": 230,
+        "actual_copy_presence_slots": 3452,
+        "actual_copy_nondefault_fact_slots": 2500,
+        "actual_copy_elided_presence_slots": 952,
+        "final_state_maps": 106,
+        "final_dense_presence_slots": 1532,
+        "final_nondefault_fact_slots": 1106,
+        "final_elided_presence_slots": 426,
+        "elided_default_write_count": 158
+      }
+    },
+    {
+      "case": "generated_3_known",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "bdda6db50d990889bd79801d7f225ecc726066a35134d176c955ec24311a7932",
+          "bytes": 37953
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "bdda6db50d990889bd79801d7f225ecc726066a35134d176c955ec24311a7932",
+          "bytes": 37953
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 378,
+        "dense_copy_presence_slots": 6152,
+        "candidate_expected_stored_fact_slots": 4434,
+        "first_reach_copy_count": 104,
+        "first_reach_by_invocation": {
+          "0": 52,
+          "1": 52
+        },
+        "actual_copy_calls": 378,
+        "actual_copy_presence_slots": 6152,
+        "actual_copy_nondefault_fact_slots": 4434,
+        "actual_copy_elided_presence_slots": 1718,
+        "final_state_maps": 106,
+        "final_dense_presence_slots": 1532,
+        "final_nondefault_fact_slots": 1106,
+        "final_elided_presence_slots": 426,
+        "elided_default_write_count": 1002
+      }
+    },
+    {
+      "case": "generated_3_known",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "bdda6db50d990889bd79801d7f225ecc726066a35134d176c955ec24311a7932",
+          "bytes": 37953
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "bdda6db50d990889bd79801d7f225ecc726066a35134d176c955ec24311a7932",
+          "bytes": 37953
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 316,
+        "dense_copy_presence_slots": 4562,
+        "candidate_expected_stored_fact_slots": 2922,
+        "first_reach_copy_count": 104,
+        "first_reach_by_invocation": {
+          "0": 52,
+          "1": 52
+        },
+        "actual_copy_calls": 316,
+        "actual_copy_presence_slots": 4562,
+        "actual_copy_nondefault_fact_slots": 2922,
+        "actual_copy_elided_presence_slots": 1640,
+        "final_state_maps": 106,
+        "final_dense_presence_slots": 1532,
+        "final_nondefault_fact_slots": 1106,
+        "final_elided_presence_slots": 426,
+        "elided_default_write_count": 626
+      }
+    },
+    {
+      "case": "generated_4_missing",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 112,
+        "dense_copy_presence_slots": 1175,
+        "candidate_expected_stored_fact_slots": 706,
+        "first_reach_copy_count": 32,
+        "first_reach_by_invocation": {
+          "0": 32
+        },
+        "actual_copy_calls": 112,
+        "actual_copy_presence_slots": 1175,
+        "actual_copy_nondefault_fact_slots": 706,
+        "actual_copy_elided_presence_slots": 469,
+        "final_state_maps": 33,
+        "final_dense_presence_slots": 325,
+        "final_nondefault_fact_slots": 215,
+        "final_elided_presence_slots": 110,
+        "elided_default_write_count": 255
+      }
+    },
+    {
+      "case": "generated_4_missing",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 80,
+        "dense_copy_presence_slots": 808,
+        "candidate_expected_stored_fact_slots": 526,
+        "first_reach_copy_count": 32,
+        "first_reach_by_invocation": {
+          "0": 32
+        },
+        "actual_copy_calls": 80,
+        "actual_copy_presence_slots": 808,
+        "actual_copy_nondefault_fact_slots": 526,
+        "actual_copy_elided_presence_slots": 282,
+        "final_state_maps": 33,
+        "final_dense_presence_slots": 325,
+        "final_nondefault_fact_slots": 215,
+        "final_elided_presence_slots": 110,
+        "elided_default_write_count": 90
+      }
+    },
+    {
+      "case": "generated_4_missing",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 96,
+        "dense_copy_presence_slots": 1023,
+        "candidate_expected_stored_fact_slots": 677,
+        "first_reach_copy_count": 32,
+        "first_reach_by_invocation": {
+          "0": 32
+        },
+        "actual_copy_calls": 96,
+        "actual_copy_presence_slots": 1023,
+        "actual_copy_nondefault_fact_slots": 677,
+        "actual_copy_elided_presence_slots": 346,
+        "final_state_maps": 33,
+        "final_dense_presence_slots": 325,
+        "final_nondefault_fact_slots": 215,
+        "final_elided_presence_slots": 110,
+        "elided_default_write_count": 160
+      }
+    },
+    {
+      "case": "generated_4_missing",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 111,
+        "dense_copy_presence_slots": 1160,
+        "candidate_expected_stored_fact_slots": 713,
+        "first_reach_copy_count": 32,
+        "first_reach_by_invocation": {
+          "0": 32
+        },
+        "actual_copy_calls": 111,
+        "actual_copy_presence_slots": 1160,
+        "actual_copy_nondefault_fact_slots": 713,
+        "actual_copy_elided_presence_slots": 447,
+        "final_state_maps": 33,
+        "final_dense_presence_slots": 325,
+        "final_nondefault_fact_slots": 215,
+        "final_elided_presence_slots": 110,
+        "elided_default_write_count": 237
+      }
+    },
+    {
+      "case": "generated_5_scalar",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 83,
+        "dense_copy_presence_slots": 783,
+        "candidate_expected_stored_fact_slots": 476,
+        "first_reach_copy_count": 27,
+        "first_reach_by_invocation": {
+          "0": 27
+        },
+        "actual_copy_calls": 83,
+        "actual_copy_presence_slots": 783,
+        "actual_copy_nondefault_fact_slots": 476,
+        "actual_copy_elided_presence_slots": 307,
+        "final_state_maps": 28,
+        "final_dense_presence_slots": 247,
+        "final_nondefault_fact_slots": 162,
+        "final_elided_presence_slots": 85,
+        "elided_default_write_count": 142
+      }
+    },
+    {
+      "case": "generated_5_scalar",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 64,
+        "dense_copy_presence_slots": 581,
+        "candidate_expected_stored_fact_slots": 379,
+        "first_reach_copy_count": 27,
+        "first_reach_by_invocation": {
+          "0": 27
+        },
+        "actual_copy_calls": 64,
+        "actual_copy_presence_slots": 581,
+        "actual_copy_nondefault_fact_slots": 379,
+        "actual_copy_elided_presence_slots": 202,
+        "final_state_maps": 28,
+        "final_dense_presence_slots": 247,
+        "final_nondefault_fact_slots": 162,
+        "final_elided_presence_slots": 85,
+        "elided_default_write_count": 50
+      }
+    },
+    {
+      "case": "generated_5_scalar",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 79,
+        "dense_copy_presence_slots": 769,
+        "candidate_expected_stored_fact_slots": 508,
+        "first_reach_copy_count": 27,
+        "first_reach_by_invocation": {
+          "0": 27
+        },
+        "actual_copy_calls": 79,
+        "actual_copy_presence_slots": 769,
+        "actual_copy_nondefault_fact_slots": 508,
+        "actual_copy_elided_presence_slots": 261,
+        "final_state_maps": 28,
+        "final_dense_presence_slots": 247,
+        "final_nondefault_fact_slots": 162,
+        "final_elided_presence_slots": 85,
+        "elided_default_write_count": 120
+      }
+    },
+    {
+      "case": "generated_5_scalar",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 83,
+        "dense_copy_presence_slots": 782,
+        "candidate_expected_stored_fact_slots": 485,
+        "first_reach_copy_count": 27,
+        "first_reach_by_invocation": {
+          "0": 27
+        },
+        "actual_copy_calls": 83,
+        "actual_copy_presence_slots": 782,
+        "actual_copy_nondefault_fact_slots": 485,
+        "actual_copy_elided_presence_slots": 297,
+        "final_state_maps": 28,
+        "final_dense_presence_slots": 247,
+        "final_nondefault_fact_slots": 162,
+        "final_elided_presence_slots": 85,
+        "elided_default_write_count": 131
+      }
+    },
+    {
+      "case": "generated_6_known",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "c62eae8044e311f9ee39f3b0ff60d2a749a0277cf3e7fa770e9124a12c3a9d39",
+          "bytes": 37953
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "c62eae8044e311f9ee39f3b0ff60d2a749a0277cf3e7fa770e9124a12c3a9d39",
+          "bytes": 37953
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 382,
+        "dense_copy_presence_slots": 5784,
+        "candidate_expected_stored_fact_slots": 3616,
+        "first_reach_copy_count": 104,
+        "first_reach_by_invocation": {
+          "0": 52,
+          "1": 52
+        },
+        "actual_copy_calls": 382,
+        "actual_copy_presence_slots": 5784,
+        "actual_copy_nondefault_fact_slots": 3616,
+        "actual_copy_elided_presence_slots": 2168,
+        "final_state_maps": 106,
+        "final_dense_presence_slots": 1532,
+        "final_nondefault_fact_slots": 1106,
+        "final_elided_presence_slots": 426,
+        "elided_default_write_count": 1184
+      }
+    },
+    {
+      "case": "generated_6_known",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "c62eae8044e311f9ee39f3b0ff60d2a749a0277cf3e7fa770e9124a12c3a9d39",
+          "bytes": 37953
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "c62eae8044e311f9ee39f3b0ff60d2a749a0277cf3e7fa770e9124a12c3a9d39",
+          "bytes": 37953
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 230,
+        "dense_copy_presence_slots": 3452,
+        "candidate_expected_stored_fact_slots": 2500,
+        "first_reach_copy_count": 104,
+        "first_reach_by_invocation": {
+          "0": 52,
+          "1": 52
+        },
+        "actual_copy_calls": 230,
+        "actual_copy_presence_slots": 3452,
+        "actual_copy_nondefault_fact_slots": 2500,
+        "actual_copy_elided_presence_slots": 952,
+        "final_state_maps": 106,
+        "final_dense_presence_slots": 1532,
+        "final_nondefault_fact_slots": 1106,
+        "final_elided_presence_slots": 426,
+        "elided_default_write_count": 158
+      }
+    },
+    {
+      "case": "generated_6_known",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "c62eae8044e311f9ee39f3b0ff60d2a749a0277cf3e7fa770e9124a12c3a9d39",
+          "bytes": 37953
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "c62eae8044e311f9ee39f3b0ff60d2a749a0277cf3e7fa770e9124a12c3a9d39",
+          "bytes": 37953
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 378,
+        "dense_copy_presence_slots": 6152,
+        "candidate_expected_stored_fact_slots": 4434,
+        "first_reach_copy_count": 104,
+        "first_reach_by_invocation": {
+          "0": 52,
+          "1": 52
+        },
+        "actual_copy_calls": 378,
+        "actual_copy_presence_slots": 6152,
+        "actual_copy_nondefault_fact_slots": 4434,
+        "actual_copy_elided_presence_slots": 1718,
+        "final_state_maps": 106,
+        "final_dense_presence_slots": 1532,
+        "final_nondefault_fact_slots": 1106,
+        "final_elided_presence_slots": 426,
+        "elided_default_write_count": 1002
+      }
+    },
+    {
+      "case": "generated_6_known",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "c62eae8044e311f9ee39f3b0ff60d2a749a0277cf3e7fa770e9124a12c3a9d39",
+          "bytes": 37953
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "c62eae8044e311f9ee39f3b0ff60d2a749a0277cf3e7fa770e9124a12c3a9d39",
+          "bytes": 37953
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 316,
+        "dense_copy_presence_slots": 4562,
+        "candidate_expected_stored_fact_slots": 2922,
+        "first_reach_copy_count": 104,
+        "first_reach_by_invocation": {
+          "0": 52,
+          "1": 52
+        },
+        "actual_copy_calls": 316,
+        "actual_copy_presence_slots": 4562,
+        "actual_copy_nondefault_fact_slots": 2922,
+        "actual_copy_elided_presence_slots": 1640,
+        "final_state_maps": 106,
+        "final_dense_presence_slots": 1532,
+        "final_nondefault_fact_slots": 1106,
+        "final_elided_presence_slots": 426,
+        "elided_default_write_count": 626
+      }
+    },
+    {
+      "case": "generated_7_missing",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 110,
+        "dense_copy_presence_slots": 1216,
+        "candidate_expected_stored_fact_slots": 736,
+        "first_reach_copy_count": 37,
+        "first_reach_by_invocation": {
+          "0": 37
+        },
+        "actual_copy_calls": 110,
+        "actual_copy_presence_slots": 1216,
+        "actual_copy_nondefault_fact_slots": 736,
+        "actual_copy_elided_presence_slots": 480,
+        "final_state_maps": 38,
+        "final_dense_presence_slots": 408,
+        "final_nondefault_fact_slots": 279,
+        "final_elided_presence_slots": 129,
+        "elided_default_write_count": 187
+      }
+    },
+    {
+      "case": "generated_7_missing",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 78,
+        "dense_copy_presence_slots": 856,
+        "candidate_expected_stored_fact_slots": 586,
+        "first_reach_copy_count": 37,
+        "first_reach_by_invocation": {
+          "0": 37
+        },
+        "actual_copy_calls": 78,
+        "actual_copy_presence_slots": 856,
+        "actual_copy_nondefault_fact_slots": 586,
+        "actual_copy_elided_presence_slots": 270,
+        "final_state_maps": 38,
+        "final_dense_presence_slots": 408,
+        "final_nondefault_fact_slots": 279,
+        "final_elided_presence_slots": 129,
+        "elided_default_write_count": 29
+      }
+    },
+    {
+      "case": "generated_7_missing",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 108,
+        "dense_copy_presence_slots": 1261,
+        "candidate_expected_stored_fact_slots": 860,
+        "first_reach_copy_count": 37,
+        "first_reach_by_invocation": {
+          "0": 37
+        },
+        "actual_copy_calls": 108,
+        "actual_copy_presence_slots": 1261,
+        "actual_copy_nondefault_fact_slots": 860,
+        "actual_copy_elided_presence_slots": 401,
+        "final_state_maps": 38,
+        "final_dense_presence_slots": 408,
+        "final_nondefault_fact_slots": 279,
+        "final_elided_presence_slots": 129,
+        "elided_default_write_count": 165
+      }
+    },
+    {
+      "case": "generated_7_missing",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 101,
+        "dense_copy_presence_slots": 1083,
+        "candidate_expected_stored_fact_slots": 661,
+        "first_reach_copy_count": 37,
+        "first_reach_by_invocation": {
+          "0": 37
+        },
+        "actual_copy_calls": 101,
+        "actual_copy_presence_slots": 1083,
+        "actual_copy_nondefault_fact_slots": 661,
+        "actual_copy_elided_presence_slots": 422,
+        "final_state_maps": 38,
+        "final_dense_presence_slots": 408,
+        "final_nondefault_fact_slots": 279,
+        "final_elided_presence_slots": 129,
+        "elided_default_write_count": 135
+      }
+    },
+    {
+      "case": "generated_8_scalar",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 134,
+        "dense_copy_presence_slots": 1658,
+        "candidate_expected_stored_fact_slots": 1019,
+        "first_reach_copy_count": 40,
+        "first_reach_by_invocation": {
+          "0": 40
+        },
+        "actual_copy_calls": 134,
+        "actual_copy_presence_slots": 1658,
+        "actual_copy_nondefault_fact_slots": 1019,
+        "actual_copy_elided_presence_slots": 639,
+        "final_state_maps": 41,
+        "final_dense_presence_slots": 481,
+        "final_nondefault_fact_slots": 335,
+        "final_elided_presence_slots": 146,
+        "elided_default_write_count": 324
+      }
+    },
+    {
+      "case": "generated_8_scalar",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 91,
+        "dense_copy_presence_slots": 1111,
+        "candidate_expected_stored_fact_slots": 775,
+        "first_reach_copy_count": 40,
+        "first_reach_by_invocation": {
+          "0": 40
+        },
+        "actual_copy_calls": 91,
+        "actual_copy_presence_slots": 1111,
+        "actual_copy_nondefault_fact_slots": 775,
+        "actual_copy_elided_presence_slots": 336,
+        "final_state_maps": 41,
+        "final_dense_presence_slots": 481,
+        "final_nondefault_fact_slots": 335,
+        "final_elided_presence_slots": 146,
+        "elided_default_write_count": 68
+      }
+    },
+    {
+      "case": "generated_8_scalar",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 130,
+        "dense_copy_presence_slots": 1702,
+        "candidate_expected_stored_fact_slots": 1187,
+        "first_reach_copy_count": 40,
+        "first_reach_by_invocation": {
+          "0": 40
+        },
+        "actual_copy_calls": 130,
+        "actual_copy_presence_slots": 1702,
+        "actual_copy_nondefault_fact_slots": 1187,
+        "actual_copy_elided_presence_slots": 515,
+        "final_state_maps": 41,
+        "final_dense_presence_slots": 481,
+        "final_nondefault_fact_slots": 335,
+        "final_elided_presence_slots": 146,
+        "elided_default_write_count": 269
+      }
+    },
+    {
+      "case": "generated_8_scalar",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 123,
+        "dense_copy_presence_slots": 1496,
+        "candidate_expected_stored_fact_slots": 950,
+        "first_reach_copy_count": 40,
+        "first_reach_by_invocation": {
+          "0": 40
+        },
+        "actual_copy_calls": 123,
+        "actual_copy_presence_slots": 1496,
+        "actual_copy_nondefault_fact_slots": 950,
+        "actual_copy_elided_presence_slots": 546,
+        "final_state_maps": 41,
+        "final_dense_presence_slots": 481,
+        "final_nondefault_fact_slots": 335,
+        "final_elided_presence_slots": 146,
+        "elided_default_write_count": 226
+      }
+    },
+    {
+      "case": "generated_9_known",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "1f1bab1fbf89ffad20d07ed7c5b42207c41d0336842d87121807322b3329fa14",
+          "bytes": 36413
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "1f1bab1fbf89ffad20d07ed7c5b42207c41d0336842d87121807322b3329fa14",
+          "bytes": 36413
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 164,
+        "dense_copy_presence_slots": 1544,
+        "candidate_expected_stored_fact_slots": 936,
+        "first_reach_copy_count": 62,
+        "first_reach_by_invocation": {
+          "0": 31,
+          "1": 31
+        },
+        "actual_copy_calls": 164,
+        "actual_copy_presence_slots": 1544,
+        "actual_copy_nondefault_fact_slots": 936,
+        "actual_copy_elided_presence_slots": 608,
+        "final_state_maps": 64,
+        "final_dense_presence_slots": 594,
+        "final_nondefault_fact_slots": 396,
+        "final_elided_presence_slots": 198,
+        "elided_default_write_count": 174
+      }
+    },
+    {
+      "case": "generated_9_known",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "1f1bab1fbf89ffad20d07ed7c5b42207c41d0336842d87121807322b3329fa14",
+          "bytes": 36413
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "1f1bab1fbf89ffad20d07ed7c5b42207c41d0336842d87121807322b3329fa14",
+          "bytes": 36413
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 130,
+        "dense_copy_presence_slots": 1232,
+        "candidate_expected_stored_fact_slots": 822,
+        "first_reach_copy_count": 62,
+        "first_reach_by_invocation": {
+          "0": 31,
+          "1": 31
+        },
+        "actual_copy_calls": 130,
+        "actual_copy_presence_slots": 1232,
+        "actual_copy_nondefault_fact_slots": 822,
+        "actual_copy_elided_presence_slots": 410,
+        "final_state_maps": 64,
+        "final_dense_presence_slots": 594,
+        "final_nondefault_fact_slots": 396,
+        "final_elided_presence_slots": 198,
+        "elided_default_write_count": 36
+      }
+    },
+    {
+      "case": "generated_9_known",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "1f1bab1fbf89ffad20d07ed7c5b42207c41d0336842d87121807322b3329fa14",
+          "bytes": 36413
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "1f1bab1fbf89ffad20d07ed7c5b42207c41d0336842d87121807322b3329fa14",
+          "bytes": 36413
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 164,
+        "dense_copy_presence_slots": 1626,
+        "candidate_expected_stored_fact_slots": 1084,
+        "first_reach_copy_count": 62,
+        "first_reach_by_invocation": {
+          "0": 31,
+          "1": 31
+        },
+        "actual_copy_calls": 164,
+        "actual_copy_presence_slots": 1626,
+        "actual_copy_nondefault_fact_slots": 1084,
+        "actual_copy_elided_presence_slots": 542,
+        "final_state_maps": 64,
+        "final_dense_presence_slots": 594,
+        "final_nondefault_fact_slots": 396,
+        "final_elided_presence_slots": 198,
+        "elided_default_write_count": 164
+      }
+    },
+    {
+      "case": "generated_9_known",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "1f1bab1fbf89ffad20d07ed7c5b42207c41d0336842d87121807322b3329fa14",
+          "bytes": 36413
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "1f1bab1fbf89ffad20d07ed7c5b42207c41d0336842d87121807322b3329fa14",
+          "bytes": 36413
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 160,
+        "dense_copy_presence_slots": 1490,
+        "candidate_expected_stored_fact_slots": 904,
+        "first_reach_copy_count": 62,
+        "first_reach_by_invocation": {
+          "0": 31,
+          "1": 31
+        },
+        "actual_copy_calls": 160,
+        "actual_copy_presence_slots": 1490,
+        "actual_copy_nondefault_fact_slots": 904,
+        "actual_copy_elided_presence_slots": 586,
+        "final_state_maps": 64,
+        "final_dense_presence_slots": 594,
+        "final_nondefault_fact_slots": 396,
+        "final_elided_presence_slots": 198,
+        "elided_default_write_count": 162
+      }
+    },
+    {
+      "case": "generated_10_missing",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 237,
+        "dense_copy_presence_slots": 3939,
+        "candidate_expected_stored_fact_slots": 2439,
+        "first_reach_copy_count": 58,
+        "first_reach_by_invocation": {
+          "0": 58
+        },
+        "actual_copy_calls": 237,
+        "actual_copy_presence_slots": 3939,
+        "actual_copy_nondefault_fact_slots": 2439,
+        "actual_copy_elided_presence_slots": 1500,
+        "final_state_maps": 59,
+        "final_dense_presence_slots": 931,
+        "final_nondefault_fact_slots": 676,
+        "final_elided_presence_slots": 255,
+        "elided_default_write_count": 928
+      }
+    },
+    {
+      "case": "generated_10_missing",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 134,
+        "dense_copy_presence_slots": 2222,
+        "candidate_expected_stored_fact_slots": 1613,
+        "first_reach_copy_count": 58,
+        "first_reach_by_invocation": {
+          "0": 58
+        },
+        "actual_copy_calls": 134,
+        "actual_copy_presence_slots": 2222,
+        "actual_copy_nondefault_fact_slots": 1613,
+        "actual_copy_elided_presence_slots": 609,
+        "final_state_maps": 59,
+        "final_dense_presence_slots": 931,
+        "final_nondefault_fact_slots": 676,
+        "final_elided_presence_slots": 255,
+        "elided_default_write_count": 144
+      }
+    },
+    {
+      "case": "generated_10_missing",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 221,
+        "dense_copy_presence_slots": 3897,
+        "candidate_expected_stored_fact_slots": 2814,
+        "first_reach_copy_count": 58,
+        "first_reach_by_invocation": {
+          "0": 58
+        },
+        "actual_copy_calls": 221,
+        "actual_copy_presence_slots": 3897,
+        "actual_copy_nondefault_fact_slots": 2814,
+        "actual_copy_elided_presence_slots": 1083,
+        "final_state_maps": 59,
+        "final_dense_presence_slots": 931,
+        "final_nondefault_fact_slots": 676,
+        "final_elided_presence_slots": 255,
+        "elided_default_write_count": 666
+      }
+    },
+    {
+      "case": "generated_10_missing",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 191,
+        "dense_copy_presence_slots": 3072,
+        "candidate_expected_stored_fact_slots": 1985,
+        "first_reach_copy_count": 58,
+        "first_reach_by_invocation": {
+          "0": 58
+        },
+        "actual_copy_calls": 191,
+        "actual_copy_presence_slots": 3072,
+        "actual_copy_nondefault_fact_slots": 1985,
+        "actual_copy_elided_presence_slots": 1087,
+        "final_state_maps": 59,
+        "final_dense_presence_slots": 931,
+        "final_nondefault_fact_slots": 676,
+        "final_elided_presence_slots": 255,
+        "elided_default_write_count": 488
+      }
+    },
+    {
+      "case": "generated_11_scalar",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 86,
+        "dense_copy_presence_slots": 834,
+        "candidate_expected_stored_fact_slots": 505,
+        "first_reach_copy_count": 32,
+        "first_reach_by_invocation": {
+          "0": 32
+        },
+        "actual_copy_calls": 86,
+        "actual_copy_presence_slots": 834,
+        "actual_copy_nondefault_fact_slots": 505,
+        "actual_copy_elided_presence_slots": 329,
+        "final_state_maps": 33,
+        "final_dense_presence_slots": 315,
+        "final_nondefault_fact_slots": 211,
+        "final_elided_presence_slots": 104,
+        "elided_default_write_count": 101
+      }
+    },
+    {
+      "case": "generated_11_scalar",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 67,
+        "dense_copy_presence_slots": 652,
+        "candidate_expected_stored_fact_slots": 437,
+        "first_reach_copy_count": 32,
+        "first_reach_by_invocation": {
+          "0": 32
+        },
+        "actual_copy_calls": 67,
+        "actual_copy_presence_slots": 652,
+        "actual_copy_nondefault_fact_slots": 437,
+        "actual_copy_elided_presence_slots": 215,
+        "final_state_maps": 33,
+        "final_dense_presence_slots": 315,
+        "final_nondefault_fact_slots": 211,
+        "final_elided_presence_slots": 104,
+        "elided_default_write_count": 19
+      }
+    },
+    {
+      "case": "generated_11_scalar",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 86,
+        "dense_copy_presence_slots": 880,
+        "candidate_expected_stored_fact_slots": 589,
+        "first_reach_copy_count": 32,
+        "first_reach_by_invocation": {
+          "0": 32
+        },
+        "actual_copy_calls": 86,
+        "actual_copy_presence_slots": 880,
+        "actual_copy_nondefault_fact_slots": 589,
+        "actual_copy_elided_presence_slots": 291,
+        "final_state_maps": 33,
+        "final_dense_presence_slots": 315,
+        "final_nondefault_fact_slots": 211,
+        "final_elided_presence_slots": 104,
+        "elided_default_write_count": 95
+      }
+    },
+    {
+      "case": "generated_11_scalar",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 83,
+        "dense_copy_presence_slots": 791,
+        "candidate_expected_stored_fact_slots": 479,
+        "first_reach_copy_count": 32,
+        "first_reach_by_invocation": {
+          "0": 32
+        },
+        "actual_copy_calls": 83,
+        "actual_copy_presence_slots": 791,
+        "actual_copy_nondefault_fact_slots": 479,
+        "actual_copy_elided_presence_slots": 312,
+        "final_state_maps": 33,
+        "final_dense_presence_slots": 315,
+        "final_nondefault_fact_slots": 211,
+        "final_elided_presence_slots": 104,
+        "elided_default_write_count": 88
+      }
+    },
+    {
+      "case": "multibackedge_0",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 202,
+        "dense_copy_presence_slots": 1690,
+        "candidate_expected_stored_fact_slots": 534,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 202,
+        "actual_copy_presence_slots": 1690,
+        "actual_copy_nondefault_fact_slots": 534,
+        "actual_copy_elided_presence_slots": 1156,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 802
+      }
+    },
+    {
+      "case": "multibackedge_0",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 158,
+        "dense_copy_presence_slots": 1332,
+        "candidate_expected_stored_fact_slots": 406,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 158,
+        "actual_copy_presence_slots": 1332,
+        "actual_copy_nondefault_fact_slots": 406,
+        "actual_copy_elided_presence_slots": 926,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 444
+      }
+    },
+    {
+      "case": "multibackedge_0",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 152,
+        "dense_copy_presence_slots": 1288,
+        "candidate_expected_stored_fact_slots": 390,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 152,
+        "actual_copy_presence_slots": 1288,
+        "actual_copy_nondefault_fact_slots": 390,
+        "actual_copy_elided_presence_slots": 898,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 422
+      }
+    },
+    {
+      "case": "multibackedge_0",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 196,
+        "dense_copy_presence_slots": 1616,
+        "candidate_expected_stored_fact_slots": 516,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 196,
+        "actual_copy_presence_slots": 1616,
+        "actual_copy_nondefault_fact_slots": 516,
+        "actual_copy_elided_presence_slots": 1100,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 742
+      }
+    },
+    {
+      "case": "multibackedge_1",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "e72733e8185307e5ffede03b29dabe3eeb04490d5f9a694fbc85c23a65f9c855",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "e72733e8185307e5ffede03b29dabe3eeb04490d5f9a694fbc85c23a65f9c855",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 202,
+        "dense_copy_presence_slots": 1690,
+        "candidate_expected_stored_fact_slots": 534,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 202,
+        "actual_copy_presence_slots": 1690,
+        "actual_copy_nondefault_fact_slots": 534,
+        "actual_copy_elided_presence_slots": 1156,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 802
+      }
+    },
+    {
+      "case": "multibackedge_1",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "e72733e8185307e5ffede03b29dabe3eeb04490d5f9a694fbc85c23a65f9c855",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "e72733e8185307e5ffede03b29dabe3eeb04490d5f9a694fbc85c23a65f9c855",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 158,
+        "dense_copy_presence_slots": 1332,
+        "candidate_expected_stored_fact_slots": 406,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 158,
+        "actual_copy_presence_slots": 1332,
+        "actual_copy_nondefault_fact_slots": 406,
+        "actual_copy_elided_presence_slots": 926,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 444
+      }
+    },
+    {
+      "case": "multibackedge_1",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "e72733e8185307e5ffede03b29dabe3eeb04490d5f9a694fbc85c23a65f9c855",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "e72733e8185307e5ffede03b29dabe3eeb04490d5f9a694fbc85c23a65f9c855",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 152,
+        "dense_copy_presence_slots": 1288,
+        "candidate_expected_stored_fact_slots": 390,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 152,
+        "actual_copy_presence_slots": 1288,
+        "actual_copy_nondefault_fact_slots": 390,
+        "actual_copy_elided_presence_slots": 898,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 422
+      }
+    },
+    {
+      "case": "multibackedge_1",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "e72733e8185307e5ffede03b29dabe3eeb04490d5f9a694fbc85c23a65f9c855",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "e72733e8185307e5ffede03b29dabe3eeb04490d5f9a694fbc85c23a65f9c855",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 196,
+        "dense_copy_presence_slots": 1616,
+        "candidate_expected_stored_fact_slots": 516,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 196,
+        "actual_copy_presence_slots": 1616,
+        "actual_copy_nondefault_fact_slots": 516,
+        "actual_copy_elided_presence_slots": 1100,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 742
+      }
+    },
+    {
+      "case": "multibackedge_2",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "084183c449e3e25146fdaa04e1bafdfe893c8b063baeeb5f46f9a41cd84ea1a6",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "084183c449e3e25146fdaa04e1bafdfe893c8b063baeeb5f46f9a41cd84ea1a6",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 202,
+        "dense_copy_presence_slots": 1690,
+        "candidate_expected_stored_fact_slots": 534,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 202,
+        "actual_copy_presence_slots": 1690,
+        "actual_copy_nondefault_fact_slots": 534,
+        "actual_copy_elided_presence_slots": 1156,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 802
+      }
+    },
+    {
+      "case": "multibackedge_2",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "084183c449e3e25146fdaa04e1bafdfe893c8b063baeeb5f46f9a41cd84ea1a6",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "084183c449e3e25146fdaa04e1bafdfe893c8b063baeeb5f46f9a41cd84ea1a6",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 158,
+        "dense_copy_presence_slots": 1332,
+        "candidate_expected_stored_fact_slots": 406,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 158,
+        "actual_copy_presence_slots": 1332,
+        "actual_copy_nondefault_fact_slots": 406,
+        "actual_copy_elided_presence_slots": 926,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 444
+      }
+    },
+    {
+      "case": "multibackedge_2",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "084183c449e3e25146fdaa04e1bafdfe893c8b063baeeb5f46f9a41cd84ea1a6",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "084183c449e3e25146fdaa04e1bafdfe893c8b063baeeb5f46f9a41cd84ea1a6",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 152,
+        "dense_copy_presence_slots": 1288,
+        "candidate_expected_stored_fact_slots": 390,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 152,
+        "actual_copy_presence_slots": 1288,
+        "actual_copy_nondefault_fact_slots": 390,
+        "actual_copy_elided_presence_slots": 898,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 422
+      }
+    },
+    {
+      "case": "multibackedge_2",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "084183c449e3e25146fdaa04e1bafdfe893c8b063baeeb5f46f9a41cd84ea1a6",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "084183c449e3e25146fdaa04e1bafdfe893c8b063baeeb5f46f9a41cd84ea1a6",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 196,
+        "dense_copy_presence_slots": 1616,
+        "candidate_expected_stored_fact_slots": 516,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 196,
+        "actual_copy_presence_slots": 1616,
+        "actual_copy_nondefault_fact_slots": 516,
+        "actual_copy_elided_presence_slots": 1100,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 742
+      }
+    },
+    {
+      "case": "unreachable_scalar_return",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 18,
+        "dense_copy_presence_slots": 12,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 8,
+        "first_reach_by_invocation": {
+          "0": 4,
+          "1": 4
+        },
+        "actual_copy_calls": 18,
+        "actual_copy_presence_slots": 12,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 8,
+        "final_state_maps": 14,
+        "final_dense_presence_slots": 6,
+        "final_nondefault_fact_slots": 2,
+        "final_elided_presence_slots": 4,
+        "elided_default_write_count": 2
+      }
+    },
+    {
+      "case": "unreachable_scalar_return",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 18,
+        "dense_copy_presence_slots": 12,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 8,
+        "first_reach_by_invocation": {
+          "0": 4,
+          "1": 4
+        },
+        "actual_copy_calls": 18,
+        "actual_copy_presence_slots": 12,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 8,
+        "final_state_maps": 14,
+        "final_dense_presence_slots": 6,
+        "final_nondefault_fact_slots": 2,
+        "final_elided_presence_slots": 4,
+        "elided_default_write_count": 2
+      }
+    },
+    {
+      "case": "unreachable_scalar_return",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 18,
+        "dense_copy_presence_slots": 12,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 8,
+        "first_reach_by_invocation": {
+          "0": 4,
+          "1": 4
+        },
+        "actual_copy_calls": 18,
+        "actual_copy_presence_slots": 12,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 8,
+        "final_state_maps": 14,
+        "final_dense_presence_slots": 6,
+        "final_nondefault_fact_slots": 2,
+        "final_elided_presence_slots": 4,
+        "elided_default_write_count": 2
+      }
+    },
+    {
+      "case": "unreachable_scalar_return",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 18,
+        "dense_copy_presence_slots": 12,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 8,
+        "first_reach_by_invocation": {
+          "0": 4,
+          "1": 4
+        },
+        "actual_copy_calls": 18,
+        "actual_copy_presence_slots": 12,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 8,
+        "final_state_maps": 14,
+        "final_dense_presence_slots": 6,
+        "final_nondefault_fact_slots": 2,
+        "final_elided_presence_slots": 4,
+        "elided_default_write_count": 2
+      }
+    },
+    {
+      "case": "missing_target_return",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 17,
+        "dense_copy_presence_slots": 26,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 17,
+        "actual_copy_presence_slots": 26,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 22,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 14,
+        "final_nondefault_fact_slots": 3,
+        "final_elided_presence_slots": 11,
+        "elided_default_write_count": 6
+      }
+    },
+    {
+      "case": "missing_target_return",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 17,
+        "dense_copy_presence_slots": 26,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 17,
+        "actual_copy_presence_slots": 26,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 22,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 14,
+        "final_nondefault_fact_slots": 3,
+        "final_elided_presence_slots": 11,
+        "elided_default_write_count": 6
+      }
+    },
+    {
+      "case": "missing_target_return",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 17,
+        "dense_copy_presence_slots": 34,
+        "candidate_expected_stored_fact_slots": 8,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 17,
+        "actual_copy_presence_slots": 34,
+        "actual_copy_nondefault_fact_slots": 8,
+        "actual_copy_elided_presence_slots": 26,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 14,
+        "final_nondefault_fact_slots": 3,
+        "final_elided_presence_slots": 11,
+        "elided_default_write_count": 6
+      }
+    },
+    {
+      "case": "missing_target_return",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 17,
+        "dense_copy_presence_slots": 26,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 17,
+        "actual_copy_presence_slots": 26,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 22,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 14,
+        "final_nondefault_fact_slots": 3,
+        "final_elided_presence_slots": 11,
+        "elided_default_write_count": 6
+      }
+    },
+    {
+      "case": "overwritten_closure",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 7,
+        "dense_copy_presence_slots": 10,
+        "candidate_expected_stored_fact_slots": 2,
+        "first_reach_copy_count": 3,
+        "first_reach_by_invocation": {
+          "0": 3
+        },
+        "actual_copy_calls": 7,
+        "actual_copy_presence_slots": 10,
+        "actual_copy_nondefault_fact_slots": 2,
+        "actual_copy_elided_presence_slots": 8,
+        "final_state_maps": 4,
+        "final_dense_presence_slots": 5,
+        "final_nondefault_fact_slots": 1,
+        "final_elided_presence_slots": 4,
+        "elided_default_write_count": 2
+      }
+    },
+    {
+      "case": "overwritten_closure",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 7,
+        "dense_copy_presence_slots": 10,
+        "candidate_expected_stored_fact_slots": 2,
+        "first_reach_copy_count": 3,
+        "first_reach_by_invocation": {
+          "0": 3
+        },
+        "actual_copy_calls": 7,
+        "actual_copy_presence_slots": 10,
+        "actual_copy_nondefault_fact_slots": 2,
+        "actual_copy_elided_presence_slots": 8,
+        "final_state_maps": 4,
+        "final_dense_presence_slots": 5,
+        "final_nondefault_fact_slots": 1,
+        "final_elided_presence_slots": 4,
+        "elided_default_write_count": 2
+      }
+    },
+    {
+      "case": "overwritten_closure",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 7,
+        "dense_copy_presence_slots": 10,
+        "candidate_expected_stored_fact_slots": 2,
+        "first_reach_copy_count": 3,
+        "first_reach_by_invocation": {
+          "0": 3
+        },
+        "actual_copy_calls": 7,
+        "actual_copy_presence_slots": 10,
+        "actual_copy_nondefault_fact_slots": 2,
+        "actual_copy_elided_presence_slots": 8,
+        "final_state_maps": 4,
+        "final_dense_presence_slots": 5,
+        "final_nondefault_fact_slots": 1,
+        "final_elided_presence_slots": 4,
+        "elided_default_write_count": 2
+      }
+    },
+    {
+      "case": "overwritten_closure",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 7,
+        "dense_copy_presence_slots": 10,
+        "candidate_expected_stored_fact_slots": 2,
+        "first_reach_copy_count": 3,
+        "first_reach_by_invocation": {
+          "0": 3
+        },
+        "actual_copy_calls": 7,
+        "actual_copy_presence_slots": 10,
+        "actual_copy_nondefault_fact_slots": 2,
+        "actual_copy_elided_presence_slots": 8,
+        "final_state_maps": 4,
+        "final_dense_presence_slots": 5,
+        "final_nondefault_fact_slots": 1,
+        "final_elided_presence_slots": 4,
+        "elided_default_write_count": 2
+      }
+    },
+    {
+      "case": "loop_zero_path_unknown",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 22,
+        "dense_copy_presence_slots": 39,
+        "candidate_expected_stored_fact_slots": 9,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 22,
+        "actual_copy_presence_slots": 39,
+        "actual_copy_nondefault_fact_slots": 9,
+        "actual_copy_elided_presence_slots": 30,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 24,
+        "final_nondefault_fact_slots": 8,
+        "final_elided_presence_slots": 16,
+        "elided_default_write_count": 20
+      }
+    },
+    {
+      "case": "loop_zero_path_unknown",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 22,
+        "dense_copy_presence_slots": 39,
+        "candidate_expected_stored_fact_slots": 9,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 22,
+        "actual_copy_presence_slots": 39,
+        "actual_copy_nondefault_fact_slots": 9,
+        "actual_copy_elided_presence_slots": 30,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 24,
+        "final_nondefault_fact_slots": 8,
+        "final_elided_presence_slots": 16,
+        "elided_default_write_count": 20
+      }
+    },
+    {
+      "case": "loop_zero_path_unknown",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 21,
+        "dense_copy_presence_slots": 42,
+        "candidate_expected_stored_fact_slots": 11,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 21,
+        "actual_copy_presence_slots": 42,
+        "actual_copy_nondefault_fact_slots": 11,
+        "actual_copy_elided_presence_slots": 31,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 24,
+        "final_nondefault_fact_slots": 8,
+        "final_elided_presence_slots": 16,
+        "elided_default_write_count": 20
+      }
+    },
+    {
+      "case": "loop_zero_path_unknown",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 22,
+        "dense_copy_presence_slots": 39,
+        "candidate_expected_stored_fact_slots": 9,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 22,
+        "actual_copy_presence_slots": 39,
+        "actual_copy_nondefault_fact_slots": 9,
+        "actual_copy_elided_presence_slots": 30,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 24,
+        "final_nondefault_fact_slots": 8,
+        "final_elided_presence_slots": 16,
+        "elided_default_write_count": 20
+      }
+    },
+    {
+      "case": "recursive_return_calls",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "f4cf37294b481c15872bf4994db97a72858f11f3eacc32170df64adb9c431cb8",
+          "bytes": 34722
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "f4cf37294b481c15872bf4994db97a72858f11f3eacc32170df64adb9c431cb8",
+          "bytes": 34722
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 42,
+        "dense_copy_presence_slots": 72,
+        "candidate_expected_stored_fact_slots": 28,
+        "first_reach_copy_count": 18,
+        "first_reach_by_invocation": {
+          "0": 3,
+          "1": 3,
+          "2": 3,
+          "3": 3,
+          "4": 3,
+          "5": 3
+        },
+        "actual_copy_calls": 42,
+        "actual_copy_presence_slots": 72,
+        "actual_copy_nondefault_fact_slots": 28,
+        "actual_copy_elided_presence_slots": 44,
+        "final_state_maps": 24,
+        "final_dense_presence_slots": 36,
+        "final_nondefault_fact_slots": 14,
+        "final_elided_presence_slots": 22,
+        "elided_default_write_count": 9
+      }
+    },
+    {
+      "case": "recursive_return_calls",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "f4cf37294b481c15872bf4994db97a72858f11f3eacc32170df64adb9c431cb8",
+          "bytes": 34722
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "f4cf37294b481c15872bf4994db97a72858f11f3eacc32170df64adb9c431cb8",
+          "bytes": 34722
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 42,
+        "dense_copy_presence_slots": 72,
+        "candidate_expected_stored_fact_slots": 28,
+        "first_reach_copy_count": 18,
+        "first_reach_by_invocation": {
+          "0": 3,
+          "1": 3,
+          "2": 3,
+          "3": 3,
+          "4": 3,
+          "5": 3
+        },
+        "actual_copy_calls": 42,
+        "actual_copy_presence_slots": 72,
+        "actual_copy_nondefault_fact_slots": 28,
+        "actual_copy_elided_presence_slots": 44,
+        "final_state_maps": 24,
+        "final_dense_presence_slots": 36,
+        "final_nondefault_fact_slots": 14,
+        "final_elided_presence_slots": 22,
+        "elided_default_write_count": 9
+      }
+    },
+    {
+      "case": "recursive_return_calls",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "f4cf37294b481c15872bf4994db97a72858f11f3eacc32170df64adb9c431cb8",
+          "bytes": 34722
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "f4cf37294b481c15872bf4994db97a72858f11f3eacc32170df64adb9c431cb8",
+          "bytes": 34722
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 42,
+        "dense_copy_presence_slots": 72,
+        "candidate_expected_stored_fact_slots": 28,
+        "first_reach_copy_count": 18,
+        "first_reach_by_invocation": {
+          "0": 3,
+          "1": 3,
+          "2": 3,
+          "3": 3,
+          "4": 3,
+          "5": 3
+        },
+        "actual_copy_calls": 42,
+        "actual_copy_presence_slots": 72,
+        "actual_copy_nondefault_fact_slots": 28,
+        "actual_copy_elided_presence_slots": 44,
+        "final_state_maps": 24,
+        "final_dense_presence_slots": 36,
+        "final_nondefault_fact_slots": 14,
+        "final_elided_presence_slots": 22,
+        "elided_default_write_count": 9
+      }
+    },
+    {
+      "case": "recursive_return_calls",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "f4cf37294b481c15872bf4994db97a72858f11f3eacc32170df64adb9c431cb8",
+          "bytes": 34722
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "f4cf37294b481c15872bf4994db97a72858f11f3eacc32170df64adb9c431cb8",
+          "bytes": 34722
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 42,
+        "dense_copy_presence_slots": 72,
+        "candidate_expected_stored_fact_slots": 28,
+        "first_reach_copy_count": 18,
+        "first_reach_by_invocation": {
+          "0": 3,
+          "1": 3,
+          "2": 3,
+          "3": 3,
+          "4": 3,
+          "5": 3
+        },
+        "actual_copy_calls": 42,
+        "actual_copy_presence_slots": 72,
+        "actual_copy_nondefault_fact_slots": 28,
+        "actual_copy_elided_presence_slots": 44,
+        "final_state_maps": 24,
+        "final_dense_presence_slots": 36,
+        "final_nondefault_fact_slots": 14,
+        "final_elided_presence_slots": 22,
+        "elided_default_write_count": 9
+      }
+    },
+    {
+      "case": "negative_mixed_return",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 15,
+        "dense_copy_presence_slots": 38,
+        "candidate_expected_stored_fact_slots": 12,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 15,
+        "actual_copy_presence_slots": 38,
+        "actual_copy_nondefault_fact_slots": 12,
+        "actual_copy_elided_presence_slots": 26,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 19,
+        "final_nondefault_fact_slots": 6,
+        "final_elided_presence_slots": 13,
+        "elided_default_write_count": 3
+      }
+    },
+    {
+      "case": "negative_mixed_return",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 15,
+        "dense_copy_presence_slots": 38,
+        "candidate_expected_stored_fact_slots": 12,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 15,
+        "actual_copy_presence_slots": 38,
+        "actual_copy_nondefault_fact_slots": 12,
+        "actual_copy_elided_presence_slots": 26,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 19,
+        "final_nondefault_fact_slots": 6,
+        "final_elided_presence_slots": 13,
+        "elided_default_write_count": 3
+      }
+    },
+    {
+      "case": "negative_mixed_return",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 15,
+        "dense_copy_presence_slots": 38,
+        "candidate_expected_stored_fact_slots": 12,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 15,
+        "actual_copy_presence_slots": 38,
+        "actual_copy_nondefault_fact_slots": 12,
+        "actual_copy_elided_presence_slots": 26,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 19,
+        "final_nondefault_fact_slots": 6,
+        "final_elided_presence_slots": 13,
+        "elided_default_write_count": 3
+      }
+    },
+    {
+      "case": "negative_mixed_return",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 15,
+        "dense_copy_presence_slots": 38,
+        "candidate_expected_stored_fact_slots": 12,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 15,
+        "actual_copy_presence_slots": 38,
+        "actual_copy_nondefault_fact_slots": 12,
+        "actual_copy_elided_presence_slots": 26,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 19,
+        "final_nondefault_fact_slots": 6,
+        "final_elided_presence_slots": 13,
+        "elided_default_write_count": 3
+      }
+    },
+    {
+      "case": "small_recursive_join_cfg",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "17ae823bfbfa887e367bf70e4dd4be766d4f3f3a5c579eaa887db58e9ddf5652",
+          "bytes": 46494
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "17ae823bfbfa887e367bf70e4dd4be766d4f3f3a5c579eaa887db58e9ddf5652",
+          "bytes": 46494
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 1535,
+        "dense_copy_presence_slots": 29918,
+        "candidate_expected_stored_fact_slots": 8762,
+        "first_reach_copy_count": 449,
+        "first_reach_by_invocation": {
+          "0": 2,
+          "1": 3,
+          "2": 3,
+          "3": 64,
+          "4": 39,
+          "5": 1,
+          "6": 2,
+          "7": 3,
+          "8": 3,
+          "9": 64,
+          "10": 39,
+          "11": 1,
+          "12": 1,
+          "13": 2,
+          "14": 3,
+          "15": 3,
+          "16": 64,
+          "17": 39,
+          "18": 1,
+          "19": 1,
+          "20": 2,
+          "21": 3,
+          "22": 3,
+          "23": 64,
+          "24": 39
+        },
+        "actual_copy_calls": 1535,
+        "actual_copy_presence_slots": 29918,
+        "actual_copy_nondefault_fact_slots": 8762,
+        "actual_copy_elided_presence_slots": 21156,
+        "final_state_maps": 486,
+        "final_dense_presence_slots": 7857,
+        "final_nondefault_fact_slots": 2423,
+        "final_elided_presence_slots": 5434,
+        "elided_default_write_count": 11986
+      }
+    },
+    {
+      "case": "small_recursive_join_cfg",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "17ae823bfbfa887e367bf70e4dd4be766d4f3f3a5c579eaa887db58e9ddf5652",
+          "bytes": 46494
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "17ae823bfbfa887e367bf70e4dd4be766d4f3f3a5c579eaa887db58e9ddf5652",
+          "bytes": 46494
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 1151,
+        "dense_copy_presence_slots": 21338,
+        "candidate_expected_stored_fact_slots": 6438,
+        "first_reach_copy_count": 449,
+        "first_reach_by_invocation": {
+          "0": 2,
+          "1": 3,
+          "2": 3,
+          "3": 64,
+          "4": 39,
+          "5": 1,
+          "6": 2,
+          "7": 3,
+          "8": 3,
+          "9": 64,
+          "10": 39,
+          "11": 1,
+          "12": 1,
+          "13": 2,
+          "14": 3,
+          "15": 3,
+          "16": 64,
+          "17": 39,
+          "18": 1,
+          "19": 1,
+          "20": 2,
+          "21": 3,
+          "22": 3,
+          "23": 64,
+          "24": 39
+        },
+        "actual_copy_calls": 1151,
+        "actual_copy_presence_slots": 21338,
+        "actual_copy_nondefault_fact_slots": 6438,
+        "actual_copy_elided_presence_slots": 14900,
+        "final_state_maps": 486,
+        "final_dense_presence_slots": 7857,
+        "final_nondefault_fact_slots": 2423,
+        "final_elided_presence_slots": 5434,
+        "elided_default_write_count": 5574
+      }
+    },
+    {
+      "case": "small_recursive_join_cfg",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "17ae823bfbfa887e367bf70e4dd4be766d4f3f3a5c579eaa887db58e9ddf5652",
+          "bytes": 46494
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "17ae823bfbfa887e367bf70e4dd4be766d4f3f3a5c579eaa887db58e9ddf5652",
+          "bytes": 46494
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 1331,
+        "dense_copy_presence_slots": 24962,
+        "candidate_expected_stored_fact_slots": 8122,
+        "first_reach_copy_count": 449,
+        "first_reach_by_invocation": {
+          "0": 2,
+          "1": 3,
+          "2": 3,
+          "3": 64,
+          "4": 39,
+          "5": 1,
+          "6": 2,
+          "7": 3,
+          "8": 3,
+          "9": 64,
+          "10": 39,
+          "11": 1,
+          "12": 1,
+          "13": 2,
+          "14": 3,
+          "15": 3,
+          "16": 64,
+          "17": 39,
+          "18": 1,
+          "19": 1,
+          "20": 2,
+          "21": 3,
+          "22": 3,
+          "23": 64,
+          "24": 39
+        },
+        "actual_copy_calls": 1331,
+        "actual_copy_presence_slots": 24962,
+        "actual_copy_nondefault_fact_slots": 8122,
+        "actual_copy_elided_presence_slots": 16840,
+        "final_state_maps": 486,
+        "final_dense_presence_slots": 7857,
+        "final_nondefault_fact_slots": 2423,
+        "final_elided_presence_slots": 5434,
+        "elided_default_write_count": 7162
+      }
+    },
+    {
+      "case": "small_recursive_join_cfg",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "17ae823bfbfa887e367bf70e4dd4be766d4f3f3a5c579eaa887db58e9ddf5652",
+          "bytes": 46494
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "17ae823bfbfa887e367bf70e4dd4be766d4f3f3a5c579eaa887db58e9ddf5652",
+          "bytes": 46494
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 1311,
+        "dense_copy_presence_slots": 24006,
+        "candidate_expected_stored_fact_slots": 7426,
+        "first_reach_copy_count": 449,
+        "first_reach_by_invocation": {
+          "0": 2,
+          "1": 3,
+          "2": 3,
+          "3": 64,
+          "4": 39,
+          "5": 1,
+          "6": 2,
+          "7": 3,
+          "8": 3,
+          "9": 64,
+          "10": 39,
+          "11": 1,
+          "12": 1,
+          "13": 2,
+          "14": 3,
+          "15": 3,
+          "16": 64,
+          "17": 39,
+          "18": 1,
+          "19": 1,
+          "20": 2,
+          "21": 3,
+          "22": 3,
+          "23": 64,
+          "24": 39
+        },
+        "actual_copy_calls": 1311,
+        "actual_copy_presence_slots": 24006,
+        "actual_copy_nondefault_fact_slots": 7426,
+        "actual_copy_elided_presence_slots": 16580,
+        "final_state_maps": 486,
+        "final_dense_presence_slots": 7857,
+        "final_nondefault_fact_slots": 2423,
+        "final_elided_presence_slots": 5434,
+        "elided_default_write_count": 7150
+      }
+    },
+    {
+      "case": "multiple_backedges_and_missing_name_join",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 202,
+        "dense_copy_presence_slots": 1690,
+        "candidate_expected_stored_fact_slots": 534,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 202,
+        "actual_copy_presence_slots": 1690,
+        "actual_copy_nondefault_fact_slots": 534,
+        "actual_copy_elided_presence_slots": 1156,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 802
+      }
+    },
+    {
+      "case": "multiple_backedges_and_missing_name_join",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 158,
+        "dense_copy_presence_slots": 1332,
+        "candidate_expected_stored_fact_slots": 406,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 158,
+        "actual_copy_presence_slots": 1332,
+        "actual_copy_nondefault_fact_slots": 406,
+        "actual_copy_elided_presence_slots": 926,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 444
+      }
+    },
+    {
+      "case": "multiple_backedges_and_missing_name_join",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 152,
+        "dense_copy_presence_slots": 1288,
+        "candidate_expected_stored_fact_slots": 390,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 152,
+        "actual_copy_presence_slots": 1288,
+        "actual_copy_nondefault_fact_slots": 390,
+        "actual_copy_elided_presence_slots": 898,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 422
+      }
+    },
+    {
+      "case": "multiple_backedges_and_missing_name_join",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "257c28c378c7f672ffdf45e5f8e6c64c88a28ae9b681cd53c8ab48fea5b0c1d0",
+          "bytes": 36453
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 196,
+        "dense_copy_presence_slots": 1616,
+        "candidate_expected_stored_fact_slots": 516,
+        "first_reach_copy_count": 56,
+        "first_reach_by_invocation": {
+          "0": 28,
+          "1": 28
+        },
+        "actual_copy_calls": 196,
+        "actual_copy_presence_slots": 1616,
+        "actual_copy_nondefault_fact_slots": 516,
+        "actual_copy_elided_presence_slots": 1100,
+        "final_state_maps": 58,
+        "final_dense_presence_slots": 474,
+        "final_nondefault_fact_slots": 138,
+        "final_elided_presence_slots": 336,
+        "elided_default_write_count": 742
+      }
+    },
+    {
+      "case": "generated_missing_name_return_join",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 112,
+        "dense_copy_presence_slots": 1175,
+        "candidate_expected_stored_fact_slots": 706,
+        "first_reach_copy_count": 32,
+        "first_reach_by_invocation": {
+          "0": 32
+        },
+        "actual_copy_calls": 112,
+        "actual_copy_presence_slots": 1175,
+        "actual_copy_nondefault_fact_slots": 706,
+        "actual_copy_elided_presence_slots": 469,
+        "final_state_maps": 33,
+        "final_dense_presence_slots": 325,
+        "final_nondefault_fact_slots": 215,
+        "final_elided_presence_slots": 110,
+        "elided_default_write_count": 255
+      }
+    },
+    {
+      "case": "generated_missing_name_return_join",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 80,
+        "dense_copy_presence_slots": 808,
+        "candidate_expected_stored_fact_slots": 526,
+        "first_reach_copy_count": 32,
+        "first_reach_by_invocation": {
+          "0": 32
+        },
+        "actual_copy_calls": 80,
+        "actual_copy_presence_slots": 808,
+        "actual_copy_nondefault_fact_slots": 526,
+        "actual_copy_elided_presence_slots": 282,
+        "final_state_maps": 33,
+        "final_dense_presence_slots": 325,
+        "final_nondefault_fact_slots": 215,
+        "final_elided_presence_slots": 110,
+        "elided_default_write_count": 90
+      }
+    },
+    {
+      "case": "generated_missing_name_return_join",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 96,
+        "dense_copy_presence_slots": 1023,
+        "candidate_expected_stored_fact_slots": 677,
+        "first_reach_copy_count": 32,
+        "first_reach_by_invocation": {
+          "0": 32
+        },
+        "actual_copy_calls": 96,
+        "actual_copy_presence_slots": 1023,
+        "actual_copy_nondefault_fact_slots": 677,
+        "actual_copy_elided_presence_slots": 346,
+        "final_state_maps": 33,
+        "final_dense_presence_slots": 325,
+        "final_nondefault_fact_slots": 215,
+        "final_elided_presence_slots": 110,
+        "elided_default_write_count": 160
+      }
+    },
+    {
+      "case": "generated_missing_name_return_join",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 111,
+        "dense_copy_presence_slots": 1160,
+        "candidate_expected_stored_fact_slots": 713,
+        "first_reach_copy_count": 32,
+        "first_reach_by_invocation": {
+          "0": 32
+        },
+        "actual_copy_calls": 111,
+        "actual_copy_presence_slots": 1160,
+        "actual_copy_nondefault_fact_slots": 713,
+        "actual_copy_elided_presence_slots": 447,
+        "final_state_maps": 33,
+        "final_dense_presence_slots": 325,
+        "final_nondefault_fact_slots": 215,
+        "final_elided_presence_slots": 110,
+        "elided_default_write_count": 237
+      }
+    },
+    {
+      "case": "missing_target_return_path",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 17,
+        "dense_copy_presence_slots": 26,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 17,
+        "actual_copy_presence_slots": 26,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 22,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 14,
+        "final_nondefault_fact_slots": 3,
+        "final_elided_presence_slots": 11,
+        "elided_default_write_count": 6
+      }
+    },
+    {
+      "case": "missing_target_return_path",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 17,
+        "dense_copy_presence_slots": 26,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 17,
+        "actual_copy_presence_slots": 26,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 22,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 14,
+        "final_nondefault_fact_slots": 3,
+        "final_elided_presence_slots": 11,
+        "elided_default_write_count": 6
+      }
+    },
+    {
+      "case": "missing_target_return_path",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 17,
+        "dense_copy_presence_slots": 34,
+        "candidate_expected_stored_fact_slots": 8,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 17,
+        "actual_copy_presence_slots": 34,
+        "actual_copy_nondefault_fact_slots": 8,
+        "actual_copy_elided_presence_slots": 26,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 14,
+        "final_nondefault_fact_slots": 3,
+        "final_elided_presence_slots": 11,
+        "elided_default_write_count": 6
+      }
+    },
+    {
+      "case": "missing_target_return_path",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 17,
+        "dense_copy_presence_slots": 26,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 17,
+        "actual_copy_presence_slots": 26,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 22,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 14,
+        "final_nondefault_fact_slots": 3,
+        "final_elided_presence_slots": 11,
+        "elided_default_write_count": 6
+      }
+    },
+    {
+      "case": "loop_zero_path_return",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 22,
+        "dense_copy_presence_slots": 39,
+        "candidate_expected_stored_fact_slots": 9,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 22,
+        "actual_copy_presence_slots": 39,
+        "actual_copy_nondefault_fact_slots": 9,
+        "actual_copy_elided_presence_slots": 30,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 24,
+        "final_nondefault_fact_slots": 8,
+        "final_elided_presence_slots": 16,
+        "elided_default_write_count": 20
+      }
+    },
+    {
+      "case": "loop_zero_path_return",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 22,
+        "dense_copy_presence_slots": 39,
+        "candidate_expected_stored_fact_slots": 9,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 22,
+        "actual_copy_presence_slots": 39,
+        "actual_copy_nondefault_fact_slots": 9,
+        "actual_copy_elided_presence_slots": 30,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 24,
+        "final_nondefault_fact_slots": 8,
+        "final_elided_presence_slots": 16,
+        "elided_default_write_count": 20
+      }
+    },
+    {
+      "case": "loop_zero_path_return",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 21,
+        "dense_copy_presence_slots": 42,
+        "candidate_expected_stored_fact_slots": 11,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 21,
+        "actual_copy_presence_slots": 42,
+        "actual_copy_nondefault_fact_slots": 11,
+        "actual_copy_elided_presence_slots": 31,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 24,
+        "final_nondefault_fact_slots": 8,
+        "final_elided_presence_slots": 16,
+        "elided_default_write_count": 20
+      }
+    },
+    {
+      "case": "loop_zero_path_return",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        },
+        "presence": {
+          "kind": "native-error",
+          "type": "compiler.native.NativeBackendError",
+          "text": "x86_64-linux Invoke requires closures with statically known targets"
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 22,
+        "dense_copy_presence_slots": 39,
+        "candidate_expected_stored_fact_slots": 9,
+        "first_reach_copy_count": 7,
+        "first_reach_by_invocation": {
+          "0": 7
+        },
+        "actual_copy_calls": 22,
+        "actual_copy_presence_slots": 39,
+        "actual_copy_nondefault_fact_slots": 9,
+        "actual_copy_elided_presence_slots": 30,
+        "final_state_maps": 8,
+        "final_dense_presence_slots": 24,
+        "final_nondefault_fact_slots": 8,
+        "final_elided_presence_slots": 16,
+        "elided_default_write_count": 20
+      }
+    },
+    {
+      "case": "unreachable_return_path",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 18,
+        "dense_copy_presence_slots": 12,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 8,
+        "first_reach_by_invocation": {
+          "0": 4,
+          "1": 4
+        },
+        "actual_copy_calls": 18,
+        "actual_copy_presence_slots": 12,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 8,
+        "final_state_maps": 14,
+        "final_dense_presence_slots": 6,
+        "final_nondefault_fact_slots": 2,
+        "final_elided_presence_slots": 4,
+        "elided_default_write_count": 2
+      }
+    },
+    {
+      "case": "unreachable_return_path",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 18,
+        "dense_copy_presence_slots": 12,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 8,
+        "first_reach_by_invocation": {
+          "0": 4,
+          "1": 4
+        },
+        "actual_copy_calls": 18,
+        "actual_copy_presence_slots": 12,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 8,
+        "final_state_maps": 14,
+        "final_dense_presence_slots": 6,
+        "final_nondefault_fact_slots": 2,
+        "final_elided_presence_slots": 4,
+        "elided_default_write_count": 2
+      }
+    },
+    {
+      "case": "unreachable_return_path",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 18,
+        "dense_copy_presence_slots": 12,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 8,
+        "first_reach_by_invocation": {
+          "0": 4,
+          "1": 4
+        },
+        "actual_copy_calls": 18,
+        "actual_copy_presence_slots": 12,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 8,
+        "final_state_maps": 14,
+        "final_dense_presence_slots": 6,
+        "final_nondefault_fact_slots": 2,
+        "final_elided_presence_slots": 4,
+        "elided_default_write_count": 2
+      }
+    },
+    {
+      "case": "unreachable_return_path",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "0f70221a8a26c01ced85c7032aa432ab0ea2da491b01a6c384e096f6992efb27",
+          "bytes": 34067
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 18,
+        "dense_copy_presence_slots": 12,
+        "candidate_expected_stored_fact_slots": 4,
+        "first_reach_copy_count": 8,
+        "first_reach_by_invocation": {
+          "0": 4,
+          "1": 4
+        },
+        "actual_copy_calls": 18,
+        "actual_copy_presence_slots": 12,
+        "actual_copy_nondefault_fact_slots": 4,
+        "actual_copy_elided_presence_slots": 8,
+        "final_state_maps": 14,
+        "final_dense_presence_slots": 6,
+        "final_nondefault_fact_slots": 2,
+        "final_elided_presence_slots": 4,
+        "elided_default_write_count": 2
+      }
+    },
+    {
+      "case": "compact_sticky_return",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "b7a015ea15a0e5d5f1bdfba2e2639e4b064529f56dd958f0feac972a9223cd61",
+          "bytes": 34037
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "b7a015ea15a0e5d5f1bdfba2e2639e4b064529f56dd958f0feac972a9223cd61",
+          "bytes": 34037
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 19,
+        "dense_copy_presence_slots": 48,
+        "candidate_expected_stored_fact_slots": 12,
+        "first_reach_copy_count": 8,
+        "first_reach_by_invocation": {
+          "0": 8
+        },
+        "actual_copy_calls": 19,
+        "actual_copy_presence_slots": 48,
+        "actual_copy_nondefault_fact_slots": 12,
+        "actual_copy_elided_presence_slots": 36,
+        "final_state_maps": 9,
+        "final_dense_presence_slots": 21,
+        "final_nondefault_fact_slots": 7,
+        "final_elided_presence_slots": 14,
+        "elided_default_write_count": 7
+      }
+    },
+    {
+      "case": "compact_sticky_return",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "b7a015ea15a0e5d5f1bdfba2e2639e4b064529f56dd958f0feac972a9223cd61",
+          "bytes": 34037
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "b7a015ea15a0e5d5f1bdfba2e2639e4b064529f56dd958f0feac972a9223cd61",
+          "bytes": 34037
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 19,
+        "dense_copy_presence_slots": 48,
+        "candidate_expected_stored_fact_slots": 16,
+        "first_reach_copy_count": 8,
+        "first_reach_by_invocation": {
+          "0": 8
+        },
+        "actual_copy_calls": 19,
+        "actual_copy_presence_slots": 48,
+        "actual_copy_nondefault_fact_slots": 16,
+        "actual_copy_elided_presence_slots": 32,
+        "final_state_maps": 9,
+        "final_dense_presence_slots": 21,
+        "final_nondefault_fact_slots": 7,
+        "final_elided_presence_slots": 14,
+        "elided_default_write_count": 7
+      }
+    },
+    {
+      "case": "compact_sticky_return",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "b7a015ea15a0e5d5f1bdfba2e2639e4b064529f56dd958f0feac972a9223cd61",
+          "bytes": 34037
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "b7a015ea15a0e5d5f1bdfba2e2639e4b064529f56dd958f0feac972a9223cd61",
+          "bytes": 34037
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 19,
+        "dense_copy_presence_slots": 48,
+        "candidate_expected_stored_fact_slots": 16,
+        "first_reach_copy_count": 8,
+        "first_reach_by_invocation": {
+          "0": 8
+        },
+        "actual_copy_calls": 19,
+        "actual_copy_presence_slots": 48,
+        "actual_copy_nondefault_fact_slots": 16,
+        "actual_copy_elided_presence_slots": 32,
+        "final_state_maps": 9,
+        "final_dense_presence_slots": 21,
+        "final_nondefault_fact_slots": 7,
+        "final_elided_presence_slots": 14,
+        "elided_default_write_count": 7
+      }
+    },
+    {
+      "case": "compact_sticky_return",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "b7a015ea15a0e5d5f1bdfba2e2639e4b064529f56dd958f0feac972a9223cd61",
+          "bytes": 34037
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "b7a015ea15a0e5d5f1bdfba2e2639e4b064529f56dd958f0feac972a9223cd61",
+          "bytes": 34037
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 18,
+        "dense_copy_presence_slots": 45,
+        "candidate_expected_stored_fact_slots": 15,
+        "first_reach_copy_count": 8,
+        "first_reach_by_invocation": {
+          "0": 8
+        },
+        "actual_copy_calls": 18,
+        "actual_copy_presence_slots": 45,
+        "actual_copy_nondefault_fact_slots": 15,
+        "actual_copy_elided_presence_slots": 30,
+        "final_state_maps": 9,
+        "final_dense_presence_slots": 21,
+        "final_nondefault_fact_slots": 7,
+        "final_elided_presence_slots": 14,
+        "elided_default_write_count": 7
+      }
+    },
+    {
+      "case": "swapped_predecessor_layout",
+      "order": "lifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "bba7948ce84f5d4f8f31012246441bf18c44abab04233c1cd2d5f559a40d5910",
+          "bytes": 34077
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "bba7948ce84f5d4f8f31012246441bf18c44abab04233c1cd2d5f559a40d5910",
+          "bytes": 34077
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 21,
+        "dense_copy_presence_slots": 54,
+        "candidate_expected_stored_fact_slots": 16,
+        "first_reach_copy_count": 9,
+        "first_reach_by_invocation": {
+          "0": 9
+        },
+        "actual_copy_calls": 21,
+        "actual_copy_presence_slots": 54,
+        "actual_copy_nondefault_fact_slots": 16,
+        "actual_copy_elided_presence_slots": 38,
+        "final_state_maps": 10,
+        "final_dense_presence_slots": 24,
+        "final_nondefault_fact_slots": 7,
+        "final_elided_presence_slots": 17,
+        "elided_default_write_count": 7
+      }
+    },
+    {
+      "case": "swapped_predecessor_layout",
+      "order": "fifo_forward",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "bba7948ce84f5d4f8f31012246441bf18c44abab04233c1cd2d5f559a40d5910",
+          "bytes": 34077
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "bba7948ce84f5d4f8f31012246441bf18c44abab04233c1cd2d5f559a40d5910",
+          "bytes": 34077
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 20,
+        "dense_copy_presence_slots": 51,
+        "candidate_expected_stored_fact_slots": 14,
+        "first_reach_copy_count": 9,
+        "first_reach_by_invocation": {
+          "0": 9
+        },
+        "actual_copy_calls": 20,
+        "actual_copy_presence_slots": 51,
+        "actual_copy_nondefault_fact_slots": 14,
+        "actual_copy_elided_presence_slots": 37,
+        "final_state_maps": 10,
+        "final_dense_presence_slots": 24,
+        "final_nondefault_fact_slots": 7,
+        "final_elided_presence_slots": 17,
+        "elided_default_write_count": 7
+      }
+    },
+    {
+      "case": "swapped_predecessor_layout",
+      "order": "lifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "bba7948ce84f5d4f8f31012246441bf18c44abab04233c1cd2d5f559a40d5910",
+          "bytes": 34077
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "bba7948ce84f5d4f8f31012246441bf18c44abab04233c1cd2d5f559a40d5910",
+          "bytes": 34077
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 21,
+        "dense_copy_presence_slots": 54,
+        "candidate_expected_stored_fact_slots": 12,
+        "first_reach_copy_count": 9,
+        "first_reach_by_invocation": {
+          "0": 9
+        },
+        "actual_copy_calls": 21,
+        "actual_copy_presence_slots": 54,
+        "actual_copy_nondefault_fact_slots": 12,
+        "actual_copy_elided_presence_slots": 42,
+        "final_state_maps": 10,
+        "final_dense_presence_slots": 24,
+        "final_nondefault_fact_slots": 7,
+        "final_elided_presence_slots": 17,
+        "elided_default_write_count": 7
+      }
+    },
+    {
+      "case": "swapped_predecessor_layout",
+      "order": "fifo_reverse",
+      "outcomes_equal": true,
+      "outcomes": {
+        "production": {
+          "kind": "assembly",
+          "sha256": "bba7948ce84f5d4f8f31012246441bf18c44abab04233c1cd2d5f559a40d5910",
+          "bytes": 34077
+        },
+        "presence": {
+          "kind": "assembly",
+          "sha256": "bba7948ce84f5d4f8f31012246441bf18c44abab04233c1cd2d5f559a40d5910",
+          "bytes": 34077
+        }
+      },
+      "exact_invocation_summaries_equal": true,
+      "raw_dense_states_equal": true,
+      "queue_and_return_timeline_equal": true,
+      "complete_trace_equal": true,
+      "production_replay_valid": true,
+      "presence_replay_valid": true,
+      "copy_accounting_valid": true,
+      "storage_copy_counts": {
+        "expected_copy_calls": 20,
+        "dense_copy_presence_slots": 51,
+        "candidate_expected_stored_fact_slots": 15,
+        "first_reach_copy_count": 9,
+        "first_reach_by_invocation": {
+          "0": 9
+        },
+        "actual_copy_calls": 20,
+        "actual_copy_presence_slots": 51,
+        "actual_copy_nondefault_fact_slots": 15,
+        "actual_copy_elided_presence_slots": 36,
+        "final_state_maps": 10,
+        "final_dense_presence_slots": 24,
+        "final_nondefault_fact_slots": 7,
+        "final_elided_presence_slots": 17,
+        "elided_default_write_count": 7
+      }
+    }
+  ]
+}
