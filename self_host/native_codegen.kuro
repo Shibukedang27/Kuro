@@ -335,6 +335,10 @@ NativeRegionCount = 0;
 NativeRegionTop is Text;
 NativeRepeatLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeRepeatStackDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeRepeatOnePending = 0;
+NativeRepeatOnePrevious = 0;
+NativeRepeatOneActive = 0;
+NativeRepeatOneStoreAllowed = 0;
 NativeWhileLabels = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeWhileStackDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeWhileTestSeen = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
@@ -381,8 +385,9 @@ Action NativeRegisterGlobalVariable Name: Text;
     Return NativeGlobalVariableSlot;
 Done.
 
-# Function-free slots may first gain Decimal kinds before control flow or in
-# every path of bounded If/Else trees; established Decimal kinds stay fixed.
+# Function-free slots may first gain Decimal kinds before control flow, in
+# every path of bounded If/Else trees, or directly in an exact-once Repeat.
+# Established Decimal kinds stay fixed in every region.
 Action NativeCheckGlobalStoreKind Slot: Integers, Kind: Text;
     If Slot is greater than or equal to 0;
         NativeGlobalKindPosition = Slot + 1;
@@ -395,6 +400,9 @@ Action NativeCheckGlobalStoreKind Slot: Integers, Kind: Text;
                 If NativeControlFlowDepth is greater than 0 and NativeGlobalStoredKind is not equal to "D";
                     NativeIfJoinStoreAllowed = 0;
                     If NativeIfJoinFrameAllowed is equal to 1;
+                        NativeIfJoinStoreAllowed = 1;
+                    Done.
+                    If NativeRepeatOneStoreAllowed is equal to 1;
                         NativeIfJoinStoreAllowed = 1;
                     Done.
                     If NativeIfJoinStoreAllowed is equal to 0;
@@ -1610,6 +1618,9 @@ Action EmitStraightIntegerProgram;
     Done.
     NativeIfDepth = 0;
     NativeRepeatDepth = 0;
+    NativeRepeatOnePending = 0;
+    NativeRepeatOneActive = 0;
+    NativeRepeatOneStoreAllowed = 0;
     NativeWhileDepth = 0;
     NativeControlFlowDepth = 0;
     NativeRegionKinds = "";
@@ -1672,6 +1683,16 @@ Action EmitStraightIntegerProgram;
         NativeStraightOp = @_;
         Add 1 to NativeStraightPos;
         NativeStraightKnown = 0;
+        # Only the immediately preceding parsed BC_CONST integer one can prove
+        # an exact-once count. Any intervening instruction loses provenance.
+        NativeRepeatOnePrevious = NativeRepeatOnePending;
+        NativeRepeatOnePending = 0;
+        NativeRepeatOneStoreAllowed = 0;
+        If NativeStraightOp is equal to "BC_STORE_LIST" and NativeFunctionMode is equal to 0 and NativeFunctionCount is equal to 0 and NativeRepeatOneActive is equal to 1;
+            If NativeControlFlowDepth is equal to 1 and NativeRepeatDepth is equal to 1 and NativeIfDepth is equal to 0 and NativeWhileDepth is equal to 0;
+                NativeRepeatOneStoreAllowed = 1;
+            Done.
+        Done.
         # Only a tree of If regions can establish a fresh Decimal kind. Preserve
         # the earlier direct top-level join behavior when Actions are present.
         NativeIfJoinFrameAllowed = 0;
@@ -1769,6 +1790,9 @@ Action EmitStraightIntegerProgram;
                 Add 1 to NativeStraightPos;
                 Call NativeValidateUnsignedInteger NativeStraightValue;
                 If @_ is equal to 1;
+                    If NativeStraightValue is equal to "1" and NativeStackDepth is equal to 0;
+                        NativeRepeatOnePending = 1;
+                    Done.
                     NativeStackOffset = NativeStackDepth * 8;
                     Call NativeLengthToText NativeStackOffset;
                     NativeStackOffsetText = @_;
@@ -2190,6 +2214,17 @@ Action EmitStraightIntegerProgram;
 
         If NativeStraightOp is equal to "BC_REPEAT_BEGIN";
             NativeStraightKnown = 1;
+            # Nested regions never inherit this permission. Keep the outer flag
+            # across nested regions, and recompute it for every top-level loop.
+            If NativeControlFlowDepth is equal to 0;
+                NativeRepeatOneActive = 0;
+                If NativeFunctionMode is equal to 0 and NativeFunctionCount is equal to 0 and NativeStackDepth is equal to 1 and NativeRepeatOnePrevious is equal to 1;
+                    Get NativeStackKinds 0;
+                    If @_ is equal to "I";
+                        NativeRepeatOneActive = 1;
+                    Done.
+                Done.
+            Done.
             If NativeStackDepth is greater than 0 and NativeRepeatDepth is less than 16;
                 NativeStackOffset = NativeStackDepth * 8 - 8;
                 NativeRepeatOffset = 1536 + NativeRepeatDepth * 8;
@@ -2236,6 +2271,9 @@ Action EmitStraightIntegerProgram;
                     Done.
                     NativeRepeatDepth = NativeRepeatDepth - 1;
                     NativeControlFlowDepth = NativeControlFlowDepth - 1;
+                    If NativeRepeatDepth is equal to 0;
+                        NativeRepeatOneActive = 0;
+                    Done.
                 Else;
                     NativeFailed = 1;
                 Done.
