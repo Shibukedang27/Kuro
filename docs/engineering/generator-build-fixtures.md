@@ -34,6 +34,17 @@ The x86-macOS build count falls by **83.33%**, and total generator-image constru
 
 The new `test_codegen_fixtures.py` uses pytest's built-in `pytester` plugin and a cheap build spy in isolated pytest subprocesses. It consumes the real fixture and actual six-case parameter list, checks the integration signature requests that fixture, verifies exactly one build with the exact host/output target pair, then repeats in a second pytest session and requires a fresh image path. The spy is confined to the child process; the native integration suite still performs real builds. This guards fixture lifetime and stale-image reuse without adding another costly generator build. macOS CI adds `--durations=20` for setup/call visibility; no tests or assertions are removed.
 
+## Hosted timing checkpoint before the final documentation update
+
+At implementation/documentation checkpoint `8d0ad33`, completed push-workflow macOS jobs both passed **976 tests, 77 skipped**:
+
+| Python | Suite seconds | Shared x86-macOS fixture setup seconds | Evidence |
+| --- | ---: | ---: | --- |
+| 3.11 | 5679.46 (1h34m39s) | 5569.34 | [Completed job](https://github.com/Shibukedang27/Kuro/actions/runs/39204999347/job/117905791683) |
+| 3.12 | 5018.84 (1h23m38s) | 4922.62 | [Completed job](https://github.com/Shibukedang27/Kuro/actions/runs/39204999347/job/117905791504) |
+
+The measured baseline was Python 3.10 at 18703.27s; these after-runs use different Python versions, so do **not** calculate a controlled same-version speedup ratio from them. They demonstrate real Darwin execution with the unchanged six x86 cases and a completed Python 3.12 suite rather than the previous timeout. The extra passing test is the fixture-lifecycle regression. At this checkpoint both Linux jobs also succeeded, but four macOS checks were still queued/running: **4/8 green is not completion**. These earlier-head results do not satisfy final documentation-head acceptance. The PR verification record must identify the final exact commit and all eight conclusions separately.
+
 ## Local verification
 
 - Full suite with fresh native generator and stage timing: **1033 passed, 20 skipped in 3946.43s (1h05m46s)**.
