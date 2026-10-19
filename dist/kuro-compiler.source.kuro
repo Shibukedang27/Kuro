@@ -1534,19 +1534,49 @@ Action LowerPrintExpr;
     Done.
 Done.
 
+Action LowerCountAssignmentValues StartPos;
+    Length AstOut;
+    LowerCountAssignmentValues_Length = @_;
+    LowerCountAssignmentValues_Pos = StartPos;
+    LowerCountAssignmentValues_Count = 0;
+    LowerCountAssignmentValues_Found = 0;
+    While LowerCountAssignmentValues_Pos is less than LowerCountAssignmentValues_Length and LowerCountAssignmentValues_Found is equal to 0;
+        Get AstOut LowerCountAssignmentValues_Pos;
+        If @_ is equal to "END_VALUES";
+            LowerCountAssignmentValues_Found = 1;
+        Else;
+            If @_ is equal to "END_EXPR";
+                Add 1 to LowerCountAssignmentValues_Count;
+            Done.
+        Done.
+        Add 1 to LowerCountAssignmentValues_Pos;
+    Done.
+    Return LowerCountAssignmentValues_Count;
+Done.
+
 Action LowerAssign;
     LowerAssign_NamePos = LowerPos + 1;
     Get AstOut LowerAssign_NamePos;
     LowerAssign_Name = @_;
     LowerPos = LowerPos + 3;
+    Call LowerCountAssignmentValues LowerPos;
+    LowerAssign_Count = @_;
+    If LowerAssign_Count is greater than 1;
+        Append "MULTI_BEGIN" to IROut;
+    Done.
     Call LowerValue;
     If LowerFailed is equal to 0;
         Add 1 to LowerPos;
         Call LowerAssignTail;
     Done.
     If LowerFailed is equal to 0;
-        Append "STORE_LIST" to IROut;
-        Append LowerAssign_Name to IROut;
+        If LowerAssign_Count is greater than 1;
+            Append "STORE_MULTI" to IROut;
+            Append LowerAssign_Name to IROut;
+        Else;
+            Append "STORE_LIST" to IROut;
+            Append LowerAssign_Name to IROut;
+        Done.
     Done.
 Done.
 
@@ -1898,21 +1928,25 @@ Action BytecodeStep;
         Append "BC_" + BytecodeStep_Op to BytecodeOut;
         Add 1 to BytecodePos;
 
-        If BytecodeStep_Op is equal to "CONST" or BytecodeStep_Op is equal to "LOADVAR" or BytecodeStep_Op is equal to "STORE_LIST" or BytecodeStep_Op is equal to "UPDATE" or BytecodeStep_Op is equal to "ADD" or BytecodeStep_Op is equal to "APPEND" or BytecodeStep_Op is equal to "FUNC_BEGIN" or BytecodeStep_Op is equal to "CALL_BEGIN" or BytecodeStep_Op is equal to "BINOP" or BytecodeStep_Op is equal to "CMP" or BytecodeStep_Op is equal to "BOOL" or BytecodeStep_Op is equal to "ISCLASS" or BytecodeStep_Op is equal to "LENGTH" or BytecodeStep_Op is equal to "SET" or BytecodeStep_Op is equal to "INPUT";
+        If BytecodeStep_Op is equal to "STORE_MULTI";
             Call BytecodeConsume 1;
         Else;
-            If BytecodeStep_Op is equal to "GET";
-                Call BytecodeConsume 2;
+            If BytecodeStep_Op is equal to "CONST" or BytecodeStep_Op is equal to "LOADVAR" or BytecodeStep_Op is equal to "STORE_LIST" or BytecodeStep_Op is equal to "UPDATE" or BytecodeStep_Op is equal to "ADD" or BytecodeStep_Op is equal to "APPEND" or BytecodeStep_Op is equal to "FUNC_BEGIN" or BytecodeStep_Op is equal to "CALL_BEGIN" or BytecodeStep_Op is equal to "BINOP" or BytecodeStep_Op is equal to "CMP" or BytecodeStep_Op is equal to "BOOL" or BytecodeStep_Op is equal to "ISCLASS" or BytecodeStep_Op is equal to "LENGTH" or BytecodeStep_Op is equal to "SET" or BytecodeStep_Op is equal to "INPUT";
+                Call BytecodeConsume 1;
             Else;
-            If BytecodeStep_Op is equal to "PARAM" or BytecodeStep_Op is equal to "DECLTYPE";
-                Call BytecodeConsume 2;
-            Else;
-            If BytecodeStep_Op is equal to "PRINT" or BytecodeStep_Op is equal to "RETURN" or BytecodeStep_Op is equal to "IF_BEGIN" or BytecodeStep_Op is equal to "ELSE_BEGIN" or BytecodeStep_Op is equal to "IF_END" or BytecodeStep_Op is equal to "REPEAT_BEGIN" or BytecodeStep_Op is equal to "REPEAT_END" or BytecodeStep_Op is equal to "WHILE_BEGIN" or BytecodeStep_Op is equal to "WHILE_TEST" or BytecodeStep_Op is equal to "WHILE_END" or BytecodeStep_Op is equal to "FUNC_END" or BytecodeStep_Op is equal to "CALL_END";
+                If BytecodeStep_Op is equal to "GET";
+                    Call BytecodeConsume 2;
                 Else;
-                    BytecodeFailed = 1;
+                    If BytecodeStep_Op is equal to "PARAM" or BytecodeStep_Op is equal to "DECLTYPE";
+                        Call BytecodeConsume 2;
+                    Else;
+                        If BytecodeStep_Op is equal to "MULTI_BEGIN" or BytecodeStep_Op is equal to "PRINT" or BytecodeStep_Op is equal to "RETURN" or BytecodeStep_Op is equal to "IF_BEGIN" or BytecodeStep_Op is equal to "ELSE_BEGIN" or BytecodeStep_Op is equal to "IF_END" or BytecodeStep_Op is equal to "REPEAT_BEGIN" or BytecodeStep_Op is equal to "REPEAT_END" or BytecodeStep_Op is equal to "WHILE_BEGIN" or BytecodeStep_Op is equal to "WHILE_TEST" or BytecodeStep_Op is equal to "WHILE_END" or BytecodeStep_Op is equal to "FUNC_END" or BytecodeStep_Op is equal to "CALL_END";
+                        Else;
+                            BytecodeFailed = 1;
+                        Done.
+                    Done.
                 Done.
             Done.
-        Done.
         Done.
     Done.
 Done.
