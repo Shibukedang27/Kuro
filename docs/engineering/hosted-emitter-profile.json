@@ -1,0 +1,105 @@
+{
+  "baseline_head": "bd1ba3de15bd0883d32fdfdee902ad9e48b015c3",
+  "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "platform": "Linux-6.18.38+-x86_64-with-glibc2.39",
+  "input": "native_codegen_source(\"x86_64-linux\")",
+  "text_heap_capacity": 1073741824,
+  "functions": 39,
+  "function_instructions": 9143,
+  "main_instructions": 1497,
+  "largest_function": {
+    "name": "EmitStraightIntegerProgram",
+    "instructions": 4399
+  },
+  "recognized_function_closure_constructors": 0,
+  "baseline": {
+    "compile_seconds": 0.15439008397515863,
+    "emit_seconds": 3755.9687312369933,
+    "sampler": "py-spy 20 Hz raw",
+    "samples": 75240,
+    "sampling_errors": 0,
+    "samples_in_closure_return_analyzer": 75155,
+    "analyzer_sample_percent": 99.88702817650186,
+    "top_leaf_frames": [
+      {
+        "frame": "analyze_action_closure_returns (compiler/native.py:2079)",
+        "samples": 37934
+      },
+      {
+        "frame": "analyze_action_closure_returns (compiler/native.py:2126)",
+        "samples": 14131
+      },
+      {
+        "frame": "analyze_action_closure_returns (compiler/native.py:2127)",
+        "samples": 9096
+      },
+      {
+        "frame": "analyze_action_closure_returns (compiler/native.py:2124)",
+        "samples": 4385
+      },
+      {
+        "frame": "analyze_action_closure_returns (compiler/native.py:2125)",
+        "samples": 2889
+      },
+      {
+        "frame": "analyze_action_closure_returns (compiler/native.py:2123)",
+        "samples": 2265
+      },
+      {
+        "frame": "analyze_action_closure_returns (compiler/native.py:2078)",
+        "samples": 1869
+      },
+      {
+        "frame": "analyze_action_closure_returns (compiler/native.py:2114)",
+        "samples": 1572
+      },
+      {
+        "frame": "analyze_action_closure_returns (compiler/native.py:2080)",
+        "samples": 388
+      },
+      {
+        "frame": "analyze_action_closure_returns (compiler/native.py:2117)",
+        "samples": 239
+      },
+      {
+        "frame": "analyze_action_closure_returns (compiler/native.py:2130)",
+        "samples": 148
+      },
+      {
+        "frame": "analyze_action_closure_returns (compiler/native.py:2128)",
+        "samples": 136
+      }
+    ]
+  },
+  "optimized": {
+    "unprofiled_emit_seconds": [
+      0.5770804679486901,
+      0.5717086959630251,
+      0.6047457959502935
+    ],
+    "unprofiled_compile_seconds": [
+      0.16724278999026865,
+      0.1591519620269537,
+      0.15710409998428077
+    ],
+    "cprofile_emit_seconds": 1.6066450029611588,
+    "cprofile_closure_return_analysis_calls": 0
+  },
+  "equivalence": {
+    "comparison": "cmp of complete baseline and optimized UTF-8 assembly succeeded",
+    "assembly_bytes": 1896239,
+    "assembly_sha256": "715a594ad187ee9ad837ae425a23215f00b5606e09f687c7cf5b267283834c68"
+  },
+  "limits": [
+    "One sampled baseline, three unprofiled optimized runs; not a controlled benchmark.",
+    "Local tests and production builds overlapped some measurements; sampling adds overhead.",
+    "Timings isolate hosted x86 Linux emission, excluding compilation, assembly/linking and execution.",
+    "No claim of corresponding Darwin speedup or expanded compiler capabilities."
+  ],
+  "reproduce": [
+    "python scripts/profile_hosted_emitter.py --root /path/to/checkout --output /tmp/emitter",
+    "python scripts/profile_hosted_emitter.py --root /path/to/checkout --output /tmp/emitter-profile --profile",
+    "py-spy record --rate 20 --format raw --output /tmp/stacks.txt -- python scripts/profile_hosted_emitter.py --root /path/to/baseline --output /tmp/before",
+    "cmp /tmp/before.s /tmp/emitter.s"
+  ]
+}
