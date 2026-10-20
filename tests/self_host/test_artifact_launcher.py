@@ -242,6 +242,19 @@ def test_native_artifact_launcher_returns_runtime_status(tmp_path):
     assert invalid.returncode == 1
     assert invalid.stdout == ""
 
+    negative_repeat = subprocess.run(
+        [str(executable)],
+        input=(
+            "kuro.bytecode/1\nBC_CONST\n-1\nBC_REPEAT_BEGIN\n"
+            "BC_CONST\nunreachable\nBC_PRINT\nBC_REPEAT_END\n"
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert negative_repeat.returncode == 1
+    assert negative_repeat.stdout == ""
+
     with_input = subprocess.run(
         [str(executable)],
         input=(

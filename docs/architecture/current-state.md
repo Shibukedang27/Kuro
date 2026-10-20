@@ -197,7 +197,16 @@ Linux host. The Kuro-authored code generator still emits macOS arm64 assembly
 regardless of the host image's CPU architecture. These milestones do not mean
 that the native compiler can construct its own machine-code image: Python is
 still used for the initial image build and system assemblers/linkers remain
-required. Windows and Linux runtime correctness remain unverified.
+required. Windows and full Linux runtime correctness remain unverified.
+
+### 2026-10-11 Linux x86-64 runtime smoke update
+
+The Ubuntu portability workflow now links and executes Kuro-generated Linux
+x86-64 assembly for integer arithmetic and loop control flow. It also runs a
+native bytecode launcher through multi-value collection reassignment. This is
+bounded smoke evidence, not full Linux language conformance, a clean self-hosted
+build, or standard-library coverage; verify the exact commit's CI results before
+making release claims.
 
 ## 10. Immediate consequences for this session's plan
 
