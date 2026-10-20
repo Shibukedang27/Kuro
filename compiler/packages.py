@@ -53,6 +53,7 @@ def read_manifest(path: str | Path) -> PackageManifest:
 
 
 def resolve_manifest(path: str | Path) -> list[tuple[str, str]]:
+    """Resolve local package-directory dependencies keyed by manifest name."""
     root = Path(path).resolve()
     seen: set[Path] = set()
     active: set[Path] = set()
@@ -86,6 +87,11 @@ def resolve_manifest(path: str | Path) -> list[tuple[str, str]]:
                 raise ValueError(f"dependency {name!r} escapes package root: {relative}")
             if not dep_manifest.is_file():
                 raise ValueError(f"dependency {name!r} not found at {relative}")
+            dependency = read_manifest(dep_manifest)
+            if dependency.name != name:
+                raise ValueError(
+                    f"dependency {name!r} points to package {dependency.name!r}"
+                )
             visit(dep_manifest)
         active.remove(manifest_path)
         seen.add(manifest_path)
@@ -116,16 +122,23 @@ def read_lock(path: str | Path) -> list[tuple[str, str]]:
             continue
         if line.startswith("graph_sha256"):
             key, value = (part.strip() for part in line.split("=", 1))
-            if key != "graph_sha256" or len(value) < 2 or value[0] != value[-1] == '"':
+            if key != "graph_sha256" or len(value) < 2 or value[0] != '"' or value[-1] != '"':
                 raise LockfileError(f"line {number}: invalid graph_sha256")
+            if graph_digest is not None:
+                raise LockfileError(f"line {number}: duplicate graph_sha256")
             graph_digest = value[1:-1]
+            if not re.fullmatch(r"[0-9a-f]{64}", graph_digest):
+                raise LockfileError(f"line {number}: invalid graph_sha256")
             continue
         if "=" not in line:
             raise LockfileError(f"line {number}: expected package = \"version\"")
         name, version = (part.strip() for part in line.split("=", 1))
-        if not name or len(version) < 2 or version[0] != version[-1] == '"' or not _SEMVER.fullmatch(version[1:-1]):
+        if not name or len(version) < 2 or version[0] != '"' or version[-1] != '"':
             raise LockfileError(f"line {number}: invalid locked package")
-        packages.append((name, version[1:-1]))
+        locked_version = version[1:-1]
+        if not _SEMVER.fullmatch(locked_version):
+            raise LockfileError(f"line {number}: invalid locked package")
+        packages.append((name, locked_version))
     if graph_digest is None:
         raise LockfileError("lockfile is missing graph_sha256")
     graph = "\n".join(f"{name}@{version}" for name, version in packages).encode()
