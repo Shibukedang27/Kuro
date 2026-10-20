@@ -8,6 +8,13 @@ from compiler.native import build_native, emit_x86_64_linux, emit_x86_64_macos
 from compiler.pipeline import compile_source
 
 
+def _native_dependency_report(executable: Path) -> str:
+    inspector = ["otool", "-L"] if platform.system() == "Darwin" else ["readelf", "-d"]
+    return subprocess.run(
+        [*inspector, str(executable)], capture_output=True, text=True, check=True
+    ).stdout
+
+
 def test_native_backend_builds_and_runs_literal_print(tmp_path):
     result = compile_source('Print "native kuro".')
     assert result.ok
@@ -350,7 +357,7 @@ def test_native_backend_runs_kuro_authored_compiler_probe(tmp_path):
     run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
     assert run.stdout.splitlines()[:6] == ["IDENT", "Print", "STRING", "native bootstrap", "DOT", "."]
     assert run.stdout.splitlines()[-2:] == ["0", "3"]
-    linked = subprocess.run(["otool", "-L", str(executable)], capture_output=True, text=True, check=True).stdout
+    linked = _native_dependency_report(executable)
     assert "Python" not in linked
 
 
@@ -370,7 +377,7 @@ def test_native_backend_runtime_decodes_decimal_constants(tmp_path):
     build_native_runtime("Print 12.5.", executable)
     run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
     assert run.stdout.endswith("12.5\n")
-    linked = subprocess.run(["otool", "-L", str(executable)], capture_output=True, text=True, check=True).stdout
+    linked = _native_dependency_report(executable)
     assert "Python" not in linked
 
 
