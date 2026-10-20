@@ -76,3 +76,17 @@ def test_hosted_and_kuro_authored_runtimes_agree(
     assert native["RuntimeExitCode"] == 0
     assert native["RuntimeFailed"] == 0
     assert native["VMOutput"] == expected_vm_output
+
+
+def test_negative_repeat_failure_conforms_between_hosted_and_kuro_runtime():
+    source = 'Repeat -1;\nPrint "unreachable".\nDone.'
+
+    hosted = run_source(source)
+    assert not hosted.ok
+    assert hosted.runtime_error is not None
+    assert hosted.runtime_error.code == "E6004"
+
+    native = run_with_kuro_runtime(source)
+    assert native["RuntimeExitCode"] == 1
+    assert native["RuntimeFailed"] == 1
+    assert native.get("VMOutput") is None

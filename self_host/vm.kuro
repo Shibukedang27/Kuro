@@ -526,24 +526,28 @@ Action VMSkipRepeat Depth;
 Done.
 
 Action VMRunRepeat Count, Start;
-    If Count is greater than 0;
-        VMRunRepeat_Remaining = Count;
-        While VMRunRepeat_Remaining is greater than 0 and VMFailed is equal to 0;
-            VMPos = Start;
-            VMRunRepeat_BodyDone = 0;
-            While VMPos is less than VMCodeLen and VMRunRepeat_BodyDone is equal to 0 and VMFailed is equal to 0;
-                Get BytecodeOut VMPos;
-                If @_ is equal to "BC_REPEAT_END";
-                    Add 1 to VMPos;
-                    VMRunRepeat_BodyDone = 1;
-                Else;
-                    Call VMStep;
-                Done.
-            Done.
-            VMRunRepeat_Remaining = VMRunRepeat_Remaining - 1;
-        Done.
+    If Count is less than 0;
+        VMFailed = 1;
     Else;
-        Call VMSkipRepeat 0;
+        If Count is greater than 0;
+            VMRunRepeat_Remaining = Count;
+            While VMRunRepeat_Remaining is greater than 0 and VMFailed is equal to 0;
+                VMPos = Start;
+                VMRunRepeat_BodyDone = 0;
+                While VMPos is less than VMCodeLen and VMRunRepeat_BodyDone is equal to 0 and VMFailed is equal to 0;
+                    Get BytecodeOut VMPos;
+                    If @_ is equal to "BC_REPEAT_END";
+                        Add 1 to VMPos;
+                        VMRunRepeat_BodyDone = 1;
+                    Else;
+                        Call VMStep;
+                    Done.
+                Done.
+                VMRunRepeat_Remaining = VMRunRepeat_Remaining - 1;
+            Done.
+        Else;
+            Call VMSkipRepeat 0;
+        Done.
     Done.
 Done.
 
