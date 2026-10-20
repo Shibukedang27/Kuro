@@ -44,6 +44,18 @@ def test_x86_64_linux_backend_assembles_dynamic_ir(tmp_path):
     result = compile_source(
         'N is Integers;\nN = 0;\nWhile N is less than 2;\nAdd 1 to N;\nDone.'
     )
+    assert result.ok
+    assembly = emit_x86_64_linux(result.ir)
+    source = tmp_path / "kuro-x86-dynamic.s"
+    object_file = tmp_path / "kuro-x86-dynamic.o"
+    source.write_text(assembly, encoding="utf-8")
+    subprocess.run(
+        ["clang", "-target", "x86_64-unknown-linux-gnu", "-c", str(source), "-o", str(object_file)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert object_file.read_bytes()[:4] == b"\x7fELF"
 
 
 def test_x86_64_macos_backend_uses_darwin_syscalls_and_assembles(tmp_path):
@@ -123,19 +135,6 @@ def test_x86_64_backend_emits_recursive_action_frames(tmp_path):
         capture_output=True,
         text=True,
     )
-    assert result.ok
-    assembly = emit_x86_64_linux(result.ir)
-    source = tmp_path / 'kuro-x86-dynamic.s'
-    object_file = tmp_path / 'kuro-x86-dynamic.o'
-    source.write_text(assembly, encoding='utf-8')
-    subprocess.run(
-        ['clang', '-target', 'x86_64-unknown-linux-gnu', '-c', str(source), '-o', str(object_file)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-
 def test_x86_64_linux_backend_emits_collection_storage_and_bounds():
     result = compile_source(
         'Items = 1, 2;\nAppend 3 to Items;\nGet Items 1;\nPrint @_.\n'
