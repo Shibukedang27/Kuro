@@ -2153,7 +2153,10 @@ def emit_x86_64_linux(ir: IRProgram) -> str:
                 inferred = inferred_symbol_kind(source)
                 lowered_source = source.lower()
                 strong_text_name = lowered_source.endswith(("name", "value", "kind", "message", "code", "text", "word", "line", "source", "token", "character", "output", "input")) and "isclass" not in lowered_source and "_is" not in lowered_source and not lowered_source.endswith(("ok", "flag"))
-                fn_kinds[item.dest] = "number" if source in fn_numeric_names else ("text" if strong_text_name else fn_kinds.get(source, inferred))
+                # Actions may read text constants initialized in the main
+                # program. Preserve that concrete global kind before falling
+                # back to name-based inference (e.g. NativeBackslash).
+                fn_kinds[item.dest] = "number" if source in fn_numeric_names else ("text" if strong_text_name else fn_kinds.get(source, kinds.get(source, inferred)))
                 if source in fn_text_lengths:
                     fn_text_lengths[item.dest] = fn_text_lengths[source]
             elif fn_op == "STORE_LIST":
