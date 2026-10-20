@@ -89,6 +89,13 @@ def test_kuro_vm_executes_repeat_blocks():
     assert output == ["x", "x", "after"]
 
 
+def test_kuro_vm_rejects_negative_repeat_counts():
+    output, failed = run_kuro_vm('Repeat -1;\nPrint "unreachable".\nDone.')
+
+    assert failed == 1
+    assert output is None
+
+
 def test_kuro_vm_executes_action_call_and_return():
     output, failed = run_kuro_vm(
         "Action Add A, B;\nReturn A + B;\nDone.\n"
