@@ -432,6 +432,7 @@ def test_native_backend_supports_record_field_abi(tmp_path):
 def test_native_backend_supports_map_abi_for_known_keys(tmp_path):
     result = compile_source(
         'Store = 0;\nCall MakeMap;\nUpdate Store to @_;\n'
+        'Call MapHas Store, "missing";\nPrint @_.\n'
         'Call MapSet Store, "answer", 42;\n'
         'Call MapHas Store, "answer";\nPrint @_.\n'
         'Call MapGet Store, "answer";\nPrint @_.\n'
@@ -440,7 +441,7 @@ def test_native_backend_supports_map_abi_for_known_keys(tmp_path):
     executable = tmp_path / "map"
     build_native(result.ir, executable)
     run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
-    assert run.stdout == "1\n42\n"
+    assert run.stdout == "0\n1\n42\n"
 
 
 def test_native_backend_supports_deterministic_task_abi(tmp_path):
