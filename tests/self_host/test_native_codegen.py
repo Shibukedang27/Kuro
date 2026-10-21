@@ -1583,8 +1583,14 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
         )
         assert rejected.returncode == 1
         assert rejected.stdout == rejected.stderr == ""
+    from test_native_loop_flow_facts import LOOP_FLOW_REJECTION_CASES, LOOP_FLOW_POSITIVE_CASES
+
+    for name, tokens in LOOP_FLOW_POSITIVE_CASES.items():
+        assert_compiled_decimal_program(
+            generator, tmp_path, target, tokens, "1.5\n1.5\n1.5\n", f"loop-facts-{name}",
+        )
     rejection_cases = {**branch_join_rejection_cases(), **loop_init_rejection_cases(),
-                       **repeat_branch_rejection_cases()}
+                       **repeat_branch_rejection_cases(), **LOOP_FLOW_REJECTION_CASES}
     for name, tokens in rejection_cases.items():
         rejected = subprocess.run(
             [str(generator)],
