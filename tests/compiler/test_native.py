@@ -811,7 +811,7 @@ def test_native_backend_captures_and_updates_map_via_closure(tmp_path):
 
 
 @requires_linux_x86_64
-def test_native_backend_captures_collections_for_indexed_closure_access(tmp_path):
+def test_native_backend_rejects_pointer_only_collections_for_indexed_closure_access(tmp_path):
     result = compile_source(
         'Values = 10, 20, 30; Other = 1, 2, 3;\n'
         'AliasValues = Values; AliasOther = 0; First = 0; Second = 0;\n'
@@ -828,14 +828,12 @@ def test_native_backend_captures_collections_for_indexed_closure_access(tmp_path
         'Get Values 1; Print @_. Get Other 0; Print @_.\n'
     )
     assert result.ok
-    executable = tmp_path / "captured-collection-index-update"
-    build_native(result.ir, executable)
-    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
-    assert run.stdout == "21\n2\n21\n2\n"
+    with pytest.raises(NativeBackendError, match="GET requires logical length metadata"):
+        emit_x86_64_linux(result.ir)
 
 
 @requires_linux_x86_64
-def test_native_backend_captures_text_collections_for_indexed_reads(tmp_path):
+def test_native_backend_rejects_pointer_only_text_collections_for_indexed_reads(tmp_path):
     result = compile_source(
         'Values = "red", "blue"; Reader = 0;\n'
         'Action MakeReader Bag;\n'
@@ -845,10 +843,8 @@ def test_native_backend_captures_text_collections_for_indexed_reads(tmp_path):
         'Call Invoke Reader, 1; Print @_.\n'
     )
     assert result.ok
-    executable = tmp_path / "captured-text-collection-read"
-    build_native(result.ir, executable)
-    run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
-    assert run.stdout == "blue\n1\n"
+    with pytest.raises(NativeBackendError, match="GET requires logical length metadata"):
+        emit_x86_64_linux(result.ir)
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,7 @@
 # Collection indexes: preserve compatibility before lowering storage
 
+Historical PR #90 checkpoint: the subsequent [native logical-bounds correction](native-logical-collection-bounds.md) supersedes the native capacity-check observations below. The compatibility rule and VM correction remain unchanged.
+
 ## The existing rule is clear
 
 The negative-index disagreement is an implementation defect, not an invitation to design new language semantics. [README](../../README.md) names the frozen `bootstrap/python/` interpreter as the compatibility oracle. [ADR-0012's Golden Rule](ADR-0012-scope-semantics.md#the-golden-rule-applied) requires reproducing Python compiler semantics unless an explicit language change goes through the documented change process. No indexing change superseding that rule was found.

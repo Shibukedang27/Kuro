@@ -1,5 +1,7 @@
 # A small indexed-state contract before native lowering
 
+Historical PR #89 checkpoint: [PR #90's compatibility correction](collection-index-compatibility.md) and the subsequent [native logical-bounds correction](native-logical-collection-bounds.md) supersede the runtime discrepancy observations below. The actual Kuro-generator collection boundary remains unfinished.
+
 The next safe step is a **test-only contract and boundary proof**, not collection lowering. Small guarded integer-state and Text-name programs can be compared across existing execution paths, while the actual Kuro-authored native generator still rejects their complete compiler-produced bytecode. The full analyzer still does not execute through that generator. Strict independence remains unfinished.
 
 This increment stacks on [PR #88](https://github.com/Shibukedang27/Kuro/pull/88), inspected open and unmerged at `d91aa537d0e572f990b664a24191c6fe4c364506` with eight successful checks. No production compiler, runtime, generator, analyzer, capacity or acceptance rule changes.
