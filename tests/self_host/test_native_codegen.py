@@ -1617,9 +1617,13 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
         assert_compiled_decimal_program(
             generator, tmp_path, target, tokens, "1.5\n1.5\n1.5\n", f"loop-facts-{name}",
         )
+    from test_native_loop_use_evidence import loop_use_control_cases, loop_use_rejection_cases
+
+    for name, (tokens, expected) in loop_use_control_cases().items():
+        assert_compiled_decimal_program(generator, tmp_path, target, tokens, expected, name)
     rejection_cases = {**branch_join_rejection_cases(), **loop_init_rejection_cases(),
                        **repeat_branch_rejection_cases(), **LOOP_FLOW_REJECTION_CASES,
-                       **positive_repeat_rejection_cases()}
+                       **positive_repeat_rejection_cases(), **loop_use_rejection_cases()}
     for name, tokens in rejection_cases.items():
         rejected = subprocess.run(
             [str(generator)],

@@ -105,8 +105,17 @@ def _parse(tokens):
     return tree, instructions, by_pc
 
 
-def analyze(tokens):
-    """Return fixed-point node, edge, load-use, and loop-boundary kind facts."""
+def analyze(tokens, *, worklist="fifo", successors="forward"):
+    """Return fixed-point facts plus loop-local uses from entry/backedge seeds.
+
+    ``worklist`` selects FIFO or LIFO processing; ``successors`` selects sorted
+    ascending (forward) or descending (reverse) successor order. These options
+    vary traversal only, not the dataflow result.
+    """
+    if worklist not in ("fifo", "lifo"):
+        raise ValueError(f"unsupported worklist order: {worklist}")
+    if successors not in ("forward", "reverse"):
+        raise ValueError(f"unsupported successor order: {successors}")
     tree, instructions, by_pc = _parse(list(tokens))
     slots = {ins["arg"] for ins in instructions if ins["op"] in ("BC_LOADVAR", "BC_STORE_LIST")}
     sink = len(tokens) + 1
@@ -142,6 +151,7 @@ def analyze(tokens):
                 if count in ("zero", "unknown"):
                     edge(begin["pc"], current)
                 loop_specs.append({"kind": "Repeat", "count": count, "begin": begin["pc"],
+                                   "end": end["pc"],
                                    "entry_edge": (begin["pc"], body_entry),
                                    "backedge": (end["pc"], body_entry) if count in ("positive", "unknown") else None,
                                    "exit_edges": ([(begin["pc"], current)] if count in ("zero", "unknown") else []) + [(end["pc"], current)]})
@@ -158,6 +168,7 @@ def analyze(tokens):
                 edge(test["pc"], body_entry); edge(test["pc"], current)
                 edge(end["pc"], cond_entry)
                 loop_specs.append({"kind": "While", "count": "runtime", "begin": begin["pc"],
+                                   "end": end["pc"],
                                    "entry_edge": (begin["pc"], cond_entry),
                                    "body_entry": body_entry, "test": test["pc"],
                                    "backedge": (end["pc"], cond_entry),
@@ -169,9 +180,6 @@ def analyze(tokens):
     for pc in by_pc:
         edges.setdefault(pc, set())
     initial = {name: frozenset(("?",)) for name in slots}
-    incoming = {first: (initial, ())}
-    pending = deque((first,))
-
     def transfer(pc, state):
         if pc == sink:
             return state
@@ -196,31 +204,43 @@ def analyze(tokens):
         elif op in ("BC_IF_BEGIN", "BC_REPEAT_BEGIN", "BC_WHILE_TEST"): pop()
         return values, tuple(stack)
 
-    while pending:
-        pc = pending.popleft()
-        out = transfer(pc, incoming[pc])
-        for target in edges[pc]:
-            if target not in incoming:
-                incoming[target] = out
-                pending.append(target)
-                continue
-            old_values, old_stack = incoming[target]
-            new_values = {name: old_values[name] | out[0][name] for name in slots}
-            if len(old_stack) != len(out[1]):
-                raise ValueError(f"incompatible stack heights joining at token {target}")
-            new_stack = tuple(a | b for a, b in zip(old_stack, out[1]))
-            merged = (new_values, new_stack)
-            if merged != incoming[target]:
-                incoming[target] = merged
-                pending.append(target)
+    def solve(seeds, blocked_edges=frozenset()):
+        """Solve from boundary states, optionally cutting selected graph edges."""
+        incoming = dict(seeds)
+        pending = deque(seeds)
+        while pending:
+            pc = pending.pop() if worklist == "lifo" else pending.popleft()
+            out = transfer(pc, incoming[pc])
+            targets = sorted(edges[pc], reverse=successors == "reverse")
+            for target in targets:
+                if (pc, target) in blocked_edges:
+                    continue
+                if target not in incoming:
+                    incoming[target] = out
+                    pending.append(target)
+                    continue
+                old_values, old_stack = incoming[target]
+                new_values = {name: old_values[name] | out[0][name] for name in slots}
+                if len(old_stack) != len(out[1]):
+                    raise ValueError(f"incompatible stack heights joining at token {target}")
+                new_stack = tuple(a | b for a, b in zip(old_stack, out[1]))
+                merged = (new_values, new_stack)
+                if merged != incoming[target]:
+                    incoming[target] = merged
+                    pending.append(target)
+        return incoming
+
+    incoming = solve({first: (initial, ())})
 
     edge_facts = {}
+    edge_states = {}
     for source, targets in edges.items():
         if source not in incoming:
             continue
         out = transfer(source, incoming[source])
         for target in targets:
             edge_facts[(source, target)] = _freeze(out)
+            edge_states[(source, target)] = out
     loads = [{"pc": ins["pc"], "name": ins["arg"],
               "kinds": incoming[ins["pc"]][0][ins["arg"]]}
              for ins in instructions if ins["op"] == "BC_LOADVAR" and ins["pc"] in incoming]
@@ -233,6 +253,31 @@ def analyze(tokens):
         item["exit_edge_facts"] = exits
         item["exit_facts"] = ({name: frozenset().union(*(state[name] for state in exits))
                                for name in slots} if exits else {})
+        # These are boundary-labelled local traversals, not iteration-number
+        # proofs: their seed states come from the globally converged solution.
+        cuts = set(spec["exit_edges"])
+        if spec["backedge"]:
+            cuts.add(spec["backedge"])
+        local = {}
+        for label, boundary in (("entry", spec["entry_edge"]),
+                                ("backedge", spec["backedge"])):
+            seed = edge_states.get(boundary) if boundary else None
+            local[label] = solve({boundary[1]: seed} if seed is not None else {}, cuts)
+        uses = []
+        for ins in instructions:
+            if ins["op"] != "BC_LOADVAR" or not spec["begin"] < ins["pc"] < spec["end"]:
+                continue
+            use = {"pc": ins["pc"], "name": ins["arg"]}
+            for label in ("entry", "backedge"):
+                state = local[label].get(ins["pc"])
+                use[f"{label}_kinds"] = state[0][ins["arg"]] if state else None
+            reachable = [use[key] for key in ("entry_kinds", "backedge_kinds")
+                         if use[key] is not None]
+            # Partitioning before a nonrelational BINOP can be more precise
+            # than the global merged state; do not promise equality to loads.
+            use["kinds"] = frozenset().union(*reachable) if reachable else frozenset()
+            uses.append(use)
+        item["uses"] = uses
         loops.append(item)
     return {"nodes": {pc: _freeze(state) for pc, state in incoming.items()},
             "edges": edge_facts, "loads": loads, "loops": loops, "entry": first, "exit": sink}
