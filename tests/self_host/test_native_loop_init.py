@@ -95,11 +95,6 @@ def loop_init_rejection_cases() -> dict[str, list[str]]:
             "BC_REPEAT_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST", "D",
             "BC_REPEAT_END", "BC_IF_END",
         ],
-        "nested-if-arms": [
-            "BC_CONST", "1", "BC_REPEAT_BEGIN", "BC_CONST", "1", "BC_IF_BEGIN",
-            "BC_CONST", "1.5", "BC_STORE_LIST", "D", "BC_ELSE_BEGIN",
-            "BC_CONST", "2.5", "BC_STORE_LIST", "D", "BC_IF_END", "BC_REPEAT_END",
-        ],
         "one-sided-if-in-repeat": [
             "BC_CONST", "1", "BC_REPEAT_BEGIN", "BC_CONST", "0", "BC_IF_BEGIN",
             "BC_CONST", "1.5", "BC_STORE_LIST", "D", "BC_IF_END", "BC_REPEAT_END",

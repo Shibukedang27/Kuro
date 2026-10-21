@@ -1,5 +1,7 @@
 # Decimal initialization in an exact-once Repeat
 
+**Historical #78 boundary:** The [follow-up branch-join increment](native-repeat-branch-joins.md) additionally permits complete If-only initialization trees inside this same eligible Repeat. The direct-store-only restrictions and verification figures below describe #78, not the widened follow-up. General loop joins remain unsupported.
+
 This increment is [PR #78](https://github.com/Shibukedang27/Kuro/pull/78), open/unmerged and stacked directly on [PR #77](https://github.com/Shibukedang27/Kuro/pull/77), verified open/unmerged at `83aa221805b1c5ab4ff1c6249c51998ad52fb013`, with all eight checks successful. It is a deliberately smaller step than general loop definite-assignment analysis. Full clean-checkout Python-free compiler/runtime construction and repository-owned assembler/linker remain unfinished.
 
 ## What is accepted
