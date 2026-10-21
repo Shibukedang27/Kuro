@@ -2,6 +2,8 @@
 
 This test-only slice follows [PR #83](https://github.com/Shibukedang27/Kuro/pull/83), inspected open/unmerged at `d1280290eaef45d8cba286cd95cc0f192df99b56` with all eight checks successful. Unlike the [preceding obligation reducer](native-loop-use-obligations.md), the new [Kuro analyzer](../../tests/self_host/loop_use_flow.kuro) discovers reads, parses branches and derives their origin-labelled kind evidence itself. Python supplies raw tokens, not a CFG, read identities, reachable-origin declarations or flow facts. Production compiler/runtime code, acceptance rules and CI configuration are unchanged. Strict compiler/runtime/toolchain independence is not complete.
 
+This note records the original single-slot slice. The [four-slot successor](native-multislot-loop-use-flow.md) extends the same test analyzer and its record format; its contract and validation supersede the single-slot limits below.
+
 ## A deliberately small complete input language
 
 The complete stream is an optional literal assignment to `Fresh`, followed by exactly one literal-count `Repeat 0` through `Repeat 9`, with no trailing instructions. Body statements are literal assignments to `Fresh`, `LOADVAR Fresh` immediately followed by `PRINT`, and literal-condition `If` statements with optional `Else` and nested bodies. Both arms are conservatively analyzed regardless of literal truth, matching the test oracle's nondeterministic branch abstraction; these are not claims of concrete arm reachability.
