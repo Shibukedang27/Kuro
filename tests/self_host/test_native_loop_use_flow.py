@@ -13,12 +13,12 @@ ROOT = Path(__file__).resolve().parents[2]
 FLOW_SOURCE = Path(__file__).with_name("loop_use_flow.kuro")
 
 
-def _store(value="1.5"):
-    return ["BC_CONST", value, "BC_STORE_LIST", "Fresh"]
+def _store(value="1.5", name="Fresh"):
+    return ["BC_CONST", value, "BC_STORE_LIST", name]
 
 
-def _read():
-    return ["BC_LOADVAR", "Fresh", "BC_PRINT"]
+def _read(name="Fresh"):
+    return ["BC_LOADVAR", name, "BC_PRINT"]
 
 
 def _if(yes, no=None):
@@ -53,11 +53,13 @@ def _run_kuro(tokens):
     i = 0
     while i < len(lines) - 2:
         assert lines[i] == "USE", result.stdout
-        pc, origin, mask = int(lines[i + 1]), lines[i + 2], int(lines[i + 3])
+        pc, name, origin, mask = int(lines[i + 1]), lines[i + 2], lines[i + 3], int(lines[i + 4])
+        assert name in ("Fresh", "Other", "Third", "Fourth")
+        assert tokens[pc:pc + 2] == ["BC_LOADVAR", name]
         assert origin in ("E", "B") and 0 <= mask <= 7
-        key = (pc, origin)
+        key = (pc, name, origin)
         records[key] = records.get(key, 0) | mask
-        i += 4
+        i += 5
     return records, lines[-1] == "1"
 
 
@@ -72,8 +74,8 @@ def _expected(tokens):
     loop = oracle["loops"][0]
     records = {}
     for use in loop["uses"]:
-        records[(use["pc"], "E")] = _mask(use["entry_kinds"])
-        records[(use["pc"], "B")] = _mask(use["backedge_kinds"])
+        records[(use["pc"], use["name"], "E")] = _mask(use["entry_kinds"])
+        records[(use["pc"], use["name"], "B")] = _mask(use["backedge_kinds"])
     decision = all(mask in (0, 4) for mask in records.values())
     return records, decision
 
@@ -116,7 +118,7 @@ def test_optional_integer_entry_and_zero_count_unreachable_are_distinct():
     ["BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST"],
     ["BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_CONST", "1", "BC_IF_BEGIN", "BC_ELSE_BEGIN", "BC_ELSE_BEGIN", "BC_IF_END", "BC_REPEAT_END"],
     ["BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_CONST", "1", "BC_IF_BEGIN", "BC_REPEAT_END", "BC_IF_END"],
-    ["BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_LOADVAR", "Other", "BC_PRINT", "BC_REPEAT_END"],
+    ["BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_LOADVAR", "Fifth", "BC_PRINT", "BC_REPEAT_END"],
     ["BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_LOADVAR", "Fresh", "BC_CONST", "1", "BC_PRINT", "BC_REPEAT_END"],
 ])
 def test_malformed_truncated_invalid_literals_and_unsupported_ops_fail_closed(tokens):
@@ -235,8 +237,8 @@ def test_finite_trip_enumeration_independently_checks_branch_evidence():
         body = _if(encode(yes), encode(no)) + _store() + _read()
         tokens = _repeat(body, "3")
         actual, decision = _run_kuro(tokens)
-        pcs = sorted(pc for pc, origin in actual if origin == "E")
-        expected = {(pc, origin): 0 for pc in pcs for origin in ("E", "B")}
+        pcs = sorted(pc for pc, name, origin in actual if origin == "E")
+        expected = {(pc, "Fresh", origin): 0 for pc in pcs for origin in ("E", "B")}
         for choices in product((0, 1), repeat=3):
             kind = 1
             for trip, choice in enumerate(choices):
@@ -244,12 +246,12 @@ def test_finite_trip_enumeration_independently_checks_branch_evidence():
                 cursor = 0 if choice == 0 else yes.count("read")
                 for event in (yes, no)[choice]:
                     if event == "read":
-                        expected[(pcs[cursor], origin)] |= kind
+                        expected[(pcs[cursor], "Fresh", origin)] |= kind
                         cursor += 1
                     else:
                         kind = 2 if event == "I" else 4
                 kind = 4
-                expected[(pcs[-1], origin)] |= kind
+                expected[(pcs[-1], "Fresh", origin)] |= kind
         assert actual == expected, (yes, no, actual, expected)
         assert decision == all(mask == 4 for mask in expected.values())
 
@@ -258,3 +260,183 @@ def test_every_proper_prefix_of_nested_program_rejects_without_runtime_error():
     tokens = _store() + _repeat(_if(_if(_read(), _store()), _store()) + _read())
     for length in range(len(tokens)):
         assert _run_kuro(tokens[:length]) is None, length
+
+
+SLOTS = ("Fresh", "Other", "Third", "Fourth")
+
+
+@pytest.mark.parametrize("count", ["0", "1", "2", "9"])
+@pytest.mark.parametrize("name", SLOTS)
+def test_all_slots_retain_independent_entry_and_backedge_kinds(name, count):
+    prefix = sum((_store("1.5", slot) for slot in SLOTS if slot != name), [])
+    tokens = prefix + _repeat(_read(name) + _store("2.5", name) + _read(name), count)
+    actual = _run_kuro(tokens)
+    assert actual == _expected(tokens)
+    assert actual[1] == (count == "0")
+
+
+def test_interleaved_cross_slot_stores_never_repair_other_slot_reads():
+    tokens = (_store("1.5", "Fresh") + _store("1", "Other") +
+              _store("2.5", "Fresh") + _repeat(
+                  _read("Other") + _store("3.5", "Third") + _read("Fourth") +
+                  _if(_store("4.5", "Other"), _store("5.5", "Fourth")) +
+                  sum((_read(name) for name in SLOTS), [])))
+    records, decision = _run_kuro(tokens)
+    assert (records, decision) == _expected(tokens)
+    assert not decision
+    entry = {(name, mask) for (pc, name, origin), mask in records.items() if origin == "E"}
+    assert ("Fresh", 4) in entry and ("Other", 2) in entry
+    assert ("Third", 4) in entry and ("Fourth", 1) in entry
+
+
+def test_nested_branch_snapshots_restore_and_join_every_slot():
+    tokens = sum((_store("1.5", name) for name in SLOTS), []) + _repeat(
+        _if(_if(_store("1", "Fresh") + _store("2", "Third"),
+                _store("3", "Other") + _store("4", "Fourth")),
+            _if(_store("5", "Fourth"), _store("6", "Fresh"))) +
+        sum((_read(name) for name in SLOTS), []))
+    result = _run_kuro(tokens)
+    assert result == _expected(tokens)
+    assert set(result[0].values()) == {6}
+
+
+@pytest.mark.parametrize("bad_name", ["Fifth", "fresh", "", "BC_LOADVAR", "Fresh Other", "Fresh\nOther"])
+def test_invalid_slot_names_reject_in_prefix_body_and_unreachable_arms(bad_name):
+    fixtures = [
+        _store(name=bad_name) + _repeat([]),
+        _repeat(_store(name=bad_name)),
+        _repeat(_if([], _read(bad_name)), "0"),
+    ]
+    for tokens in fixtures:
+        assert _run_kuro(tokens) is None
+
+
+def test_copy_and_cross_slot_expression_extensions_are_explicitly_rejected():
+    for count in ("0", "2"):
+        for body in (
+            ["BC_LOADVAR", "Fresh", "BC_STORE_LIST", "Other"],
+            ["BC_LOADVAR", "Fresh", "BC_LOADVAR", "Other", "BC_BINOP", "+", "BC_PRINT"],
+            ["BC_CONST", "1.5", "BC_STORE_LIST"],
+            ["BC_LOADVAR", "Fourth"],
+        ):
+            assert _run_kuro(_repeat(body, count)) is None
+
+
+def test_multislot_prefix_and_nested_stream_all_proper_prefixes_reject():
+    tokens = sum((_store(name=name) for name in SLOTS), []) + _repeat(
+        _if(_read("Fourth"), _if(_store("1", "Other"), _read("Third"))) + _read())
+    for length in range(len(tokens)):
+        assert _run_kuro(tokens[:length]) is None, length
+
+
+def test_multislot_token_limit_includes_prefix_and_never_truncates_reads():
+    # 31 stores (124 tokens) plus the empty Repeat (4 tokens) hits 128 exactly.
+    prefix = sum((_store(name=SLOTS[i % 4]) for i in range(31)), [])
+    exact = prefix + _repeat([])
+    assert len(exact) == 128
+    assert _run_kuro(exact) == _expected(exact)
+    assert _run_kuro(prefix + _repeat(_read("Fourth"))) is None
+    assert _run_kuro(prefix + _store(name="Fourth") + _repeat([])) is None
+
+
+def test_slot_renaming_preserves_evidence_without_aliasing():
+    tokens = _store(name="Fresh") + _repeat(
+        _if(_read("Other") + _store(name="Third"), _store("1", "Fourth")) +
+        sum((_read(name) for name in SLOTS), []))
+    original, decision = _run_kuro(tokens)
+    rename = dict(zip(SLOTS, SLOTS[1:] + SLOTS[:1]))
+    renamed = [rename.get(token, token) for token in tokens]
+    actual = _run_kuro(renamed)
+    assert actual == ({(pc, rename[name], origin): mask
+                       for (pc, name, origin), mask in original.items()}, decision)
+    assert actual == _expected(renamed)
+
+
+@pytest.mark.parametrize("count", [0, 1, 2, 3, 9])
+def test_independent_finite_paths_track_all_slots_across_literal_trips(count):
+    from itertools import product
+    # Enumerate every independent branch choice for every trip, not an abstract
+    # fixed-point solve. Each arm overwrites a different pair of slots.
+    yes = _read("Other") + _store("1.5", "Fresh") + _store("1", "Third")
+    no = _read("Fresh") + _store("2.5", "Other") + _store("2", "Fourth")
+    tokens = _repeat(_if(yes, no) + sum((_read(name) for name in SLOTS), []), str(count))
+    actual, decision = _run_kuro(tokens)
+    loads = [(pc, tokens[pc + 1]) for pc, token in enumerate(tokens) if token == "BC_LOADVAR"]
+    expected = {(pc, name, origin): 0 for pc, name in loads for origin in ("E", "B")}
+    for choices in product((0, 1), repeat=count):
+        state = dict.fromkeys(SLOTS, 1)
+        for trip, choice in enumerate(choices):
+            origin = "E" if trip == 0 else "B"
+            pc, name = loads[choice]
+            expected[(pc, name, origin)] |= state[name]
+            state.update({"Fresh": 4, "Third": 2} if choice == 0 else {"Other": 4, "Fourth": 2})
+            for pc, name in loads[2:]:
+                expected[(pc, name, origin)] |= state[name]
+    assert actual == expected
+    assert decision == all(mask in (0, 4) for mask in expected.values())
+    assert (actual, decision) == _expected(tokens)
+
+
+@pytest.mark.skipif(platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+                    reason="native execution requires Linux x86-64")
+@pytest.mark.parametrize("tokens", [
+    sum((_store(name=name) for name in SLOTS), []) + _repeat(sum((_read(name) for name in SLOTS), [])),
+    _repeat(_if(_read("Other"), _store(name="Third")) + _store(name="Other") + _read("Other")),
+    _repeat(_read("Fourth"), "0"),
+    sum((_store(name=name) for name in SLOTS), []) + _repeat(sum((_read(name) for name in SLOTS), []), "1"),
+    _store("1", "Fresh") + _store("1.5", "Fresh") + _store("1", "Other") + _repeat(_read("Fresh") + _read("Other")),
+    _repeat(_read("Fifth"), "0"),
+    sum((_store(name=SLOTS[i % 4]) for i in range(31)), []) + _repeat(_read("Fourth")),
+])
+def test_multislot_analyzer_hosted_native_matches_full_protocol(tmp_path, tokens):
+    from compiler.native import build_native
+    compiled = compile_source(_source(tokens), filename="<native multislot flow>")
+    assert compiled.ok, compiled.diags.diagnostics
+    image = tmp_path / "multislot-flow"
+    build_native(compiled.ir, image, target="x86_64-linux")
+    result = subprocess.run([str(image)], text=True, capture_output=True, timeout=15)
+    hosted = run_source(_source(tokens))
+    assert hosted.ok, hosted.runtime_error
+    assert result.returncode == 0 and result.stderr == ""
+    assert result.stdout == hosted.stdout
+
+
+def test_all_slot_snapshots_work_at_exact_depth_bound():
+    body = sum((_store("1", name) for name in SLOTS), [])
+    for _ in range(16):
+        body = _if(body)
+    tokens = sum((_store(name=name) for name in SLOTS), []) + _repeat(
+        body + sum((_read(name) for name in SLOTS), []))
+    assert len(tokens) <= 128
+    assert _run_kuro(tokens) == _expected(tokens)
+    assert set(_run_kuro(tokens)[0].values()) == {6}
+
+
+@pytest.mark.parametrize("literal", ["9" * 256, "1." + "0" * 256, "-9999999999999999999999", "1e999999"])
+def test_oversized_numeric_operands_do_not_wrap_into_supported_values(literal):
+    assert _run_kuro(_repeat([], literal)) is None
+    assert _run_kuro(_store(literal, "Fourth") + _repeat([])) is None
+    assert _run_kuro(_repeat(_store(literal, "Other"), "0")) is None
+
+
+@pytest.mark.parametrize("count", ["0", "1", "9"])
+def test_maximum_load_density_retains_all_82_origin_keys(count):
+    tokens = _repeat(sum((_read(SLOTS[i % 4]) for i in range(41)), []), count)
+    assert len(tokens) == 127
+    actual = _run_kuro(tokens)
+    assert actual == _expected(tokens)
+    assert len(actual[0]) == 82
+    assert _run_kuro(_repeat(sum((_read(SLOTS[i % 4]) for i in range(42)), []), count)) is None
+
+
+@pytest.mark.parametrize("count", ["0", "1", "2", "9"])
+def test_ordered_prefix_overwrites_have_direct_independent_expected_facts(count):
+    prefix = (_store("1", "Fresh") + _store("1.5", "Fresh") +
+              _store("1", "Other") + _store("2.5", "Fourth"))
+    tokens = prefix + _repeat(sum((_read(name) for name in SLOTS), []), count)
+    expected = {}
+    for i, (name, mask) in enumerate(zip(SLOTS, (4, 2, 1, 4))):
+        pc = len(prefix) + 3 + 3 * i
+        expected[(pc, name, "E")] = 0 if count == "0" else mask
+        expected[(pc, name, "B")] = mask if count in ("2", "9") else 0
+    assert _run_kuro(tokens) == (expected, count == "0")

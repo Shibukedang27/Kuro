@@ -6,6 +6,11 @@ Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 ## [Unreleased] — In-house implementation policy and Stage 8 foundation
 
 ### Added
+- Test-only raw-token loop analysis tracks four explicit independent slots,
+  pointwise branch snapshots and slot-labelled entry/backedge read evidence.
+  Interleaved literal stores never repair another slot's unsafe reads; copies
+  and general expressions remain rejected. Production acceptance is unchanged;
+  see `docs/engineering/native-multislot-loop-use-flow.md`.
 - Test-only Kuro-owned raw-token analysis derives per-read entry/backedge kinds
   for one bounded literal Repeat with nested branches and a single literal-written
   slot. Whole-stream validation, finite-trip witnesses and hosted native execution
