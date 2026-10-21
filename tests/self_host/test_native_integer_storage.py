@@ -39,8 +39,9 @@ def generate(generator, tokens, tmp_path):
     return generated
 
 
-def execute(generator, source, tmp_path):
-    tokens = compiler_tokens(source)
+def execute(generator, source, tmp_path, *, tokens=None):
+    if tokens is None:
+        tokens = compiler_tokens(source)
     generated = generate(generator, tokens, tmp_path)
     assert (generated.returncode, generated.stderr) == (0, "")
     assert generated.stdout
@@ -183,18 +184,14 @@ def test_actual_generator_owner_names_are_not_pointer_heuristics(tmp_path, x86_l
 
 @requires_linux
 @pytest.mark.parametrize('count', [32, 33])
-def test_actual_generator_aggregate_cell_capacity(tmp_path, x86_linux_codegen, count):
+def test_actual_generator_previous_cell_capacity_is_accepted(tmp_path, x86_linux_codegen, count):
     source = 'Items = ' + ', '.join(str(i) for i in range(count)) + ';\nGet Items 31;\nPrint @_.\n'
-    if count == 32:
-        result = execute(x86_linux_codegen, source, tmp_path)
-        assert (result.returncode, result.stdout, result.stderr) == (0, '31\n', '')
-    else:
-        result = generate(x86_linux_codegen, compiler_tokens(source), tmp_path)
-        assert (result.returncode, result.stdout, result.stderr) == (1, '', '')
+    result = execute(x86_linux_codegen, source, tmp_path)
+    assert (result.returncode, result.stdout, result.stderr) == (0, '31\n', '')
 
 
 @requires_linux
-def test_actual_generator_sixteen_owners_at_capacity(tmp_path, x86_linux_codegen):
+def test_actual_generator_sixteen_small_owners(tmp_path, x86_linux_codegen):
     source = ''.join(f'Owner{i} = {i}, {i + 1};\n' for i in range(16))
     source += 'Set Owner15 1 to 99;\nGet Owner0 0;\nPrint @_.\nGet Owner15 -1;\nPrint @_.\n'
     result = execute(x86_linux_codegen, source, tmp_path)

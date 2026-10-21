@@ -4,6 +4,8 @@ The actual Kuro-written generator, itself built for Linux x86-64, can now turn a
 
 This increment is stacked directly on verified, open/unmerged [PR #91](https://github.com/Shibukedang27/Kuro/pull/91), exact head `4dae7ed77a12ca56c653ceffc00c53d99aa7ae77`, which passed all eight checks. No merge is authorized.
 
+**Capacity follow-up:** The separate [272-cell fixed-storage increment](kuro-owned-expanded-integer-storage.md), stacked on verified PR #93, expands the per-initializer and aggregate budget to fit sixteen mask lanes plus a 16×16 snapshot. The 32-cell limit, 248-byte maximum offset and 4×4 witness below describe this original PR #92 checkpoint. The later increment preserves its representation, logical bounds, fixed grammar and Linux x86-64 execution/output restrictions, and documents the separate hosted-interpreter parser-depth boundary.
+
 ## What is accepted
 
 An isolated whole-program capability path in [native_codegen.kuro](../../self_host/native_codegen.kuro) recognizes a prefix of fixed integer collection initializers, followed by a straight-line integer stack program. It bypasses the existing general scalar-kind inference pipeline rather than teaching that pipeline to treat a collection pointer as a scalar integer.
