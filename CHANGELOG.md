@@ -6,6 +6,11 @@ Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 ## [Unreleased] — In-house implementation policy and Stage 8 foundation
 
 ### Added
+- Native codegen permits direct unconditional first Decimal stores in function-free
+  top-level canonical literal `Repeat 2` through `Repeat 9`, using separate entered-loop
+  provenance and monotone slot kinds to protect first-entry and backedge reads.
+  Branch, nested-loop, Action, result-slot and stack-join permissions are unchanged;
+  see `docs/engineering/native-positive-repeat-direct.md`.
 - Test-only native loop-flow facts distinguish entry, backedge, normal-exit
   and read-site kinds before any multitrip Decimal initialization extension.
   Production acceptance is unchanged; see

@@ -1,4 +1,4 @@
-"""Fixed-point loop-flow witnesses plus unchanged native acceptance-gate checks."""
+"""Fixed-point loop-flow witnesses and bounded native acceptance-gate checks."""
 import json
 
 import pytest
@@ -18,11 +18,9 @@ def _raw(tokens, target):
     return run_codegen(", ".join(json.dumps(token) for token in tokens), target=target)
 
 
-# Named for parent-side fresh gate integration. These are candidate rejections,
-# not assertions that the current generator should accept multitrip initialization.
+# Named for fresh gate integration. Only the direct-store candidate has gained
+# production permission; all other loop-flow witnesses remain fail-closed.
 LOOP_FLOW_REJECTION_CASES = {
-    "repeat-two-direct-store": _repeat(["BC_CONST", "1.5", "BC_STORE_LIST", "Fresh", *_load()])
-        + _load(),
     "repeat-two-first-iteration-read": _repeat([*_load(), "BC_CONST", "1.5",
         "BC_STORE_LIST", "Fresh"]),
     "repeat-two-missing-else": _repeat(["BC_CONST", "1", "BC_IF_BEGIN",
@@ -50,6 +48,8 @@ LOOP_FLOW_REJECTION_CASES = {
         *_load(), "BC_CONST", "1.5", "BC_STORE_LIST", "Fresh"], ("BC_LOADVAR", "N"))),
 }
 LOOP_FLOW_POSITIVE_CASES = {
+    "repeat-two-direct-store": _repeat(["BC_CONST", "1.5", "BC_STORE_LIST", "Fresh", *_load()])
+        + _load(),
     "established-decimal-through-multitrip-loop": ["BC_CONST", "1.5", "BC_STORE_LIST",
         "Established", *_repeat(["BC_LOADVAR", "Established", "BC_PRINT"]),
         "BC_LOADVAR", "Established", "BC_PRINT"],

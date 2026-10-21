@@ -1583,6 +1583,34 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
         )
         assert rejected.returncode == 1
         assert rejected.stdout == rejected.stderr == ""
+    from test_native_positive_repeat import (
+        POSITIVE_REPEAT_SOURCE, POSITIVE_REPEAT_OUTPUT,
+        positive_repeat_cases, positive_repeat_rejection_cases,
+    )
+    compiled = compile_with_kuro_driver(POSITIVE_REPEAT_SOURCE)
+    assert_compiled_decimal_program(
+        generator, tmp_path, target, [str(token) for token in compiled["CompilerOutput"]],
+        POSITIVE_REPEAT_OUTPUT, "positive-repeat-source",
+    )
+    for name, (tokens, expected) in positive_repeat_cases().items():
+        assert_compiled_decimal_program(
+            generator, tmp_path, target, tokens, expected, f"positive-repeat-{name}",
+        )
+    # The same depth and slot bounds apply with a genuine backedge.
+    boundary = loop_init_boundary_bytecode()
+    boundary[1] = "2"
+    assert_compiled_decimal_program(
+        generator, tmp_path, target, boundary, "1.5\n", "positive-repeat-boundary",
+    )
+    for invalid in (loop_init_boundary_bytecode(depth=17),
+                    loop_init_boundary_bytecode(global_count=65)):
+        invalid[1] = "2"
+        rejected = subprocess.run(
+            [str(generator)], input="kuro.bytecode/1\n" + "\n".join(invalid) + "\n",
+            capture_output=True, text=True, timeout=30,
+        )
+        assert rejected.returncode == 1
+        assert rejected.stdout == rejected.stderr == ""
     from test_native_loop_flow_facts import LOOP_FLOW_REJECTION_CASES, LOOP_FLOW_POSITIVE_CASES
 
     for name, tokens in LOOP_FLOW_POSITIVE_CASES.items():
@@ -1590,7 +1618,8 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
             generator, tmp_path, target, tokens, "1.5\n1.5\n1.5\n", f"loop-facts-{name}",
         )
     rejection_cases = {**branch_join_rejection_cases(), **loop_init_rejection_cases(),
-                       **repeat_branch_rejection_cases(), **LOOP_FLOW_REJECTION_CASES}
+                       **repeat_branch_rejection_cases(), **LOOP_FLOW_REJECTION_CASES,
+                       **positive_repeat_rejection_cases()}
     for name, tokens in rejection_cases.items():
         rejected = subprocess.run(
             [str(generator)],

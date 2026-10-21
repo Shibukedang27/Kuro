@@ -243,10 +243,6 @@ def branch_join_rejection_cases() -> dict[str, list[str]]:
             "BC_CONST", "1", "BC_REPEAT_BEGIN", "BC_CONST", "1", "BC_IF_BEGIN",
             "BC_REPEAT_END", "BC_IF_END",
         ],
-        "loop-first-decimal": [
-            "BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST", "Slot",
-            "BC_REPEAT_END",
-        ],
         "action-with-decimal-join": [
             "BC_CONST", "1", "BC_IF_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST", "Slot",
             "BC_ELSE_BEGIN", "BC_CONST", "2.5", "BC_STORE_LIST", "Slot", "BC_IF_END",
