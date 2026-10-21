@@ -42,6 +42,8 @@ The hosted Python compiler/interpreter remain trusted. Hosted-native analyzer ex
 
 The next narrow path is to establish the indexed analyzer's execution through the Kuro-owned generator, or another separately reviewed reduction of its hosted dependencies, while preserving this restricted transfer language. Copies or general expressions require a new convergence argument or monotone CFG/worklist machinery with evidence that changes after trip two; production changes additionally require storage, stack, exit-representation and integration proofs.
 
+The subsequent [actual-generator boundary regression](native-analyzer-generator-boundary.md) submits the complete analyzer artifact to a fresh native Kuro generator and records rejection, not analyzer execution. It identifies size and collection-lowering gaps without widening production acceptance.
+
 ## Reproduce
 
 ```sh

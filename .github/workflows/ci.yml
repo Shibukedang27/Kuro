@@ -75,6 +75,7 @@ jobs:
           tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_links_and_runs
           tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_runs_decimal_printing
           tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_runs_decimal_storage
+          tests/self_host/test_native_codegen.py::test_kuro_owned_generator_records_analyzer_execution_boundary
           tests/self_host/test_artifact_launcher.py::test_native_artifact_launcher_executes_multi_value_reassignment
 
       - name: Build Linux native production images (hosted bootstrap seed)
