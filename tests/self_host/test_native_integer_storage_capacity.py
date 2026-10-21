@@ -9,7 +9,7 @@ import subprocess
 import pytest
 
 from compiler.pipeline import run_source
-from compiler.self_host import build_native_compiler, compile_with_kuro_driver
+from compiler.self_host import build_native_artifact_launcher, build_native_compiler, compile_with_kuro_driver
 from test_native_codegen import run_codegen, x86_linux_codegen
 from test_native_integer_storage import execute, generate, requires_linux
 from test_vm_cross import BYTECODE_RE, VM
@@ -63,6 +63,43 @@ def native_compiler(native_compiler_image):
         return tokens
 
     return compile_source_tokens
+
+
+@requires_linux
+def test_fresh_bytecode_stage_compiler_reproduces_self_and_large_initializer(
+    tmp_path, native_compiler_image
+):
+    # Direct native execution is not enough: the authored VM must execute the
+    # compiler too. In particular, do not introduce Return inside its While.
+    launcher = tmp_path / "kuro-bytecode"
+    build_native_artifact_launcher(launcher, target="x86_64-linux")
+    source = native_compiler_image.with_suffix(".source.kuro").read_text(encoding="utf-8")
+    stage1 = subprocess.run(
+        [str(native_compiler_image)], input=source, text=True, capture_output=True,
+        check=False, timeout=30,
+    )
+    assert (stage1.returncode, stage1.stderr) == (0, "")
+    assert stage1.stdout.startswith("kuro.bytecode/1\n")
+    (tmp_path / "stage1.kurobc").write_text(stage1.stdout, encoding="utf-8")
+    for name, program, expected in [
+        ("self", source, stage1.stdout),
+        ("initializer", f"Items = {_values(272)};\nGet Items -1; Print @_.\n", None),
+    ]:
+        if expected is None:
+            direct = subprocess.run(
+                [str(native_compiler_image)], input=program, text=True, capture_output=True,
+                check=False, timeout=30,
+            )
+            assert (direct.returncode, direct.stderr) == (0, "")
+            expected = direct.stdout
+        framed_input = stage1.stdout + "kuro.input/1\n" + program
+        rebuilt = subprocess.run(
+            [str(launcher)], input=framed_input, text=True, capture_output=True,
+            check=False, timeout=120,
+        )
+        (tmp_path / f"{name}-stage-input.kurobc").write_text(framed_input, encoding="utf-8")
+        (tmp_path / f"{name}-stage-output.kurobc").write_text(rebuilt.stdout, encoding="utf-8")
+        assert (rebuilt.returncode, rebuilt.stdout, rebuilt.stderr) == (0, expected, "")
 
 
 def _values(count: int, start: int = 0) -> str:

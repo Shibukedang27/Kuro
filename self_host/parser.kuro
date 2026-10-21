@@ -66,7 +66,8 @@
 # by the *grammar* this parser recognizes (it can parse a Kuro `While`
 # statement fine). The assignment-only ParseValueListTail is an exception:
 # ParseExpr cannot parse a statement or re-enter a value list. Its comma
-# loop keeps no scratch live across ParseExpr and avoids a frame per value.
+# loop's private flag is therefore safe across ParseExpr, avoiding a frame
+# per value without changing the recursive constructs above.
 #
 # Every non-parameter
 # variable in this file is therefore named `<ActionName>_<purpose>`, which
@@ -742,15 +743,18 @@ Done.
 
 Action ParseValueListTail;
     # Expressions may nest, but cannot re-enter assignment value lists.
-    # Inspect the kind before ParseExpr; no scratch must survive that call.
-    While ParseFailed is equal to 0;
+    # Only this non-reentrant Action owns the loop flag. Avoid Return inside
+    # While: the authored bytecode VM does not unwind a loop for BC_RETURN.
+    ParseValueListTail_Looping = 1;
+    While ParseFailed is equal to 0 and ParseValueListTail_Looping is equal to 1;
         Call CurKind;
         ParseValueListTail_K = @_;
-        If ParseValueListTail_K is not equal to "COMMA";
-            Return 1;
+        If ParseValueListTail_K is equal to "COMMA";
+            Add 1 to TokPos;
+            Call ParseExpr;
+        Else;
+            ParseValueListTail_Looping = 0;
         Done.
-        Add 1 to TokPos;
-        Call ParseExpr;
     Done.
 Done.
 
