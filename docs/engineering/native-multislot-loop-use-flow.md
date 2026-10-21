@@ -1,5 +1,7 @@
 # Independent slot facts in the bounded Kuro loop analyzer
 
+The [dynamic-slot successor](native-dynamic-slot-loop-use-flow.md) replaces the four-name whitelist below with Kuro-owned bounded identifier discovery while retaining four physical state components and literal-only writes. This note records the original PR #85 contract and validation.
+
 This test-only increment stacks directly on [PR #84](https://github.com/Shibukedang27/Kuro/pull/84), inspected open/unmerged at `dc4a2588b9adc0c547828b430f521912a6c232bd` with all eight checks successful. It extends the [raw-token analyzer](../../tests/self_host/loop_use_flow.kuro) from one slot to four explicitly named slots: `Fresh`, `Other`, `Third`, and `Fourth`. Python still supplies only raw tokens; Kuro validates structure, discovers reads and derives their entry/backedge kind masks. Production compiler/runtime code, acceptance rules and CI configuration are unchanged. Strict compiler/runtime/toolchain independence remains incomplete.
 
 ## What the bounded language now accepts

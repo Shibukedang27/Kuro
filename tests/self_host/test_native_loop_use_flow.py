@@ -33,8 +33,11 @@ def _repeat(body, count="2"):
 def _source(tokens):
     source = FLOW_SOURCE.read_text(encoding="utf-8")
     assert source.count("RawTokens is Text;") == 1
+    # Kuro has no JSON-style Unicode escape decoder: preserve the actual
+    # characters, including NUL, rather than testing a different ASCII name.
     appended = "\n".join(
-        f"Append {json.dumps(token)} to RawTokens;" for token in tokens
+        "Append " + json.dumps(token, ensure_ascii=False).replace(r"\u0000", "\x00")
+        + " to RawTokens;" for token in tokens
     )
     if not tokens:
         appended = 'RawTokens = "";'
@@ -54,7 +57,7 @@ def _run_kuro(tokens):
     while i < len(lines) - 2:
         assert lines[i] == "USE", result.stdout
         pc, name, origin, mask = int(lines[i + 1]), lines[i + 2], lines[i + 3], int(lines[i + 4])
-        assert name in ("Fresh", "Other", "Third", "Fourth")
+        assert name == tokens[pc + 1]
         assert tokens[pc:pc + 2] == ["BC_LOADVAR", name]
         assert origin in ("E", "B") and 0 <= mask <= 7
         key = (pc, name, origin)
@@ -118,7 +121,7 @@ def test_optional_integer_entry_and_zero_count_unreachable_are_distinct():
     ["BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST"],
     ["BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_CONST", "1", "BC_IF_BEGIN", "BC_ELSE_BEGIN", "BC_ELSE_BEGIN", "BC_IF_END", "BC_REPEAT_END"],
     ["BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_CONST", "1", "BC_IF_BEGIN", "BC_REPEAT_END", "BC_IF_END"],
-    ["BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_LOADVAR", "Fifth", "BC_PRINT", "BC_REPEAT_END"],
+    ["BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_LOADVAR", "BC_Fifth", "BC_PRINT", "BC_REPEAT_END"],
     ["BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_LOADVAR", "Fresh", "BC_CONST", "1", "BC_PRINT", "BC_REPEAT_END"],
 ])
 def test_malformed_truncated_invalid_literals_and_unsupported_ops_fail_closed(tokens):
@@ -300,7 +303,7 @@ def test_nested_branch_snapshots_restore_and_join_every_slot():
     assert set(result[0].values()) == {6}
 
 
-@pytest.mark.parametrize("bad_name", ["Fifth", "fresh", "", "BC_LOADVAR", "Fresh Other", "Fresh\nOther"])
+@pytest.mark.parametrize("bad_name", ["1Fifth", "fresh!", "", "BC_LOADVAR", "Fresh Other", "Fresh\nOther"])
 def test_invalid_slot_names_reject_in_prefix_body_and_unreachable_arms(bad_name):
     fixtures = [
         _store(name=bad_name) + _repeat([]),
@@ -385,7 +388,7 @@ def test_independent_finite_paths_track_all_slots_across_literal_trips(count):
     _repeat(_read("Fourth"), "0"),
     sum((_store(name=name) for name in SLOTS), []) + _repeat(sum((_read(name) for name in SLOTS), []), "1"),
     _store("1", "Fresh") + _store("1.5", "Fresh") + _store("1", "Other") + _repeat(_read("Fresh") + _read("Other")),
-    _repeat(_read("Fifth"), "0"),
+    _repeat(_read("BC_Fifth"), "0"),
     sum((_store(name=SLOTS[i % 4]) for i in range(31)), []) + _repeat(_read("Fourth")),
 ])
 def test_multislot_analyzer_hosted_native_matches_full_protocol(tmp_path, tokens):

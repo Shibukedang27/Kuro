@@ -1,6 +1,6 @@
 # TEST-ONLY bounded raw-bytecode loop-use analyzer.
 # Input is the complete RawTokens list (one exact raw bytecode token per item).
-# Supported grammar: optional literal STORE prefixes for Fresh, Other, Third, Fourth;
+# Supported grammar: optional literal STORE prefixes for up to four exact identifiers;
 # one literal-count Repeat (0..9); body = literal STORE slot | LOADVAR slot PRINT
 # | literal IF_BEGIN body [ELSE body] IF_END. No other bytecode is accepted.
 # This program owns structural parsing, reachability and abstract kind transfer;
@@ -23,8 +23,148 @@ FlowTrip = 0;
 FlowEmit = 0;
 FlowDecision = 1;
 FlowDepth = 0;
+# Names are discovered only by the dry validation traversal. These four exact
+# string fields are frozen before execution; masks remain bounded numeric state.
+FlowSlot0Name = "";
+FlowSlot1Name = "";
+FlowSlot2Name = "";
+FlowSlot3Name = "";
+FlowNameCount = 0;
 Length RawTokens;
 FlowLength = @_;
+
+
+# Slot identifiers are exact ASCII identifiers, bounded to 32 characters. The
+# reserved BC_ namespace is excluded; no normalization, aliasing, or truncation.
+Action FlowResolveName FlowNameValue;
+    FlowResolve_Result = -1;
+    Length FlowNameValue;
+    FlowNameLength = @_;
+    FlowNameValid = 1;
+    If FlowNameLength is less than 1 or FlowNameLength is greater than 32;
+        FlowNameValid = 0;
+    Done.
+    FlowNameScanPos = 0;
+    While FlowNameScanPos is less than FlowNameLength and FlowNameValid is equal to 1;
+        Get FlowNameValue FlowNameScanPos;
+        FlowNameChar = @_;
+        FlowNameCharOK = 0;
+        If FlowNameChar is equal to "A" or FlowNameChar is equal to "B" or FlowNameChar is equal to "C" or FlowNameChar is equal to "D" or FlowNameChar is equal to "E" or FlowNameChar is equal to "F" or FlowNameChar is equal to "G" or FlowNameChar is equal to "H" or FlowNameChar is equal to "I" or FlowNameChar is equal to "J" or FlowNameChar is equal to "K" or FlowNameChar is equal to "L" or FlowNameChar is equal to "M" or FlowNameChar is equal to "N" or FlowNameChar is equal to "O" or FlowNameChar is equal to "P" or FlowNameChar is equal to "Q" or FlowNameChar is equal to "R" or FlowNameChar is equal to "S" or FlowNameChar is equal to "T" or FlowNameChar is equal to "U" or FlowNameChar is equal to "V" or FlowNameChar is equal to "W" or FlowNameChar is equal to "X" or FlowNameChar is equal to "Y" or FlowNameChar is equal to "Z" or FlowNameChar is equal to "a" or FlowNameChar is equal to "b" or FlowNameChar is equal to "c" or FlowNameChar is equal to "d" or FlowNameChar is equal to "e" or FlowNameChar is equal to "f" or FlowNameChar is equal to "g" or FlowNameChar is equal to "h" or FlowNameChar is equal to "i" or FlowNameChar is equal to "j" or FlowNameChar is equal to "k" or FlowNameChar is equal to "l" or FlowNameChar is equal to "m" or FlowNameChar is equal to "n" or FlowNameChar is equal to "o" or FlowNameChar is equal to "p" or FlowNameChar is equal to "q" or FlowNameChar is equal to "r" or FlowNameChar is equal to "s" or FlowNameChar is equal to "t" or FlowNameChar is equal to "u" or FlowNameChar is equal to "v" or FlowNameChar is equal to "w" or FlowNameChar is equal to "x" or FlowNameChar is equal to "y" or FlowNameChar is equal to "z" or FlowNameChar is equal to "_";
+            FlowNameCharOK = 1;
+        Else;
+            If FlowNameScanPos is greater than 0;
+                If FlowNameChar is equal to "0" or FlowNameChar is equal to "1" or FlowNameChar is equal to "2" or FlowNameChar is equal to "3" or FlowNameChar is equal to "4" or FlowNameChar is equal to "5" or FlowNameChar is equal to "6" or FlowNameChar is equal to "7" or FlowNameChar is equal to "8" or FlowNameChar is equal to "9";
+                    FlowNameCharOK = 1;
+                Done.
+            Done.
+        Done.
+        If FlowNameCharOK is equal to 0;
+            FlowNameValid = 0;
+        Done.
+        Add 1 to FlowNameScanPos;
+    Done.
+    If FlowNameLength is greater than 2;
+        Get FlowNameValue 0;
+        FlowNameFirstChar = @_;
+        Get FlowNameValue 1;
+        FlowNameSecondChar = @_;
+        Get FlowNameValue 2;
+        FlowNameThirdChar = @_;
+        If FlowNameFirstChar is equal to "B" and FlowNameSecondChar is equal to "C" and FlowNameThirdChar is equal to "_";
+            FlowNameValid = 0;
+        Done.
+    Done.
+    If FlowNameValid is equal to 0;
+        FlowBad = 1;
+    Else;
+        FlowNameIndex = 0;
+        While FlowNameIndex is less than FlowNameCount and FlowResolve_Result is less than 0;
+            If FlowNameIndex is equal to 0;
+                FlowNameCandidate = FlowSlot0Name;
+            Else;
+                If FlowNameIndex is equal to 1;
+                    FlowNameCandidate = FlowSlot1Name;
+                Else;
+                    If FlowNameIndex is equal to 2;
+                        FlowNameCandidate = FlowSlot2Name;
+                    Else;
+                        FlowNameCandidate = FlowSlot3Name;
+                    Done.
+                Done.
+            Done.
+            If FlowNameCandidate is equal to FlowNameValue;
+                FlowResolve_Result = FlowNameIndex;
+            Done.
+            Add 1 to FlowNameIndex;
+        Done.
+        If FlowResolve_Result is less than 0;
+            If FlowNameCount is greater than or equal to 4 or FlowEmit is not equal to 0;
+                FlowBad = 1;
+            Else;
+                If FlowNameCount is equal to 0;
+                    FlowSlot0Name = FlowNameValue;
+                Else;
+                    If FlowNameCount is equal to 1;
+                        FlowSlot1Name = FlowNameValue;
+                    Else;
+                        If FlowNameCount is equal to 2;
+                            FlowSlot2Name = FlowNameValue;
+                        Else;
+                            FlowSlot3Name = FlowNameValue;
+                        Done.
+                    Done.
+                Done.
+                FlowResolve_Result = FlowNameCount;
+                Add 1 to FlowNameCount;
+            Done.
+        Done.
+    Done.
+    Return FlowResolve_Result;
+Done.
+
+# These helpers are the only bridge from a dynamic exact name to the four
+# fixed numeric mask components. All branch snapshots remain explicit copies.
+Action FlowGetMask FlowSlotIndex;
+    FlowGetMask_Result = 0;
+    If FlowSlotIndex is equal to 0;
+        FlowGetMask_Result = FlowFresh;
+    Else;
+        If FlowSlotIndex is equal to 1;
+            FlowGetMask_Result = FlowOther;
+        Else;
+            If FlowSlotIndex is equal to 2;
+                FlowGetMask_Result = FlowThird;
+            Else;
+                If FlowSlotIndex is equal to 3;
+                    FlowGetMask_Result = FlowFourth;
+                Else;
+                    FlowBad = 1;
+                Done.
+            Done.
+        Done.
+    Done.
+    Return FlowGetMask_Result;
+Done.
+
+Action FlowSetMask FlowSlotIndex, FlowSlotMask;
+    If FlowSlotIndex is equal to 0;
+        FlowFresh = FlowSlotMask;
+    Else;
+        If FlowSlotIndex is equal to 1;
+            FlowOther = FlowSlotMask;
+        Else;
+            If FlowSlotIndex is equal to 2;
+                FlowThird = FlowSlotMask;
+            Else;
+                If FlowSlotIndex is equal to 3;
+                    FlowFourth = FlowSlotMask;
+                Else;
+                    FlowBad = 1;
+                Done.
+            Done.
+        Done.
+    Done.
+Done.
 
 Action FlowLiteral TextValue;
     FlowLiteral_Result = 0;
@@ -107,22 +247,10 @@ Action FlowSequence0 FlowSeq0_Mode;
                     Else;
                         Get RawTokens FlowSeq0_ArgPos;
                         FlowSeq0_Name = @_;
-                        If FlowSeq0_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq0_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq0_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq0_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq0_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -138,8 +266,10 @@ Action FlowSequence0 FlowSeq0_Mode;
                         Else;
                             Get RawTokens FlowSeq0_ArgPos;
                             FlowSeq0_Name = @_;
+                            Call FlowResolveName FlowSeq0_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq0_NameOK = 0;
-                            If FlowSeq0_Name is equal to "Fresh" or FlowSeq0_Name is equal to "Other" or FlowSeq0_Name is equal to "Third" or FlowSeq0_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq0_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq0_PrintPos;
@@ -147,20 +277,8 @@ Action FlowSequence0 FlowSeq0_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq0_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq0_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq0_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq0_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -294,22 +412,10 @@ Action FlowSequence1 FlowSeq1_Mode;
                     Else;
                         Get RawTokens FlowSeq1_ArgPos;
                         FlowSeq1_Name = @_;
-                        If FlowSeq1_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq1_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq1_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq1_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq1_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -325,8 +431,10 @@ Action FlowSequence1 FlowSeq1_Mode;
                         Else;
                             Get RawTokens FlowSeq1_ArgPos;
                             FlowSeq1_Name = @_;
+                            Call FlowResolveName FlowSeq1_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq1_NameOK = 0;
-                            If FlowSeq1_Name is equal to "Fresh" or FlowSeq1_Name is equal to "Other" or FlowSeq1_Name is equal to "Third" or FlowSeq1_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq1_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq1_PrintPos;
@@ -334,20 +442,8 @@ Action FlowSequence1 FlowSeq1_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq1_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq1_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq1_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq1_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -481,22 +577,10 @@ Action FlowSequence2 FlowSeq2_Mode;
                     Else;
                         Get RawTokens FlowSeq2_ArgPos;
                         FlowSeq2_Name = @_;
-                        If FlowSeq2_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq2_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq2_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq2_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq2_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -512,8 +596,10 @@ Action FlowSequence2 FlowSeq2_Mode;
                         Else;
                             Get RawTokens FlowSeq2_ArgPos;
                             FlowSeq2_Name = @_;
+                            Call FlowResolveName FlowSeq2_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq2_NameOK = 0;
-                            If FlowSeq2_Name is equal to "Fresh" or FlowSeq2_Name is equal to "Other" or FlowSeq2_Name is equal to "Third" or FlowSeq2_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq2_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq2_PrintPos;
@@ -521,20 +607,8 @@ Action FlowSequence2 FlowSeq2_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq2_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq2_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq2_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq2_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -668,22 +742,10 @@ Action FlowSequence3 FlowSeq3_Mode;
                     Else;
                         Get RawTokens FlowSeq3_ArgPos;
                         FlowSeq3_Name = @_;
-                        If FlowSeq3_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq3_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq3_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq3_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq3_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -699,8 +761,10 @@ Action FlowSequence3 FlowSeq3_Mode;
                         Else;
                             Get RawTokens FlowSeq3_ArgPos;
                             FlowSeq3_Name = @_;
+                            Call FlowResolveName FlowSeq3_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq3_NameOK = 0;
-                            If FlowSeq3_Name is equal to "Fresh" or FlowSeq3_Name is equal to "Other" or FlowSeq3_Name is equal to "Third" or FlowSeq3_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq3_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq3_PrintPos;
@@ -708,20 +772,8 @@ Action FlowSequence3 FlowSeq3_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq3_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq3_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq3_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq3_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -855,22 +907,10 @@ Action FlowSequence4 FlowSeq4_Mode;
                     Else;
                         Get RawTokens FlowSeq4_ArgPos;
                         FlowSeq4_Name = @_;
-                        If FlowSeq4_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq4_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq4_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq4_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq4_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -886,8 +926,10 @@ Action FlowSequence4 FlowSeq4_Mode;
                         Else;
                             Get RawTokens FlowSeq4_ArgPos;
                             FlowSeq4_Name = @_;
+                            Call FlowResolveName FlowSeq4_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq4_NameOK = 0;
-                            If FlowSeq4_Name is equal to "Fresh" or FlowSeq4_Name is equal to "Other" or FlowSeq4_Name is equal to "Third" or FlowSeq4_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq4_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq4_PrintPos;
@@ -895,20 +937,8 @@ Action FlowSequence4 FlowSeq4_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq4_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq4_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq4_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq4_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -1042,22 +1072,10 @@ Action FlowSequence5 FlowSeq5_Mode;
                     Else;
                         Get RawTokens FlowSeq5_ArgPos;
                         FlowSeq5_Name = @_;
-                        If FlowSeq5_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq5_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq5_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq5_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq5_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -1073,8 +1091,10 @@ Action FlowSequence5 FlowSeq5_Mode;
                         Else;
                             Get RawTokens FlowSeq5_ArgPos;
                             FlowSeq5_Name = @_;
+                            Call FlowResolveName FlowSeq5_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq5_NameOK = 0;
-                            If FlowSeq5_Name is equal to "Fresh" or FlowSeq5_Name is equal to "Other" or FlowSeq5_Name is equal to "Third" or FlowSeq5_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq5_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq5_PrintPos;
@@ -1082,20 +1102,8 @@ Action FlowSequence5 FlowSeq5_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq5_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq5_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq5_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq5_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -1229,22 +1237,10 @@ Action FlowSequence6 FlowSeq6_Mode;
                     Else;
                         Get RawTokens FlowSeq6_ArgPos;
                         FlowSeq6_Name = @_;
-                        If FlowSeq6_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq6_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq6_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq6_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq6_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -1260,8 +1256,10 @@ Action FlowSequence6 FlowSeq6_Mode;
                         Else;
                             Get RawTokens FlowSeq6_ArgPos;
                             FlowSeq6_Name = @_;
+                            Call FlowResolveName FlowSeq6_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq6_NameOK = 0;
-                            If FlowSeq6_Name is equal to "Fresh" or FlowSeq6_Name is equal to "Other" or FlowSeq6_Name is equal to "Third" or FlowSeq6_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq6_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq6_PrintPos;
@@ -1269,20 +1267,8 @@ Action FlowSequence6 FlowSeq6_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq6_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq6_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq6_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq6_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -1416,22 +1402,10 @@ Action FlowSequence7 FlowSeq7_Mode;
                     Else;
                         Get RawTokens FlowSeq7_ArgPos;
                         FlowSeq7_Name = @_;
-                        If FlowSeq7_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq7_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq7_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq7_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq7_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -1447,8 +1421,10 @@ Action FlowSequence7 FlowSeq7_Mode;
                         Else;
                             Get RawTokens FlowSeq7_ArgPos;
                             FlowSeq7_Name = @_;
+                            Call FlowResolveName FlowSeq7_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq7_NameOK = 0;
-                            If FlowSeq7_Name is equal to "Fresh" or FlowSeq7_Name is equal to "Other" or FlowSeq7_Name is equal to "Third" or FlowSeq7_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq7_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq7_PrintPos;
@@ -1456,20 +1432,8 @@ Action FlowSequence7 FlowSeq7_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq7_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq7_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq7_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq7_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -1603,22 +1567,10 @@ Action FlowSequence8 FlowSeq8_Mode;
                     Else;
                         Get RawTokens FlowSeq8_ArgPos;
                         FlowSeq8_Name = @_;
-                        If FlowSeq8_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq8_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq8_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq8_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq8_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -1634,8 +1586,10 @@ Action FlowSequence8 FlowSeq8_Mode;
                         Else;
                             Get RawTokens FlowSeq8_ArgPos;
                             FlowSeq8_Name = @_;
+                            Call FlowResolveName FlowSeq8_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq8_NameOK = 0;
-                            If FlowSeq8_Name is equal to "Fresh" or FlowSeq8_Name is equal to "Other" or FlowSeq8_Name is equal to "Third" or FlowSeq8_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq8_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq8_PrintPos;
@@ -1643,20 +1597,8 @@ Action FlowSequence8 FlowSeq8_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq8_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq8_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq8_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq8_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -1790,22 +1732,10 @@ Action FlowSequence9 FlowSeq9_Mode;
                     Else;
                         Get RawTokens FlowSeq9_ArgPos;
                         FlowSeq9_Name = @_;
-                        If FlowSeq9_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq9_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq9_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq9_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq9_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -1821,8 +1751,10 @@ Action FlowSequence9 FlowSeq9_Mode;
                         Else;
                             Get RawTokens FlowSeq9_ArgPos;
                             FlowSeq9_Name = @_;
+                            Call FlowResolveName FlowSeq9_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq9_NameOK = 0;
-                            If FlowSeq9_Name is equal to "Fresh" or FlowSeq9_Name is equal to "Other" or FlowSeq9_Name is equal to "Third" or FlowSeq9_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq9_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq9_PrintPos;
@@ -1830,20 +1762,8 @@ Action FlowSequence9 FlowSeq9_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq9_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq9_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq9_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq9_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -1977,22 +1897,10 @@ Action FlowSequence10 FlowSeq10_Mode;
                     Else;
                         Get RawTokens FlowSeq10_ArgPos;
                         FlowSeq10_Name = @_;
-                        If FlowSeq10_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq10_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq10_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq10_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq10_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -2008,8 +1916,10 @@ Action FlowSequence10 FlowSeq10_Mode;
                         Else;
                             Get RawTokens FlowSeq10_ArgPos;
                             FlowSeq10_Name = @_;
+                            Call FlowResolveName FlowSeq10_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq10_NameOK = 0;
-                            If FlowSeq10_Name is equal to "Fresh" or FlowSeq10_Name is equal to "Other" or FlowSeq10_Name is equal to "Third" or FlowSeq10_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq10_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq10_PrintPos;
@@ -2017,20 +1927,8 @@ Action FlowSequence10 FlowSeq10_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq10_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq10_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq10_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq10_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -2164,22 +2062,10 @@ Action FlowSequence11 FlowSeq11_Mode;
                     Else;
                         Get RawTokens FlowSeq11_ArgPos;
                         FlowSeq11_Name = @_;
-                        If FlowSeq11_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq11_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq11_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq11_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq11_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -2195,8 +2081,10 @@ Action FlowSequence11 FlowSeq11_Mode;
                         Else;
                             Get RawTokens FlowSeq11_ArgPos;
                             FlowSeq11_Name = @_;
+                            Call FlowResolveName FlowSeq11_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq11_NameOK = 0;
-                            If FlowSeq11_Name is equal to "Fresh" or FlowSeq11_Name is equal to "Other" or FlowSeq11_Name is equal to "Third" or FlowSeq11_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq11_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq11_PrintPos;
@@ -2204,20 +2092,8 @@ Action FlowSequence11 FlowSeq11_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq11_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq11_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq11_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq11_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -2351,22 +2227,10 @@ Action FlowSequence12 FlowSeq12_Mode;
                     Else;
                         Get RawTokens FlowSeq12_ArgPos;
                         FlowSeq12_Name = @_;
-                        If FlowSeq12_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq12_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq12_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq12_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq12_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -2382,8 +2246,10 @@ Action FlowSequence12 FlowSeq12_Mode;
                         Else;
                             Get RawTokens FlowSeq12_ArgPos;
                             FlowSeq12_Name = @_;
+                            Call FlowResolveName FlowSeq12_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq12_NameOK = 0;
-                            If FlowSeq12_Name is equal to "Fresh" or FlowSeq12_Name is equal to "Other" or FlowSeq12_Name is equal to "Third" or FlowSeq12_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq12_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq12_PrintPos;
@@ -2391,20 +2257,8 @@ Action FlowSequence12 FlowSeq12_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq12_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq12_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq12_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq12_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -2538,22 +2392,10 @@ Action FlowSequence13 FlowSeq13_Mode;
                     Else;
                         Get RawTokens FlowSeq13_ArgPos;
                         FlowSeq13_Name = @_;
-                        If FlowSeq13_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq13_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq13_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq13_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq13_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -2569,8 +2411,10 @@ Action FlowSequence13 FlowSeq13_Mode;
                         Else;
                             Get RawTokens FlowSeq13_ArgPos;
                             FlowSeq13_Name = @_;
+                            Call FlowResolveName FlowSeq13_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq13_NameOK = 0;
-                            If FlowSeq13_Name is equal to "Fresh" or FlowSeq13_Name is equal to "Other" or FlowSeq13_Name is equal to "Third" or FlowSeq13_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq13_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq13_PrintPos;
@@ -2578,20 +2422,8 @@ Action FlowSequence13 FlowSeq13_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq13_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq13_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq13_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq13_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -2725,22 +2557,10 @@ Action FlowSequence14 FlowSeq14_Mode;
                     Else;
                         Get RawTokens FlowSeq14_ArgPos;
                         FlowSeq14_Name = @_;
-                        If FlowSeq14_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq14_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq14_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq14_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq14_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -2756,8 +2576,10 @@ Action FlowSequence14 FlowSeq14_Mode;
                         Else;
                             Get RawTokens FlowSeq14_ArgPos;
                             FlowSeq14_Name = @_;
+                            Call FlowResolveName FlowSeq14_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq14_NameOK = 0;
-                            If FlowSeq14_Name is equal to "Fresh" or FlowSeq14_Name is equal to "Other" or FlowSeq14_Name is equal to "Third" or FlowSeq14_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq14_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq14_PrintPos;
@@ -2765,20 +2587,8 @@ Action FlowSequence14 FlowSeq14_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq14_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq14_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq14_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq14_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -2912,22 +2722,10 @@ Action FlowSequence15 FlowSeq15_Mode;
                     Else;
                         Get RawTokens FlowSeq15_ArgPos;
                         FlowSeq15_Name = @_;
-                        If FlowSeq15_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq15_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq15_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq15_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq15_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -2943,8 +2741,10 @@ Action FlowSequence15 FlowSeq15_Mode;
                         Else;
                             Get RawTokens FlowSeq15_ArgPos;
                             FlowSeq15_Name = @_;
+                            Call FlowResolveName FlowSeq15_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq15_NameOK = 0;
-                            If FlowSeq15_Name is equal to "Fresh" or FlowSeq15_Name is equal to "Other" or FlowSeq15_Name is equal to "Third" or FlowSeq15_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq15_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq15_PrintPos;
@@ -2952,20 +2752,8 @@ Action FlowSequence15 FlowSeq15_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq15_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq15_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq15_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq15_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -3099,22 +2887,10 @@ Action FlowSequence16 FlowSeq16_Mode;
                     Else;
                         Get RawTokens FlowSeq16_ArgPos;
                         FlowSeq16_Name = @_;
-                        If FlowSeq16_Name is equal to "Fresh";
-                            FlowFresh = FlowPending;
-                        Else;
-                            If FlowSeq16_Name is equal to "Other";
-                                FlowOther = FlowPending;
-                            Else;
-                                If FlowSeq16_Name is equal to "Third";
-                                    FlowThird = FlowPending;
-                                Else;
-                                    If FlowSeq16_Name is equal to "Fourth";
-                                        FlowFourth = FlowPending;
-                                    Else;
-                                        FlowBad = 1;
-                                    Done.
-                                Done.
-                            Done.
+                        Call FlowResolveName FlowSeq16_Name;
+                        FlowSlotIndex = @_;
+                        If FlowBad is equal to 0;
+                            Call FlowSetMask FlowSlotIndex, FlowPending;
                         Done.
                         If FlowBad is equal to 0;
                             FlowPending = 0;
@@ -3130,8 +2906,10 @@ Action FlowSequence16 FlowSeq16_Mode;
                         Else;
                             Get RawTokens FlowSeq16_ArgPos;
                             FlowSeq16_Name = @_;
+                            Call FlowResolveName FlowSeq16_Name;
+                            FlowSlotIndex = @_;
                             FlowSeq16_NameOK = 0;
-                            If FlowSeq16_Name is equal to "Fresh" or FlowSeq16_Name is equal to "Other" or FlowSeq16_Name is equal to "Third" or FlowSeq16_Name is equal to "Fourth";
+                            If FlowBad is equal to 0;
                                 FlowSeq16_NameOK = 1;
                             Done.
                             Get RawTokens FlowSeq16_PrintPos;
@@ -3139,20 +2917,8 @@ Action FlowSequence16 FlowSeq16_Mode;
                                 FlowBad = 1;
                             Else;
                                 FlowUseName = FlowSeq16_Name;
-                                FlowUseMask = 0;
-                                If FlowSeq16_Name is equal to "Fresh";
-                                    FlowUseMask = FlowFresh;
-                                Else;
-                                    If FlowSeq16_Name is equal to "Other";
-                                        FlowUseMask = FlowOther;
-                                    Else;
-                                        If FlowSeq16_Name is equal to "Third";
-                                            FlowUseMask = FlowThird;
-                                        Else;
-                                            FlowUseMask = FlowFourth;
-                                        Done.
-                                    Done.
-                                Done.
+                                Call FlowGetMask FlowSlotIndex;
+                                FlowUseMask = @_;
                                 If FlowEmit is equal to 1;
                                     If FlowTrip is equal to 0;
                                         Print "USE".
@@ -3282,22 +3048,10 @@ Action FlowAnalyze;
                         If FlowPrefixMask is equal to 0;
                             FlowBad = 1;
                         Else;
-                            If FlowPrefixName is equal to "Fresh";
-                                FlowFresh = FlowPrefixMask;
-                            Else;
-                                If FlowPrefixName is equal to "Other";
-                                    FlowOther = FlowPrefixMask;
-                                Else;
-                                    If FlowPrefixName is equal to "Third";
-                                        FlowThird = FlowPrefixMask;
-                                    Else;
-                                        If FlowPrefixName is equal to "Fourth";
-                                            FlowFourth = FlowPrefixMask;
-                                        Else;
-                                            FlowBad = 1;
-                                        Done.
-                                    Done.
-                                Done.
+                            Call FlowResolveName FlowPrefixName;
+                            FlowSlotIndex = @_;
+                            If FlowBad is equal to 0;
+                                Call FlowSetMask FlowSlotIndex, FlowPrefixMask;
                             Done.
                         Done.
                         If FlowBad is equal to 0;
