@@ -1,5 +1,7 @@
 # Dynamic slot names in the bounded Kuro loop analyzer
 
+Historical four-slot increment: the subsequent [indexed-state increment](native-indexed-slot-loop-use-flow.md) replaces physical components with a bounded 16-slot representation while retaining the literal-only write language. Limits and results below describe this earlier step.
+
 This test-only increment stacks directly on [PR #85](https://github.com/Shibukedang27/Kuro/pull/85), inspected open/unmerged at `b688d1ae7c8003b47e345819bcf12e13eac98652` with all eight checks successful. The [Kuro analyzer](../../tests/self_host/loop_use_flow.kuro) now discovers up to four exact identifier names instead of whitelisting `Fresh`, `Other`, `Third`, and `Fourth`. Python supplies raw tokens, not a symbol table, state vector, branch snapshots, read identities or transfer facts. Production code, production acceptance and CI configuration are unchanged. Strict compiler/runtime/toolchain independence remains unfinished.
 
 ## A small symbol table, not a larger write language

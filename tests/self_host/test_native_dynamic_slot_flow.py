@@ -9,6 +9,7 @@ from compiler.pipeline import compile_source, run_source
 from test_native_loop_use_flow import _store, _read, _if, _repeat, _source, _run_kuro, _expected
 
 NAMES = ("alpha", "Alpha", "_scratch2", "Z" + "9" * 31)
+CAPACITY_NAMES = tuple(f"slot{i:02d}" for i in range(16))
 
 
 @pytest.mark.parametrize("name", ["Fifth", "fresh", "_", "a0", "bc_loadvar", "BC", "B", *NAMES])
@@ -26,12 +27,13 @@ def test_invalid_names_reject_before_any_evidence_even_unreachable(name):
 
 
 @pytest.mark.parametrize("count", ["0", "1", "2", "9"])
-def test_fifth_distinct_name_rejects_in_all_discovery_positions(count):
-    prefix = sum((_store(name=name) for name in NAMES), [])
-    for tokens in (prefix + _store(name="fifth") + _repeat([], count),
-                   prefix + _repeat(_store(name="fifth"), count),
-                   prefix + _repeat(_if([], _read("fifth")), count),
-                   _repeat(sum((_read(name) for name in (*NAMES, "fifth")), []), count)):
+def test_seventeenth_distinct_name_rejects_in_all_discovery_positions(count):
+    prefix = sum((_store(name=name) for name in CAPACITY_NAMES), [])
+    overflow = "slot16"
+    for tokens in (prefix + _store(name=overflow) + _repeat([], count),
+                   prefix + _repeat(_store(name=overflow), count),
+                   prefix + _repeat(_if([], _read(overflow)), count),
+                   _repeat(sum((_read(name) for name in (*CAPACITY_NAMES, overflow)), []), count)):
         assert _run_kuro(tokens) is None
 
 
@@ -146,7 +148,7 @@ NATIVE_CASES = [
     _repeat(_if(_store(name="late"), _read("late"))),
     _repeat(sum((_read(name) for name in NAMES), []), "0"),
     _repeat(sum((_read(name) for name in NAMES), []), "1"),
-    _repeat(sum((_read(name) for name in (*NAMES, "fifth")), []), "0"),
+    _repeat(sum((_read(name) for name in (*CAPACITY_NAMES, "slot16")), []), "0"),
     _repeat(_read("BC_LOADVAR"), "0"),
     _repeat(_read("a" * 33)),
     _repeat(_read("é")),
