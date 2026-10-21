@@ -99,6 +99,12 @@ Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
   crash").
 
 ### Fixed
+- The Kuro-authored parser preserves outer `+`, `-`, `*` and `/` operators
+  across recursively parsed operands using frame-local Text parameters instead
+  of shared operator scratch. Nested subtraction and mixed-operator AST, IR,
+  bytecode, VM and actual-generator storage regressions pin the correction;
+  bounded collection generation remains Linux x86-64-only. See
+  `docs/engineering/recursive-expression-operators.md`.
 - A genuine, previously-undiscovered **crash** in `compiler/lower.py`: a
   nested `ActionDecl` (valid, resolvable Kuro source, already established
   as parsed-but-uncallable rather than rejected) had no case in
