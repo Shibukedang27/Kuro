@@ -209,15 +209,21 @@ Action LowerAssign;
 Done.
 
 Action LowerAssignTail;
-    Get AstOut LowerPos;
-    LowerAssignTail_Tag = @_;
-    If LowerAssignTail_Tag is equal to "END_VALUES";
-        Add 1 to LowerPos;
-    Else;
-        Call LowerValue;
-        If LowerFailed is equal to 0;
+    # LowerValue walks only expression tokens, never another assignment.
+    # Its private flag cannot be clobbered by nested expression lowering.
+    # Avoid Return inside While for authored bytecode VM compatibility.
+    LowerAssignTail_Looping = 1;
+    While LowerFailed is equal to 0 and LowerAssignTail_Looping is equal to 1;
+        Get AstOut LowerPos;
+        LowerAssignTail_Tag = @_;
+        If LowerAssignTail_Tag is equal to "END_VALUES";
             Add 1 to LowerPos;
-            Call LowerAssignTail;
+            LowerAssignTail_Looping = 0;
+        Else;
+            Call LowerValue;
+            If LowerFailed is equal to 0;
+                Add 1 to LowerPos;
+            Done.
         Done.
     Done.
 Done.

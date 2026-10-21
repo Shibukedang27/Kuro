@@ -9,7 +9,7 @@ import subprocess
 import pytest
 
 from compiler.pipeline import run_source
-from compiler.self_host import SelfHostError, build_native_compiler, compile_with_kuro_driver
+from compiler.self_host import build_native_artifact_launcher, build_native_compiler, compile_with_kuro_driver
 from test_native_codegen import run_codegen, x86_linux_codegen
 from test_native_integer_storage import execute, generate, requires_linux
 from test_vm_cross import BYTECODE_RE, VM
@@ -19,12 +19,19 @@ LINUX_X86 = platform.system() == "Linux" and platform.machine().lower() in {"x86
 
 
 @pytest.fixture(scope="module")
-def native_compiler(tmp_path_factory):
-    """Build one fresh Kuro compiler and use its framed output for every source case."""
+def native_compiler_image(tmp_path_factory):
+    """Build one fresh Kuro compiler for accepted and rejected source cases."""
     if not LINUX_X86:
         pytest.skip("fresh native compiler fixture executes Linux x86-64 images")
     image = tmp_path_factory.mktemp("native-integer-capacity-compiler") / "kuro-compiler"
     build_native_compiler(None, image)
+    return image
+
+
+@pytest.fixture(scope="module")
+def native_compiler(native_compiler_image):
+    """Require complete hosted/native token parity for every capacity witness."""
+    image = native_compiler_image
     compiler_sha256 = hashlib.sha256(image.read_bytes()).hexdigest()
 
     def compile_source_tokens(source: str, artifact_dir):
@@ -38,12 +45,17 @@ def native_compiler(tmp_path_factory):
         assert framed_output.endswith("\n")
         tokens = framed_output.splitlines()[1:]
         assert 0 < len(tokens) < 4096
+        hosted = compile_with_kuro_driver(source)
+        assert hosted["CompilerFailed"] == 0
+        assert hosted["CompilerOutput"] == tokens
+        assert hosted["CompilerInstructionCount"] == len(tokens)
         artifact_dir.mkdir(parents=True, exist_ok=True)
         (artifact_dir / "native-compiler-record.json").write_text(
             json.dumps({
                 "native_compiler_sha256": compiler_sha256,
                 "source": source,
                 "framed_token_output": framed_output,
+                "hosted_tokens": hosted["CompilerOutput"],
                 "tokens": tokens,
             }, indent=2) + "\n",
             encoding="utf-8",
@@ -51,6 +63,43 @@ def native_compiler(tmp_path_factory):
         return tokens
 
     return compile_source_tokens
+
+
+@requires_linux
+def test_fresh_bytecode_stage_compiler_reproduces_self_and_large_initializer(
+    tmp_path, native_compiler_image
+):
+    # Direct native execution is not enough: the authored VM must execute the
+    # compiler too. In particular, do not introduce Return inside its While.
+    launcher = tmp_path / "kuro-bytecode"
+    build_native_artifact_launcher(launcher, target="x86_64-linux")
+    source = native_compiler_image.with_suffix(".source.kuro").read_text(encoding="utf-8")
+    stage1 = subprocess.run(
+        [str(native_compiler_image)], input=source, text=True, capture_output=True,
+        check=False, timeout=30,
+    )
+    assert (stage1.returncode, stage1.stderr) == (0, "")
+    assert stage1.stdout.startswith("kuro.bytecode/1\n")
+    (tmp_path / "stage1.kurobc").write_text(stage1.stdout, encoding="utf-8")
+    for name, program, expected in [
+        ("self", source, stage1.stdout),
+        ("initializer", f"Items = {_values(272)};\nGet Items -1; Print @_.\n", None),
+    ]:
+        if expected is None:
+            direct = subprocess.run(
+                [str(native_compiler_image)], input=program, text=True, capture_output=True,
+                check=False, timeout=30,
+            )
+            assert (direct.returncode, direct.stderr) == (0, "")
+            expected = direct.stdout
+        framed_input = stage1.stdout + "kuro.input/1\n" + program
+        rebuilt = subprocess.run(
+            [str(launcher)], input=framed_input, text=True, capture_output=True,
+            check=False, timeout=120,
+        )
+        (tmp_path / f"{name}-stage-input.kurobc").write_text(framed_input, encoding="utf-8")
+        (tmp_path / f"{name}-stage-output.kurobc").write_text(rebuilt.stdout, encoding="utf-8")
+        assert (rebuilt.returncode, rebuilt.stdout, rebuilt.stderr) == (0, expected, "")
 
 
 def _values(count: int, start: int = 0) -> str:
@@ -117,10 +166,34 @@ def test_hosted_generator_rejects_invalid_initializers_before_name_lookup(tokens
     assert (env["NativeFailed"], env["NativeOut"]) == (1, "")
 
 
-def test_hosted_authored_compiler_documents_long_initializer_recursion_limit():
-    source = f"Items = {_values(272)};\nGet Items -1; Print @_.\n"
-    with pytest.raises(SelfHostError, match="maximum recursion depth exceeded"):
-        compile_with_kuro_driver(source)
+@requires_linux
+@pytest.mark.parametrize("count", [190, 191, 272])
+def test_hosted_and_fresh_native_compiler_initializer_boundary(
+    count, tmp_path, x86_linux_codegen, native_compiler
+):
+    source = f"Items = {_values(count)};\nGet Items -1; Print @_.\n"
+    tokens = native_compiler(source, tmp_path)
+    expected = f"{count - 1}\n"
+    _assert_source_and_vm(source, tokens, expected)
+    result = execute(x86_linux_codegen, source, tmp_path, tokens=tokens)
+    assert (result.returncode, result.stdout, result.stderr) == (0, expected, "")
+
+
+@requires_linux
+@pytest.mark.parametrize("suffix", [",;", ",", ",, 1;", ", * 1;", ", (1 + );", ""])
+def test_fresh_native_compiler_rejects_malformed_long_initializer(
+    suffix, tmp_path, native_compiler_image
+):
+    source = f"Items = {_values(272)}{suffix}"
+    completed = subprocess.run(
+        [str(native_compiler_image)], input=source, text=True, capture_output=True,
+        check=False, timeout=30,
+    )
+    (tmp_path / "source.kuro").write_text(source, encoding="utf-8")
+    (tmp_path / "compiler-output.txt").write_text(completed.stdout, encoding="utf-8")
+    assert (completed.returncode, completed.stdout, completed.stderr) == (
+        1, "kuro.compile-error/1\n", "",
+    )
 
 
 @requires_linux
