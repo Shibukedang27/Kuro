@@ -1,0 +1,2449 @@
+# TEST-ONLY bounded raw-bytecode loop-use analyzer.
+# Input is the complete RawTokens list (one exact raw bytecode token per item).
+# Supported grammar: optional literal STORE Fresh; one literal-count Repeat
+# (0..9); body = literal STORE Fresh | LOADVAR Fresh PRINT | literal IF_BEGIN
+# body [ELSE body] IF_END. No other bytecode is accepted.
+# This program owns structural parsing, reachability and abstract kind transfer;
+# the Python harness only serializes tokens and compares an independent oracle.
+# Kinds are bit masks: ?=1, I=2, D=4. 0 means unreachable.
+RawTokens is Text;
+FlowBad = 0;
+FlowPos = 0;
+FlowLength = 0;
+FlowFresh = 1;
+FlowPending = 0;
+FlowCount = 0;
+FlowTrip = 0;
+FlowEmit = 0;
+FlowDecision = 1;
+FlowDepth = 0;
+Length RawTokens;
+FlowLength = @_;
+
+Action FlowLiteral TextValue;
+    FlowLiteral_Result = 0;
+    If TextValue is equal to "0" or TextValue is equal to "1" or TextValue is equal to "2" or TextValue is equal to "3" or TextValue is equal to "4" or TextValue is equal to "5" or TextValue is equal to "6" or TextValue is equal to "7" or TextValue is equal to "8" or TextValue is equal to "9";
+        FlowLiteral_Result = 2;
+    Else;
+        If TextValue is equal to "0.0" or TextValue is equal to "0.5" or TextValue is equal to "1.0" or TextValue is equal to "1.5" or TextValue is equal to "2.0" or TextValue is equal to "2.5" or TextValue is equal to "3.0" or TextValue is equal to "3.5" or TextValue is equal to "4.0" or TextValue is equal to "4.5" or TextValue is equal to "5.0" or TextValue is equal to "5.5" or TextValue is equal to "6.0" or TextValue is equal to "6.5" or TextValue is equal to "7.0" or TextValue is equal to "7.5" or TextValue is equal to "8.0" or TextValue is equal to "8.5" or TextValue is equal to "9.0" or TextValue is equal to "9.5";
+            FlowLiteral_Result = 4;
+        Else;
+            FlowBad = 1;
+        Done.
+    Done.
+    Return FlowLiteral_Result;
+Done.
+
+Action FlowJoin Left, Right;
+    FlowJoin_Result = 0;
+    If Left is equal to 1 or Left is equal to 3 or Left is equal to 5 or Left is equal to 7 or Right is equal to 1 or Right is equal to 3 or Right is equal to 5 or Right is equal to 7;
+        Add 1 to FlowJoin_Result;
+    Done.
+    If Left is equal to 2 or Left is equal to 3 or Left is equal to 6 or Left is equal to 7 or Right is equal to 2 or Right is equal to 3 or Right is equal to 6 or Right is equal to 7;
+        Add 2 to FlowJoin_Result;
+    Done.
+    If Left is equal to 4 or Left is equal to 5 or Left is equal to 6 or Left is equal to 7 or Right is equal to 4 or Right is equal to 5 or Right is equal to 6 or Right is equal to 7;
+        Add 4 to FlowJoin_Result;
+    Done.
+    Return FlowJoin_Result;
+Done.
+
+# Branch recovery must never index beyond a truncated input.
+Action FlowPeek;
+    If FlowPos is less than 0 or FlowPos is greater than or equal to FlowLength;
+        FlowBad = 1;
+        Return "";
+    Done.
+    Get RawTokens FlowPos;
+    Return @_;
+Done.
+
+# Stop mode 1 = ELSE or IF_END; 2 = IF_END; 3 = REPEAT_END.
+# Recursive sequence evaluation considers both IF arms and joins their outputs.
+Action FlowSequence0 FlowSeq0_Mode;
+    FlowSeq0_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq0_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq0_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq0_Op is not equal to "BC_STORE_LIST" and FlowSeq0_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq0_IsStop = 0;
+        If FlowSeq0_Mode is equal to 1 and FlowSeq0_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq0_IsStop = 1;
+        Done.
+        If FlowSeq0_Op is equal to "BC_IF_END" and FlowSeq0_Mode is not equal to 3;
+            FlowSeq0_IsStop = 1;
+        Done.
+        If FlowSeq0_Mode is equal to 3 and FlowSeq0_Op is equal to "BC_REPEAT_END";
+            FlowSeq0_IsStop = 1;
+        Done.
+        If FlowSeq0_IsStop is equal to 1;
+            FlowSeq0_Running = 0;
+        Else;
+            If FlowSeq0_Op is equal to "BC_CONST";
+                FlowSeq0_ArgPos = FlowPos + 1;
+                If FlowSeq0_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq0_ArgPos;
+                    FlowSeq0_Value = @_;
+                    Call FlowLiteral FlowSeq0_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq0_Op is equal to "BC_STORE_LIST";
+                    FlowSeq0_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq0_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq0_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq0_Op is equal to "BC_LOADVAR";
+                        FlowSeq0_ArgPos = FlowPos + 1;
+                        FlowSeq0_PrintPos = FlowPos + 2;
+                        If FlowSeq0_PrintPos is greater than or equal to FlowLength or FlowSeq0_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq0_ArgPos;
+                            FlowSeq0_Name = @_;
+                            Get RawTokens FlowSeq0_PrintPos;
+                            If FlowSeq0_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq0_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq0_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence1 1;
+                                FlowSeq0_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq0_Stop = @_;
+                                If FlowSeq0_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq0_Entry;
+                                    Call FlowSequence1 2;
+                                    FlowSeq0_Else = FlowFresh;
+                                Else;
+                                    FlowSeq0_Else = FlowSeq0_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq0_Then, FlowSeq0_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq0_Op is equal to "BC_ELSE_BEGIN" or FlowSeq0_Op is equal to "BC_IF_END" or FlowSeq0_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq0_Op is equal to "BC_REPEAT_END" or FlowSeq0_Op is equal to "BC_WHILE_BEGIN" or FlowSeq0_Op is equal to "BC_WHILE_TEST" or FlowSeq0_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence1 FlowSeq1_Mode;
+    FlowSeq1_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq1_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq1_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq1_Op is not equal to "BC_STORE_LIST" and FlowSeq1_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq1_IsStop = 0;
+        If FlowSeq1_Mode is equal to 1 and FlowSeq1_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq1_IsStop = 1;
+        Done.
+        If FlowSeq1_Op is equal to "BC_IF_END" and FlowSeq1_Mode is not equal to 3;
+            FlowSeq1_IsStop = 1;
+        Done.
+        If FlowSeq1_Mode is equal to 3 and FlowSeq1_Op is equal to "BC_REPEAT_END";
+            FlowSeq1_IsStop = 1;
+        Done.
+        If FlowSeq1_IsStop is equal to 1;
+            FlowSeq1_Running = 0;
+        Else;
+            If FlowSeq1_Op is equal to "BC_CONST";
+                FlowSeq1_ArgPos = FlowPos + 1;
+                If FlowSeq1_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq1_ArgPos;
+                    FlowSeq1_Value = @_;
+                    Call FlowLiteral FlowSeq1_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq1_Op is equal to "BC_STORE_LIST";
+                    FlowSeq1_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq1_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq1_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq1_Op is equal to "BC_LOADVAR";
+                        FlowSeq1_ArgPos = FlowPos + 1;
+                        FlowSeq1_PrintPos = FlowPos + 2;
+                        If FlowSeq1_PrintPos is greater than or equal to FlowLength or FlowSeq1_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq1_ArgPos;
+                            FlowSeq1_Name = @_;
+                            Get RawTokens FlowSeq1_PrintPos;
+                            If FlowSeq1_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq1_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq1_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence2 1;
+                                FlowSeq1_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq1_Stop = @_;
+                                If FlowSeq1_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq1_Entry;
+                                    Call FlowSequence2 2;
+                                    FlowSeq1_Else = FlowFresh;
+                                Else;
+                                    FlowSeq1_Else = FlowSeq1_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq1_Then, FlowSeq1_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq1_Op is equal to "BC_ELSE_BEGIN" or FlowSeq1_Op is equal to "BC_IF_END" or FlowSeq1_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq1_Op is equal to "BC_REPEAT_END" or FlowSeq1_Op is equal to "BC_WHILE_BEGIN" or FlowSeq1_Op is equal to "BC_WHILE_TEST" or FlowSeq1_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence2 FlowSeq2_Mode;
+    FlowSeq2_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq2_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq2_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq2_Op is not equal to "BC_STORE_LIST" and FlowSeq2_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq2_IsStop = 0;
+        If FlowSeq2_Mode is equal to 1 and FlowSeq2_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq2_IsStop = 1;
+        Done.
+        If FlowSeq2_Op is equal to "BC_IF_END" and FlowSeq2_Mode is not equal to 3;
+            FlowSeq2_IsStop = 1;
+        Done.
+        If FlowSeq2_Mode is equal to 3 and FlowSeq2_Op is equal to "BC_REPEAT_END";
+            FlowSeq2_IsStop = 1;
+        Done.
+        If FlowSeq2_IsStop is equal to 1;
+            FlowSeq2_Running = 0;
+        Else;
+            If FlowSeq2_Op is equal to "BC_CONST";
+                FlowSeq2_ArgPos = FlowPos + 1;
+                If FlowSeq2_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq2_ArgPos;
+                    FlowSeq2_Value = @_;
+                    Call FlowLiteral FlowSeq2_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq2_Op is equal to "BC_STORE_LIST";
+                    FlowSeq2_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq2_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq2_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq2_Op is equal to "BC_LOADVAR";
+                        FlowSeq2_ArgPos = FlowPos + 1;
+                        FlowSeq2_PrintPos = FlowPos + 2;
+                        If FlowSeq2_PrintPos is greater than or equal to FlowLength or FlowSeq2_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq2_ArgPos;
+                            FlowSeq2_Name = @_;
+                            Get RawTokens FlowSeq2_PrintPos;
+                            If FlowSeq2_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq2_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq2_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence3 1;
+                                FlowSeq2_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq2_Stop = @_;
+                                If FlowSeq2_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq2_Entry;
+                                    Call FlowSequence3 2;
+                                    FlowSeq2_Else = FlowFresh;
+                                Else;
+                                    FlowSeq2_Else = FlowSeq2_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq2_Then, FlowSeq2_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq2_Op is equal to "BC_ELSE_BEGIN" or FlowSeq2_Op is equal to "BC_IF_END" or FlowSeq2_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq2_Op is equal to "BC_REPEAT_END" or FlowSeq2_Op is equal to "BC_WHILE_BEGIN" or FlowSeq2_Op is equal to "BC_WHILE_TEST" or FlowSeq2_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence3 FlowSeq3_Mode;
+    FlowSeq3_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq3_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq3_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq3_Op is not equal to "BC_STORE_LIST" and FlowSeq3_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq3_IsStop = 0;
+        If FlowSeq3_Mode is equal to 1 and FlowSeq3_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq3_IsStop = 1;
+        Done.
+        If FlowSeq3_Op is equal to "BC_IF_END" and FlowSeq3_Mode is not equal to 3;
+            FlowSeq3_IsStop = 1;
+        Done.
+        If FlowSeq3_Mode is equal to 3 and FlowSeq3_Op is equal to "BC_REPEAT_END";
+            FlowSeq3_IsStop = 1;
+        Done.
+        If FlowSeq3_IsStop is equal to 1;
+            FlowSeq3_Running = 0;
+        Else;
+            If FlowSeq3_Op is equal to "BC_CONST";
+                FlowSeq3_ArgPos = FlowPos + 1;
+                If FlowSeq3_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq3_ArgPos;
+                    FlowSeq3_Value = @_;
+                    Call FlowLiteral FlowSeq3_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq3_Op is equal to "BC_STORE_LIST";
+                    FlowSeq3_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq3_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq3_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq3_Op is equal to "BC_LOADVAR";
+                        FlowSeq3_ArgPos = FlowPos + 1;
+                        FlowSeq3_PrintPos = FlowPos + 2;
+                        If FlowSeq3_PrintPos is greater than or equal to FlowLength or FlowSeq3_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq3_ArgPos;
+                            FlowSeq3_Name = @_;
+                            Get RawTokens FlowSeq3_PrintPos;
+                            If FlowSeq3_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq3_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq3_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence4 1;
+                                FlowSeq3_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq3_Stop = @_;
+                                If FlowSeq3_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq3_Entry;
+                                    Call FlowSequence4 2;
+                                    FlowSeq3_Else = FlowFresh;
+                                Else;
+                                    FlowSeq3_Else = FlowSeq3_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq3_Then, FlowSeq3_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq3_Op is equal to "BC_ELSE_BEGIN" or FlowSeq3_Op is equal to "BC_IF_END" or FlowSeq3_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq3_Op is equal to "BC_REPEAT_END" or FlowSeq3_Op is equal to "BC_WHILE_BEGIN" or FlowSeq3_Op is equal to "BC_WHILE_TEST" or FlowSeq3_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence4 FlowSeq4_Mode;
+    FlowSeq4_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq4_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq4_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq4_Op is not equal to "BC_STORE_LIST" and FlowSeq4_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq4_IsStop = 0;
+        If FlowSeq4_Mode is equal to 1 and FlowSeq4_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq4_IsStop = 1;
+        Done.
+        If FlowSeq4_Op is equal to "BC_IF_END" and FlowSeq4_Mode is not equal to 3;
+            FlowSeq4_IsStop = 1;
+        Done.
+        If FlowSeq4_Mode is equal to 3 and FlowSeq4_Op is equal to "BC_REPEAT_END";
+            FlowSeq4_IsStop = 1;
+        Done.
+        If FlowSeq4_IsStop is equal to 1;
+            FlowSeq4_Running = 0;
+        Else;
+            If FlowSeq4_Op is equal to "BC_CONST";
+                FlowSeq4_ArgPos = FlowPos + 1;
+                If FlowSeq4_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq4_ArgPos;
+                    FlowSeq4_Value = @_;
+                    Call FlowLiteral FlowSeq4_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq4_Op is equal to "BC_STORE_LIST";
+                    FlowSeq4_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq4_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq4_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq4_Op is equal to "BC_LOADVAR";
+                        FlowSeq4_ArgPos = FlowPos + 1;
+                        FlowSeq4_PrintPos = FlowPos + 2;
+                        If FlowSeq4_PrintPos is greater than or equal to FlowLength or FlowSeq4_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq4_ArgPos;
+                            FlowSeq4_Name = @_;
+                            Get RawTokens FlowSeq4_PrintPos;
+                            If FlowSeq4_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq4_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq4_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence5 1;
+                                FlowSeq4_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq4_Stop = @_;
+                                If FlowSeq4_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq4_Entry;
+                                    Call FlowSequence5 2;
+                                    FlowSeq4_Else = FlowFresh;
+                                Else;
+                                    FlowSeq4_Else = FlowSeq4_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq4_Then, FlowSeq4_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq4_Op is equal to "BC_ELSE_BEGIN" or FlowSeq4_Op is equal to "BC_IF_END" or FlowSeq4_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq4_Op is equal to "BC_REPEAT_END" or FlowSeq4_Op is equal to "BC_WHILE_BEGIN" or FlowSeq4_Op is equal to "BC_WHILE_TEST" or FlowSeq4_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence5 FlowSeq5_Mode;
+    FlowSeq5_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq5_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq5_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq5_Op is not equal to "BC_STORE_LIST" and FlowSeq5_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq5_IsStop = 0;
+        If FlowSeq5_Mode is equal to 1 and FlowSeq5_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq5_IsStop = 1;
+        Done.
+        If FlowSeq5_Op is equal to "BC_IF_END" and FlowSeq5_Mode is not equal to 3;
+            FlowSeq5_IsStop = 1;
+        Done.
+        If FlowSeq5_Mode is equal to 3 and FlowSeq5_Op is equal to "BC_REPEAT_END";
+            FlowSeq5_IsStop = 1;
+        Done.
+        If FlowSeq5_IsStop is equal to 1;
+            FlowSeq5_Running = 0;
+        Else;
+            If FlowSeq5_Op is equal to "BC_CONST";
+                FlowSeq5_ArgPos = FlowPos + 1;
+                If FlowSeq5_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq5_ArgPos;
+                    FlowSeq5_Value = @_;
+                    Call FlowLiteral FlowSeq5_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq5_Op is equal to "BC_STORE_LIST";
+                    FlowSeq5_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq5_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq5_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq5_Op is equal to "BC_LOADVAR";
+                        FlowSeq5_ArgPos = FlowPos + 1;
+                        FlowSeq5_PrintPos = FlowPos + 2;
+                        If FlowSeq5_PrintPos is greater than or equal to FlowLength or FlowSeq5_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq5_ArgPos;
+                            FlowSeq5_Name = @_;
+                            Get RawTokens FlowSeq5_PrintPos;
+                            If FlowSeq5_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq5_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq5_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence6 1;
+                                FlowSeq5_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq5_Stop = @_;
+                                If FlowSeq5_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq5_Entry;
+                                    Call FlowSequence6 2;
+                                    FlowSeq5_Else = FlowFresh;
+                                Else;
+                                    FlowSeq5_Else = FlowSeq5_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq5_Then, FlowSeq5_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq5_Op is equal to "BC_ELSE_BEGIN" or FlowSeq5_Op is equal to "BC_IF_END" or FlowSeq5_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq5_Op is equal to "BC_REPEAT_END" or FlowSeq5_Op is equal to "BC_WHILE_BEGIN" or FlowSeq5_Op is equal to "BC_WHILE_TEST" or FlowSeq5_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence6 FlowSeq6_Mode;
+    FlowSeq6_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq6_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq6_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq6_Op is not equal to "BC_STORE_LIST" and FlowSeq6_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq6_IsStop = 0;
+        If FlowSeq6_Mode is equal to 1 and FlowSeq6_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq6_IsStop = 1;
+        Done.
+        If FlowSeq6_Op is equal to "BC_IF_END" and FlowSeq6_Mode is not equal to 3;
+            FlowSeq6_IsStop = 1;
+        Done.
+        If FlowSeq6_Mode is equal to 3 and FlowSeq6_Op is equal to "BC_REPEAT_END";
+            FlowSeq6_IsStop = 1;
+        Done.
+        If FlowSeq6_IsStop is equal to 1;
+            FlowSeq6_Running = 0;
+        Else;
+            If FlowSeq6_Op is equal to "BC_CONST";
+                FlowSeq6_ArgPos = FlowPos + 1;
+                If FlowSeq6_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq6_ArgPos;
+                    FlowSeq6_Value = @_;
+                    Call FlowLiteral FlowSeq6_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq6_Op is equal to "BC_STORE_LIST";
+                    FlowSeq6_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq6_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq6_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq6_Op is equal to "BC_LOADVAR";
+                        FlowSeq6_ArgPos = FlowPos + 1;
+                        FlowSeq6_PrintPos = FlowPos + 2;
+                        If FlowSeq6_PrintPos is greater than or equal to FlowLength or FlowSeq6_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq6_ArgPos;
+                            FlowSeq6_Name = @_;
+                            Get RawTokens FlowSeq6_PrintPos;
+                            If FlowSeq6_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq6_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq6_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence7 1;
+                                FlowSeq6_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq6_Stop = @_;
+                                If FlowSeq6_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq6_Entry;
+                                    Call FlowSequence7 2;
+                                    FlowSeq6_Else = FlowFresh;
+                                Else;
+                                    FlowSeq6_Else = FlowSeq6_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq6_Then, FlowSeq6_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq6_Op is equal to "BC_ELSE_BEGIN" or FlowSeq6_Op is equal to "BC_IF_END" or FlowSeq6_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq6_Op is equal to "BC_REPEAT_END" or FlowSeq6_Op is equal to "BC_WHILE_BEGIN" or FlowSeq6_Op is equal to "BC_WHILE_TEST" or FlowSeq6_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence7 FlowSeq7_Mode;
+    FlowSeq7_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq7_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq7_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq7_Op is not equal to "BC_STORE_LIST" and FlowSeq7_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq7_IsStop = 0;
+        If FlowSeq7_Mode is equal to 1 and FlowSeq7_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq7_IsStop = 1;
+        Done.
+        If FlowSeq7_Op is equal to "BC_IF_END" and FlowSeq7_Mode is not equal to 3;
+            FlowSeq7_IsStop = 1;
+        Done.
+        If FlowSeq7_Mode is equal to 3 and FlowSeq7_Op is equal to "BC_REPEAT_END";
+            FlowSeq7_IsStop = 1;
+        Done.
+        If FlowSeq7_IsStop is equal to 1;
+            FlowSeq7_Running = 0;
+        Else;
+            If FlowSeq7_Op is equal to "BC_CONST";
+                FlowSeq7_ArgPos = FlowPos + 1;
+                If FlowSeq7_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq7_ArgPos;
+                    FlowSeq7_Value = @_;
+                    Call FlowLiteral FlowSeq7_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq7_Op is equal to "BC_STORE_LIST";
+                    FlowSeq7_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq7_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq7_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq7_Op is equal to "BC_LOADVAR";
+                        FlowSeq7_ArgPos = FlowPos + 1;
+                        FlowSeq7_PrintPos = FlowPos + 2;
+                        If FlowSeq7_PrintPos is greater than or equal to FlowLength or FlowSeq7_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq7_ArgPos;
+                            FlowSeq7_Name = @_;
+                            Get RawTokens FlowSeq7_PrintPos;
+                            If FlowSeq7_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq7_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq7_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence8 1;
+                                FlowSeq7_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq7_Stop = @_;
+                                If FlowSeq7_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq7_Entry;
+                                    Call FlowSequence8 2;
+                                    FlowSeq7_Else = FlowFresh;
+                                Else;
+                                    FlowSeq7_Else = FlowSeq7_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq7_Then, FlowSeq7_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq7_Op is equal to "BC_ELSE_BEGIN" or FlowSeq7_Op is equal to "BC_IF_END" or FlowSeq7_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq7_Op is equal to "BC_REPEAT_END" or FlowSeq7_Op is equal to "BC_WHILE_BEGIN" or FlowSeq7_Op is equal to "BC_WHILE_TEST" or FlowSeq7_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence8 FlowSeq8_Mode;
+    FlowSeq8_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq8_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq8_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq8_Op is not equal to "BC_STORE_LIST" and FlowSeq8_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq8_IsStop = 0;
+        If FlowSeq8_Mode is equal to 1 and FlowSeq8_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq8_IsStop = 1;
+        Done.
+        If FlowSeq8_Op is equal to "BC_IF_END" and FlowSeq8_Mode is not equal to 3;
+            FlowSeq8_IsStop = 1;
+        Done.
+        If FlowSeq8_Mode is equal to 3 and FlowSeq8_Op is equal to "BC_REPEAT_END";
+            FlowSeq8_IsStop = 1;
+        Done.
+        If FlowSeq8_IsStop is equal to 1;
+            FlowSeq8_Running = 0;
+        Else;
+            If FlowSeq8_Op is equal to "BC_CONST";
+                FlowSeq8_ArgPos = FlowPos + 1;
+                If FlowSeq8_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq8_ArgPos;
+                    FlowSeq8_Value = @_;
+                    Call FlowLiteral FlowSeq8_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq8_Op is equal to "BC_STORE_LIST";
+                    FlowSeq8_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq8_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq8_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq8_Op is equal to "BC_LOADVAR";
+                        FlowSeq8_ArgPos = FlowPos + 1;
+                        FlowSeq8_PrintPos = FlowPos + 2;
+                        If FlowSeq8_PrintPos is greater than or equal to FlowLength or FlowSeq8_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq8_ArgPos;
+                            FlowSeq8_Name = @_;
+                            Get RawTokens FlowSeq8_PrintPos;
+                            If FlowSeq8_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq8_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq8_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence9 1;
+                                FlowSeq8_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq8_Stop = @_;
+                                If FlowSeq8_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq8_Entry;
+                                    Call FlowSequence9 2;
+                                    FlowSeq8_Else = FlowFresh;
+                                Else;
+                                    FlowSeq8_Else = FlowSeq8_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq8_Then, FlowSeq8_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq8_Op is equal to "BC_ELSE_BEGIN" or FlowSeq8_Op is equal to "BC_IF_END" or FlowSeq8_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq8_Op is equal to "BC_REPEAT_END" or FlowSeq8_Op is equal to "BC_WHILE_BEGIN" or FlowSeq8_Op is equal to "BC_WHILE_TEST" or FlowSeq8_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence9 FlowSeq9_Mode;
+    FlowSeq9_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq9_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq9_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq9_Op is not equal to "BC_STORE_LIST" and FlowSeq9_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq9_IsStop = 0;
+        If FlowSeq9_Mode is equal to 1 and FlowSeq9_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq9_IsStop = 1;
+        Done.
+        If FlowSeq9_Op is equal to "BC_IF_END" and FlowSeq9_Mode is not equal to 3;
+            FlowSeq9_IsStop = 1;
+        Done.
+        If FlowSeq9_Mode is equal to 3 and FlowSeq9_Op is equal to "BC_REPEAT_END";
+            FlowSeq9_IsStop = 1;
+        Done.
+        If FlowSeq9_IsStop is equal to 1;
+            FlowSeq9_Running = 0;
+        Else;
+            If FlowSeq9_Op is equal to "BC_CONST";
+                FlowSeq9_ArgPos = FlowPos + 1;
+                If FlowSeq9_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq9_ArgPos;
+                    FlowSeq9_Value = @_;
+                    Call FlowLiteral FlowSeq9_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq9_Op is equal to "BC_STORE_LIST";
+                    FlowSeq9_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq9_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq9_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq9_Op is equal to "BC_LOADVAR";
+                        FlowSeq9_ArgPos = FlowPos + 1;
+                        FlowSeq9_PrintPos = FlowPos + 2;
+                        If FlowSeq9_PrintPos is greater than or equal to FlowLength or FlowSeq9_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq9_ArgPos;
+                            FlowSeq9_Name = @_;
+                            Get RawTokens FlowSeq9_PrintPos;
+                            If FlowSeq9_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq9_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq9_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence10 1;
+                                FlowSeq9_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq9_Stop = @_;
+                                If FlowSeq9_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq9_Entry;
+                                    Call FlowSequence10 2;
+                                    FlowSeq9_Else = FlowFresh;
+                                Else;
+                                    FlowSeq9_Else = FlowSeq9_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq9_Then, FlowSeq9_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq9_Op is equal to "BC_ELSE_BEGIN" or FlowSeq9_Op is equal to "BC_IF_END" or FlowSeq9_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq9_Op is equal to "BC_REPEAT_END" or FlowSeq9_Op is equal to "BC_WHILE_BEGIN" or FlowSeq9_Op is equal to "BC_WHILE_TEST" or FlowSeq9_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence10 FlowSeq10_Mode;
+    FlowSeq10_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq10_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq10_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq10_Op is not equal to "BC_STORE_LIST" and FlowSeq10_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq10_IsStop = 0;
+        If FlowSeq10_Mode is equal to 1 and FlowSeq10_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq10_IsStop = 1;
+        Done.
+        If FlowSeq10_Op is equal to "BC_IF_END" and FlowSeq10_Mode is not equal to 3;
+            FlowSeq10_IsStop = 1;
+        Done.
+        If FlowSeq10_Mode is equal to 3 and FlowSeq10_Op is equal to "BC_REPEAT_END";
+            FlowSeq10_IsStop = 1;
+        Done.
+        If FlowSeq10_IsStop is equal to 1;
+            FlowSeq10_Running = 0;
+        Else;
+            If FlowSeq10_Op is equal to "BC_CONST";
+                FlowSeq10_ArgPos = FlowPos + 1;
+                If FlowSeq10_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq10_ArgPos;
+                    FlowSeq10_Value = @_;
+                    Call FlowLiteral FlowSeq10_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq10_Op is equal to "BC_STORE_LIST";
+                    FlowSeq10_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq10_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq10_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq10_Op is equal to "BC_LOADVAR";
+                        FlowSeq10_ArgPos = FlowPos + 1;
+                        FlowSeq10_PrintPos = FlowPos + 2;
+                        If FlowSeq10_PrintPos is greater than or equal to FlowLength or FlowSeq10_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq10_ArgPos;
+                            FlowSeq10_Name = @_;
+                            Get RawTokens FlowSeq10_PrintPos;
+                            If FlowSeq10_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq10_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq10_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence11 1;
+                                FlowSeq10_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq10_Stop = @_;
+                                If FlowSeq10_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq10_Entry;
+                                    Call FlowSequence11 2;
+                                    FlowSeq10_Else = FlowFresh;
+                                Else;
+                                    FlowSeq10_Else = FlowSeq10_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq10_Then, FlowSeq10_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq10_Op is equal to "BC_ELSE_BEGIN" or FlowSeq10_Op is equal to "BC_IF_END" or FlowSeq10_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq10_Op is equal to "BC_REPEAT_END" or FlowSeq10_Op is equal to "BC_WHILE_BEGIN" or FlowSeq10_Op is equal to "BC_WHILE_TEST" or FlowSeq10_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence11 FlowSeq11_Mode;
+    FlowSeq11_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq11_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq11_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq11_Op is not equal to "BC_STORE_LIST" and FlowSeq11_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq11_IsStop = 0;
+        If FlowSeq11_Mode is equal to 1 and FlowSeq11_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq11_IsStop = 1;
+        Done.
+        If FlowSeq11_Op is equal to "BC_IF_END" and FlowSeq11_Mode is not equal to 3;
+            FlowSeq11_IsStop = 1;
+        Done.
+        If FlowSeq11_Mode is equal to 3 and FlowSeq11_Op is equal to "BC_REPEAT_END";
+            FlowSeq11_IsStop = 1;
+        Done.
+        If FlowSeq11_IsStop is equal to 1;
+            FlowSeq11_Running = 0;
+        Else;
+            If FlowSeq11_Op is equal to "BC_CONST";
+                FlowSeq11_ArgPos = FlowPos + 1;
+                If FlowSeq11_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq11_ArgPos;
+                    FlowSeq11_Value = @_;
+                    Call FlowLiteral FlowSeq11_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq11_Op is equal to "BC_STORE_LIST";
+                    FlowSeq11_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq11_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq11_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq11_Op is equal to "BC_LOADVAR";
+                        FlowSeq11_ArgPos = FlowPos + 1;
+                        FlowSeq11_PrintPos = FlowPos + 2;
+                        If FlowSeq11_PrintPos is greater than or equal to FlowLength or FlowSeq11_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq11_ArgPos;
+                            FlowSeq11_Name = @_;
+                            Get RawTokens FlowSeq11_PrintPos;
+                            If FlowSeq11_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq11_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq11_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence12 1;
+                                FlowSeq11_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq11_Stop = @_;
+                                If FlowSeq11_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq11_Entry;
+                                    Call FlowSequence12 2;
+                                    FlowSeq11_Else = FlowFresh;
+                                Else;
+                                    FlowSeq11_Else = FlowSeq11_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq11_Then, FlowSeq11_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq11_Op is equal to "BC_ELSE_BEGIN" or FlowSeq11_Op is equal to "BC_IF_END" or FlowSeq11_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq11_Op is equal to "BC_REPEAT_END" or FlowSeq11_Op is equal to "BC_WHILE_BEGIN" or FlowSeq11_Op is equal to "BC_WHILE_TEST" or FlowSeq11_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence12 FlowSeq12_Mode;
+    FlowSeq12_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq12_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq12_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq12_Op is not equal to "BC_STORE_LIST" and FlowSeq12_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq12_IsStop = 0;
+        If FlowSeq12_Mode is equal to 1 and FlowSeq12_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq12_IsStop = 1;
+        Done.
+        If FlowSeq12_Op is equal to "BC_IF_END" and FlowSeq12_Mode is not equal to 3;
+            FlowSeq12_IsStop = 1;
+        Done.
+        If FlowSeq12_Mode is equal to 3 and FlowSeq12_Op is equal to "BC_REPEAT_END";
+            FlowSeq12_IsStop = 1;
+        Done.
+        If FlowSeq12_IsStop is equal to 1;
+            FlowSeq12_Running = 0;
+        Else;
+            If FlowSeq12_Op is equal to "BC_CONST";
+                FlowSeq12_ArgPos = FlowPos + 1;
+                If FlowSeq12_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq12_ArgPos;
+                    FlowSeq12_Value = @_;
+                    Call FlowLiteral FlowSeq12_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq12_Op is equal to "BC_STORE_LIST";
+                    FlowSeq12_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq12_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq12_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq12_Op is equal to "BC_LOADVAR";
+                        FlowSeq12_ArgPos = FlowPos + 1;
+                        FlowSeq12_PrintPos = FlowPos + 2;
+                        If FlowSeq12_PrintPos is greater than or equal to FlowLength or FlowSeq12_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq12_ArgPos;
+                            FlowSeq12_Name = @_;
+                            Get RawTokens FlowSeq12_PrintPos;
+                            If FlowSeq12_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq12_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq12_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence13 1;
+                                FlowSeq12_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq12_Stop = @_;
+                                If FlowSeq12_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq12_Entry;
+                                    Call FlowSequence13 2;
+                                    FlowSeq12_Else = FlowFresh;
+                                Else;
+                                    FlowSeq12_Else = FlowSeq12_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq12_Then, FlowSeq12_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq12_Op is equal to "BC_ELSE_BEGIN" or FlowSeq12_Op is equal to "BC_IF_END" or FlowSeq12_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq12_Op is equal to "BC_REPEAT_END" or FlowSeq12_Op is equal to "BC_WHILE_BEGIN" or FlowSeq12_Op is equal to "BC_WHILE_TEST" or FlowSeq12_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence13 FlowSeq13_Mode;
+    FlowSeq13_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq13_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq13_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq13_Op is not equal to "BC_STORE_LIST" and FlowSeq13_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq13_IsStop = 0;
+        If FlowSeq13_Mode is equal to 1 and FlowSeq13_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq13_IsStop = 1;
+        Done.
+        If FlowSeq13_Op is equal to "BC_IF_END" and FlowSeq13_Mode is not equal to 3;
+            FlowSeq13_IsStop = 1;
+        Done.
+        If FlowSeq13_Mode is equal to 3 and FlowSeq13_Op is equal to "BC_REPEAT_END";
+            FlowSeq13_IsStop = 1;
+        Done.
+        If FlowSeq13_IsStop is equal to 1;
+            FlowSeq13_Running = 0;
+        Else;
+            If FlowSeq13_Op is equal to "BC_CONST";
+                FlowSeq13_ArgPos = FlowPos + 1;
+                If FlowSeq13_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq13_ArgPos;
+                    FlowSeq13_Value = @_;
+                    Call FlowLiteral FlowSeq13_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq13_Op is equal to "BC_STORE_LIST";
+                    FlowSeq13_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq13_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq13_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq13_Op is equal to "BC_LOADVAR";
+                        FlowSeq13_ArgPos = FlowPos + 1;
+                        FlowSeq13_PrintPos = FlowPos + 2;
+                        If FlowSeq13_PrintPos is greater than or equal to FlowLength or FlowSeq13_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq13_ArgPos;
+                            FlowSeq13_Name = @_;
+                            Get RawTokens FlowSeq13_PrintPos;
+                            If FlowSeq13_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq13_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq13_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence14 1;
+                                FlowSeq13_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq13_Stop = @_;
+                                If FlowSeq13_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq13_Entry;
+                                    Call FlowSequence14 2;
+                                    FlowSeq13_Else = FlowFresh;
+                                Else;
+                                    FlowSeq13_Else = FlowSeq13_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq13_Then, FlowSeq13_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq13_Op is equal to "BC_ELSE_BEGIN" or FlowSeq13_Op is equal to "BC_IF_END" or FlowSeq13_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq13_Op is equal to "BC_REPEAT_END" or FlowSeq13_Op is equal to "BC_WHILE_BEGIN" or FlowSeq13_Op is equal to "BC_WHILE_TEST" or FlowSeq13_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence14 FlowSeq14_Mode;
+    FlowSeq14_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq14_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq14_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq14_Op is not equal to "BC_STORE_LIST" and FlowSeq14_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq14_IsStop = 0;
+        If FlowSeq14_Mode is equal to 1 and FlowSeq14_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq14_IsStop = 1;
+        Done.
+        If FlowSeq14_Op is equal to "BC_IF_END" and FlowSeq14_Mode is not equal to 3;
+            FlowSeq14_IsStop = 1;
+        Done.
+        If FlowSeq14_Mode is equal to 3 and FlowSeq14_Op is equal to "BC_REPEAT_END";
+            FlowSeq14_IsStop = 1;
+        Done.
+        If FlowSeq14_IsStop is equal to 1;
+            FlowSeq14_Running = 0;
+        Else;
+            If FlowSeq14_Op is equal to "BC_CONST";
+                FlowSeq14_ArgPos = FlowPos + 1;
+                If FlowSeq14_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq14_ArgPos;
+                    FlowSeq14_Value = @_;
+                    Call FlowLiteral FlowSeq14_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq14_Op is equal to "BC_STORE_LIST";
+                    FlowSeq14_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq14_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq14_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq14_Op is equal to "BC_LOADVAR";
+                        FlowSeq14_ArgPos = FlowPos + 1;
+                        FlowSeq14_PrintPos = FlowPos + 2;
+                        If FlowSeq14_PrintPos is greater than or equal to FlowLength or FlowSeq14_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq14_ArgPos;
+                            FlowSeq14_Name = @_;
+                            Get RawTokens FlowSeq14_PrintPos;
+                            If FlowSeq14_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq14_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq14_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence15 1;
+                                FlowSeq14_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq14_Stop = @_;
+                                If FlowSeq14_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq14_Entry;
+                                    Call FlowSequence15 2;
+                                    FlowSeq14_Else = FlowFresh;
+                                Else;
+                                    FlowSeq14_Else = FlowSeq14_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq14_Then, FlowSeq14_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq14_Op is equal to "BC_ELSE_BEGIN" or FlowSeq14_Op is equal to "BC_IF_END" or FlowSeq14_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq14_Op is equal to "BC_REPEAT_END" or FlowSeq14_Op is equal to "BC_WHILE_BEGIN" or FlowSeq14_Op is equal to "BC_WHILE_TEST" or FlowSeq14_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence15 FlowSeq15_Mode;
+    FlowSeq15_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq15_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq15_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq15_Op is not equal to "BC_STORE_LIST" and FlowSeq15_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq15_IsStop = 0;
+        If FlowSeq15_Mode is equal to 1 and FlowSeq15_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq15_IsStop = 1;
+        Done.
+        If FlowSeq15_Op is equal to "BC_IF_END" and FlowSeq15_Mode is not equal to 3;
+            FlowSeq15_IsStop = 1;
+        Done.
+        If FlowSeq15_Mode is equal to 3 and FlowSeq15_Op is equal to "BC_REPEAT_END";
+            FlowSeq15_IsStop = 1;
+        Done.
+        If FlowSeq15_IsStop is equal to 1;
+            FlowSeq15_Running = 0;
+        Else;
+            If FlowSeq15_Op is equal to "BC_CONST";
+                FlowSeq15_ArgPos = FlowPos + 1;
+                If FlowSeq15_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq15_ArgPos;
+                    FlowSeq15_Value = @_;
+                    Call FlowLiteral FlowSeq15_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq15_Op is equal to "BC_STORE_LIST";
+                    FlowSeq15_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq15_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq15_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq15_Op is equal to "BC_LOADVAR";
+                        FlowSeq15_ArgPos = FlowPos + 1;
+                        FlowSeq15_PrintPos = FlowPos + 2;
+                        If FlowSeq15_PrintPos is greater than or equal to FlowLength or FlowSeq15_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq15_ArgPos;
+                            FlowSeq15_Name = @_;
+                            Get RawTokens FlowSeq15_PrintPos;
+                            If FlowSeq15_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq15_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq15_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                Call FlowSequence16 1;
+                                FlowSeq15_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq15_Stop = @_;
+                                If FlowSeq15_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq15_Entry;
+                                    Call FlowSequence16 2;
+                                    FlowSeq15_Else = FlowFresh;
+                                Else;
+                                    FlowSeq15_Else = FlowSeq15_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq15_Then, FlowSeq15_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq15_Op is equal to "BC_ELSE_BEGIN" or FlowSeq15_Op is equal to "BC_IF_END" or FlowSeq15_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq15_Op is equal to "BC_REPEAT_END" or FlowSeq15_Op is equal to "BC_WHILE_BEGIN" or FlowSeq15_Op is equal to "BC_WHILE_TEST" or FlowSeq15_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+
+Action FlowSequence16 FlowSeq16_Mode;
+    FlowSeq16_Running = 1;
+    While FlowPos is less than FlowLength and FlowBad is equal to 0 and FlowSeq16_Running is equal to 1;
+        Call FlowPeek;
+        FlowSeq16_Op = @_;
+        # A literal must be consumed immediately by its store or condition.
+        If FlowPending is not equal to 0 and FlowSeq16_Op is not equal to "BC_STORE_LIST" and FlowSeq16_Op is not equal to "BC_IF_BEGIN";
+            FlowBad = 1;
+        Done.
+        FlowSeq16_IsStop = 0;
+        If FlowSeq16_Mode is equal to 1 and FlowSeq16_Op is equal to "BC_ELSE_BEGIN";
+            FlowSeq16_IsStop = 1;
+        Done.
+        If FlowSeq16_Op is equal to "BC_IF_END" and FlowSeq16_Mode is not equal to 3;
+            FlowSeq16_IsStop = 1;
+        Done.
+        If FlowSeq16_Mode is equal to 3 and FlowSeq16_Op is equal to "BC_REPEAT_END";
+            FlowSeq16_IsStop = 1;
+        Done.
+        If FlowSeq16_IsStop is equal to 1;
+            FlowSeq16_Running = 0;
+        Else;
+            If FlowSeq16_Op is equal to "BC_CONST";
+                FlowSeq16_ArgPos = FlowPos + 1;
+                If FlowSeq16_ArgPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowSeq16_ArgPos;
+                    FlowSeq16_Value = @_;
+                    Call FlowLiteral FlowSeq16_Value;
+                    FlowPending = @_;
+                    FlowPos = FlowPos + 2;
+                Done.
+            Else;
+                If FlowSeq16_Op is equal to "BC_STORE_LIST";
+                    FlowSeq16_ArgPos = FlowPos + 1;
+                    If FlowPending is equal to 0 or FlowSeq16_ArgPos is greater than or equal to FlowLength;
+                        FlowBad = 1;
+                    Else;
+                        Get RawTokens FlowSeq16_ArgPos;
+                        If @_ is not equal to "Fresh";
+                            FlowBad = 1;
+                        Else;
+                            FlowFresh = FlowPending;
+                            FlowPending = 0;
+                            FlowPos = FlowPos + 2;
+                        Done.
+                    Done.
+                Else;
+                    If FlowSeq16_Op is equal to "BC_LOADVAR";
+                        FlowSeq16_ArgPos = FlowPos + 1;
+                        FlowSeq16_PrintPos = FlowPos + 2;
+                        If FlowSeq16_PrintPos is greater than or equal to FlowLength or FlowSeq16_ArgPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Get RawTokens FlowSeq16_ArgPos;
+                            FlowSeq16_Name = @_;
+                            Get RawTokens FlowSeq16_PrintPos;
+                            If FlowSeq16_Name is not equal to "Fresh" or @_ is not equal to "BC_PRINT";
+                                FlowBad = 1;
+                            Else;
+                                If FlowEmit is equal to 1;
+                                    If FlowTrip is equal to 0;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "E".
+                                        Print FlowFresh.
+                                    Else;
+                                        Print "USE".
+                                        Print FlowPos.
+                                        Print "B".
+                                        Print FlowFresh.
+                                    Done.
+                                    If FlowFresh is not equal to 4;
+                                        FlowDecision = 0;
+                                    Done.
+                                Done.
+                                FlowPos = FlowPos + 3;
+                            Done.
+                        Done.
+                    Else;
+                        If FlowSeq16_Op is equal to "BC_IF_BEGIN";
+                            Add 1 to FlowDepth;
+                            If FlowDepth is greater than 16 or FlowPending is equal to 0;
+                                FlowBad = 1;
+                                Add -1 to FlowDepth;
+                            Else;
+                                FlowPending = 0;
+                                FlowSeq16_Entry = FlowFresh;
+                                FlowPos = FlowPos + 1;
+                                FlowBad = 1;
+                                FlowSeq16_Then = FlowFresh;
+                                Call FlowPeek;
+                                FlowSeq16_Stop = @_;
+                                If FlowSeq16_Stop is equal to "BC_ELSE_BEGIN";
+                                    FlowPos = FlowPos + 1;
+                                    FlowFresh = FlowSeq16_Entry;
+                                    FlowBad = 1;
+                                    FlowSeq16_Else = FlowFresh;
+                                Else;
+                                    FlowSeq16_Else = FlowSeq16_Entry;
+                                Done.
+                                Call FlowPeek;
+                                If @_ is not equal to "BC_IF_END";
+                                    FlowBad = 1;
+                                Else;
+                                    Call FlowJoin FlowSeq16_Then, FlowSeq16_Else;
+                                    FlowFresh = @_;
+                                    FlowPos = FlowPos + 1;
+                                Done.
+                                Add -1 to FlowDepth;
+                            Done.
+                        Else;
+                            If FlowSeq16_Op is equal to "BC_ELSE_BEGIN" or FlowSeq16_Op is equal to "BC_IF_END" or FlowSeq16_Op is equal to "BC_REPEAT_BEGIN" or FlowSeq16_Op is equal to "BC_REPEAT_END" or FlowSeq16_Op is equal to "BC_WHILE_BEGIN" or FlowSeq16_Op is equal to "BC_WHILE_TEST" or FlowSeq16_Op is equal to "BC_WHILE_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowBad = 1;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    If FlowPending is not equal to 0;
+        FlowBad = 1;
+    Done.
+Done.
+
+# Validate and then execute; no Python-provided CFG, identities, or facts.
+Action FlowAnalyze;
+    FlowBad = 0;
+    FlowPos = 0;
+    FlowFresh = 1;
+    FlowPending = 0;
+    FlowEmit = 0;
+    If FlowLength is greater than 128;
+        FlowBad = 1;
+    Done.
+    # A leading literal is an initializer only when followed by STORE_LIST.
+    If FlowBad is equal to 0 and FlowLength is greater than 3;
+        Get RawTokens 0;
+        If @_ is equal to "BC_CONST";
+            Get RawTokens 2;
+            If @_ is equal to "BC_STORE_LIST";
+                Get RawTokens 1;
+                FlowInitialValue = @_;
+                Call FlowLiteral FlowInitialValue;
+                FlowInitialKind = @_;
+                If FlowInitialKind is equal to 0;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens 3;
+                    If @_ is not equal to "Fresh";
+                        FlowBad = 1;
+                    Else;
+                        FlowPos = 4;
+                    Done.
+                Done.
+            Done.
+        Done.
+    Done.
+    # A single literal-count outer Repeat is required.
+    If FlowBad is equal to 0 and FlowPos is less than FlowLength;
+        Call FlowPeek;
+        If @_ is not equal to "BC_CONST";
+            FlowBad = 1;
+        Else;
+            FlowCountPos = FlowPos + 1;
+            If FlowCountPos is greater than or equal to FlowLength;
+                FlowBad = 1;
+            Else;
+                Get RawTokens FlowCountPos;
+                FlowCountText = @_;
+                If FlowCountText is equal to "0";
+                    FlowCount = 0;
+                Else;
+                    If FlowCountText is equal to "1";
+                        FlowCount = 1;
+                    Else;
+                        If FlowCountText is equal to "2" or FlowCountText is equal to "3" or FlowCountText is equal to "4" or FlowCountText is equal to "5" or FlowCountText is equal to "6" or FlowCountText is equal to "7" or FlowCountText is equal to "8" or FlowCountText is equal to "9";
+                            # Literal overwrites + conservative branches give either
+                            # F(S)=C or F(S)=S union C, so F(F(S))=F(S).
+                            # Every later trip therefore has the same incoming state
+                            # as trip 2. This is finite-trip evidence, not a general
+                            # CFG/header fixed point or a widening rule.
+                            FlowCount = 2;
+                        Else;
+                            FlowBad = 1;
+                        Done.
+                    Done.
+                Done.
+                FlowBeginPos = FlowPos + 2;
+                If FlowBeginPos is greater than or equal to FlowLength;
+                    FlowBad = 1;
+                Else;
+                    Get RawTokens FlowBeginPos;
+                    If @_ is not equal to "BC_REPEAT_BEGIN";
+                        FlowBad = 1;
+                    Else;
+                        FlowPos = FlowBeginPos + 1;
+                        # Dry structural pass: body syntax and full input consumption.
+                        FlowFresh = 1;
+                        FlowPending = 0;
+                        FlowDepth = 0;
+                        Call FlowSequence0 3;
+                        If FlowPos is greater than or equal to FlowLength;
+                            FlowBad = 1;
+                        Else;
+                            Call FlowPeek;
+                            If @_ is not equal to "BC_REPEAT_END";
+                                FlowBad = 1;
+                            Else;
+                                FlowPos = FlowPos + 1;
+                                If FlowPos is not equal to FlowLength;
+                                    FlowBad = 1;
+                                Done.
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+    Else;
+        FlowBad = 1;
+    Done.
+    If FlowBad is equal to 0;
+        # Re-evaluate with incoming slot state; every use gets an entry record
+        # on trip zero and backedge records on subsequent literal trips.
+        If FlowLength is greater than 3;
+            Get RawTokens 0;
+            If @_ is equal to "BC_CONST";
+                Get RawTokens 2;
+                If @_ is equal to "BC_STORE_LIST";
+                    FlowFresh = FlowInitialKind;
+                    FlowPos = 4;
+                Else;
+                    FlowFresh = 1;
+                    FlowPos = 0;
+                Done.
+            Else;
+                FlowFresh = 1;
+                FlowPos = 0;
+            Done.
+        Else;
+            FlowFresh = 1;
+            FlowPos = 0;
+        Done.
+        FlowPos = FlowPos + 2;
+        FlowPos = FlowPos + 1;
+        # position now points to first body token after count and REPEAT_BEGIN
+        FlowEmit = 1;
+        FlowDecision = 1;
+        FlowTrip = 0;
+        If FlowCount is equal to 0;
+            FlowScanPos = FlowBeginPos + 1;
+            While FlowScanPos is less than FlowLength;
+                Get RawTokens FlowScanPos;
+                If @_ is equal to "BC_LOADVAR";
+                    Print "USE".
+                    Print FlowScanPos.
+                    Print "E".
+                    Print "0".
+                    Print "USE".
+                    Print FlowScanPos.
+                    Print "B".
+                    Print "0".
+                Done.
+                Add 1 to FlowScanPos;
+            Done.
+        Else;
+            If FlowCount is equal to 1;
+                FlowScanPos = FlowBeginPos + 1;
+                While FlowScanPos is less than FlowLength;
+                    Get RawTokens FlowScanPos;
+                    If @_ is equal to "BC_LOADVAR";
+                        Print "USE".
+                        Print FlowScanPos.
+                        Print "B".
+                        Print "0".
+                    Done.
+                    Add 1 to FlowScanPos;
+                Done.
+            Done.
+            FlowTrip = 0;
+            Call FlowSequence0 3;
+            FlowTrip = 1;
+            FlowLoopBound = FlowCount;
+            While FlowTrip is less than FlowLoopBound and FlowBad is equal to 0;
+                FlowPos = FlowBeginPos + 1;
+                Call FlowSequence0 3;
+                Add 1 to FlowTrip;
+            Done.
+        Done.
+        If FlowDecision is equal to 1;
+            Print "DECISION".
+            Print "1".
+        Else;
+            Print "DECISION".
+            Print "0".
+        Done.
+    Else;
+        Print "REJECT".
+    Done.
+Done.
+
+Call FlowAnalyze;

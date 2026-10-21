@@ -6,6 +6,11 @@ Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 ## [Unreleased] — In-house implementation policy and Stage 8 foundation
 
 ### Added
+- Test-only Kuro-owned raw-token analysis derives per-read entry/backedge kinds
+  for one bounded literal Repeat with nested branches and a single literal-written
+  slot. Whole-stream validation, finite-trip witnesses and hosted native execution
+  do not widen production acceptance; see
+  `docs/engineering/native-bounded-loop-use-flow.md`.
 - Test-only Kuro-written streaming loop-read obligations preserve sticky failure
   independently of slot snapshots, check required entry/backedge coverage and
   fail closed on malformed call order or row overflow. Oracle differential and
