@@ -3084,6 +3084,7 @@ NativeIndexedIntegerValid = 0;
 NativeIndexedIntegerLength = 0;
 NativeIndexedIntegerIndex = 0;
 NativeIndexedNegative = 0;
+NativeIndexedExecutionTarget = "unverified";
 
 Action NativeIndexedFindCollection Name: Text;
     NativeIndexedSearch = 0;
@@ -3202,7 +3203,7 @@ Action EmitBoundedIntegerState;
         NativeIndexedScanPos = NativeIndexedScanPos + @_ + 1;
     Done.
     If NativeIndexedAttempted is equal to 1;
-        If NativeTarget is not equal to "x86_64-linux" or NativeIndexedScanLength is greater than 4096;
+        If NativeTarget is not equal to "x86_64-linux" or NativeIndexedExecutionTarget is not equal to "x86_64-linux" or NativeIndexedScanLength is greater than 4096;
             NativeIndexedValid = 0;
         Done.
         NativeIndexedCode = "";

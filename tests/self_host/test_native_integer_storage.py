@@ -313,11 +313,14 @@ def test_inherited_nested_subtraction_lowering_is_not_source_parity():
     assert vm['VMFailed'] == 0 and vm['VMOutput'] == [3]
 
 
-def test_actual_generator_integer_storage_cross_assembles_on_host(tmp_path, x86_linux_codegen):
-    # On Darwin the generator itself is a fresh Darwin native image, but the
-    # submitted program still targets Linux. Cross-assembly is not execution.
+def test_actual_generator_integer_storage_execution_host_boundary(tmp_path, x86_linux_codegen):
+    # A Linux output ABI does not qualify a Darwin-built generator. Unsupported
+    # execution hosts must reject before entry, never crash or emit partial code.
     source = 'Items = 11, 22;\nSet Items 0 to 99;\nGet Items -2;\nPrint @_.\n'
     generated = generate(x86_linux_codegen, compiler_tokens(source), tmp_path)
+    if not LINUX_X86:
+        assert (generated.returncode, generated.stdout, generated.stderr) == (1, '', '')
+        return
     assert (generated.returncode, generated.stderr) == (0, '')
     assert '.Lku_index_array_0:' in generated.stdout
     assert 'movq %rcx, (%rdx,%rax,8)' in generated.stdout
@@ -363,3 +366,16 @@ def test_actual_generator_normalization_preserves_each_decimal_digit(tmp_path, x
     assert all(runtime['stdout'] == expected for runtime in _logical_runtimes(source).values())
     result = execute(x86_linux_codegen, source, tmp_path)
     assert (result.returncode, result.stdout, result.stderr) == (0, expected, '')
+
+
+@pytest.mark.parametrize('output_target', ['aarch64-macos', 'x86_64-macos', 'x86_64-linux'])
+@pytest.mark.parametrize('execution_target', ['unverified', 'aarch64-macos', 'x86_64-macos', 'x86_64-linux'])
+def test_integer_storage_requires_qualified_execution_and_output_targets(output_target, execution_target):
+    from test_native_codegen import run_codegen
+    tokens = INITIALIZATION + ['BC_CONST', '0', 'BC_GET', 'Items', '1', 'BC_PRINT']
+    env = run_codegen(', '.join(json.dumps(t) for t in tokens), target=output_target,
+                      execution_target=execution_target)
+    if output_target == execution_target == 'x86_64-linux':
+        assert env['NativeFailed'] == 0 and '.quad 11, 22' in env['NativeOut']
+    else:
+        assert (env['NativeFailed'], env['NativeOut']) == (1, '')

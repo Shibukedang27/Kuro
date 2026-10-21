@@ -161,9 +161,13 @@ requires_macos_arm64 = pytest.mark.skipif(
 )
 
 
-def run_codegen(bytecode: str, target: str = "aarch64-macos"):
+def run_codegen(bytecode: str, target: str = "aarch64-macos", *, execution_target: str = "unverified"):
     codegen = CODEGEN.read_text(encoding="utf-8").replace(
         'NativeTarget = "aarch64-macos";', f'NativeTarget = "{target}";', 1
+    )
+    codegen = codegen.replace(
+        'NativeIndexedExecutionTarget = "unverified";',
+        f'NativeIndexedExecutionTarget = "{execution_target}";', 1,
     )
     stage = f'BytecodeOut = {bytecode};\n' + codegen
     result = run_source(stage)
@@ -2833,11 +2837,12 @@ def test_kuro_owned_generator_records_analyzer_execution_boundary(tmp_path, x86_
             "assembly_sha256": digest(generated.stdout.encode()),
         }
 
-    generator_source = native_codegen_source("x86_64-linux")
+    execution_target = "aarch64-macos" if MACOS_ARM64_HOST else "x86_64-linux"
+    generator_source = native_codegen_source("x86_64-linux", execution_target=execution_target)
     (tmp_path / "generator-source.kuro").write_text(generator_source, encoding="utf-8")
     manifest = {
         "compiler_path": "compile_with_kuro_driver: Kuro stages in hosted interpreter",
-        "generator_source": "artifact_loader.kuro + native_codegen.kuro; output=x86_64-linux",
+        "generator_source": f"artifact_loader.kuro + native_codegen.kuro; output=x86_64-linux; execution={execution_target}",
         "generator_source_sha256": digest(generator_source.encode()),
         "compiler_stages_sha256": {
             name: digest((ROOT / "self_host" / name).read_bytes())

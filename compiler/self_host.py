@@ -156,14 +156,22 @@ def build_native_artifact_launcher(output: str | Path, target: str | None = None
     return build_native(result.ir, output, target=target)
 
 
-def native_codegen_source(output_target: str = "aarch64-macos") -> str:
+def native_codegen_source(
+    output_target: str = "aarch64-macos", *, execution_target: str = "unverified",
+) -> str:
     """Compose the Kuro source for a target-specific native code generator."""
     loader = (ROOT / "self_host" / "artifact_loader.kuro").read_text(encoding="utf-8")
     codegen = (ROOT / "self_host" / "native_codegen.kuro").read_text(encoding="utf-8")
     if output_target not in {"aarch64-macos", "x86_64-macos", "x86_64-linux"}:
         raise SelfHostError(f"unsupported code-generation output target: {output_target}")
+    if execution_target not in {"unverified", "aarch64-macos", "x86_64-macos", "x86_64-linux"}:
+        raise SelfHostError(f"unsupported code-generation execution target: {execution_target}")
     codegen = codegen.replace(
         'NativeTarget = "aarch64-macos";', f'NativeTarget = "{output_target}";', 1
+    )
+    codegen = codegen.replace(
+        'NativeIndexedExecutionTarget = "unverified";',
+        f'NativeIndexedExecutionTarget = "{execution_target}";', 1,
     )
     return "\n".join((loader, codegen))
 
@@ -180,14 +188,21 @@ def build_native_codegen(
     """
     from .native import NATIVE_CODEGEN_TEXT_HEAP_CAPACITY, build_native
     from .pipeline import compile_source
+    import platform
 
-    result = compile_source(native_codegen_source(output_target))
+    # Match build_native's default once, and transport that same image ABI to
+    # Kuro's capability guard. Output ABI alone cannot prove a safe execution host.
+    selected = target or (
+        "aarch64-macos" if platform.system() == "Darwin" and platform.machine() == "arm64"
+        else "x86_64-linux"
+    )
+    result = compile_source(native_codegen_source(output_target, execution_target=selected))
     if not result.ok:
         raise SelfHostError(result.diags.render_all())
     return build_native(
         result.ir,
         output,
-        target=target,
+        target=selected,
         text_heap_capacity=NATIVE_CODEGEN_TEXT_HEAP_CAPACITY,
     )
 
