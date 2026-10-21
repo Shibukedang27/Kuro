@@ -6,6 +6,10 @@ Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 ## [Unreleased] — In-house implementation policy and Stage 8 foundation
 
 ### Added
+- Test-only per-use loop facts preserve separate entry/backedge evidence through
+  branches and later overwrites, with adversarial native-gate regressions and
+  independent finite branch-event checks. Production acceptance is unchanged;
+  see `docs/engineering/native-loop-per-use-evidence.md`.
 - Native codegen permits direct unconditional first Decimal stores in function-free
   top-level canonical literal `Repeat 2` through `Repeat 9`, using separate entered-loop
   provenance and monotone slot kinds to protect first-entry and backedge reads.
