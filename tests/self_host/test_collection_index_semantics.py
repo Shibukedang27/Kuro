@@ -130,11 +130,8 @@ def _frozen_oracle(source: str, indices: tuple[int, ...] = ()) -> dict:
 def _expected(operation: str, index: int, path: str, *, append: bool = False) -> tuple[str, bool]:
     """Return expected visible stdout and failure state for one observed path."""
     logical_length = 3 if append else 2
-    if path in {"host", "bytecode", "kuro_vm"}:
-        valid_get = -logical_length <= index < logical_length
-        valid_set = 0 <= index < logical_length
-    else:
-        valid_get = valid_set = 0 <= index < NATIVE_COLLECTION_CAPACITY
+    valid_get = -logical_length <= index < logical_length
+    valid_set = 0 <= index < logical_length
 
     valid = valid_get if operation == "get" else valid_set
     if not valid:
@@ -143,10 +140,7 @@ def _expected(operation: str, index: int, path: str, *, append: bool = False) ->
         return "", True
 
     if operation == "get":
-        if path == "native" and index >= logical_length:
-            value = 0  # Uninitialized capacity-backed storage is zero-filled.
-        else:
-            value = [11, 22, 33][:logical_length][index]
+        value = [11, 22, 33][:logical_length][index]
         return f"{value}\ncontinued\n", False
 
     items = [11, 22, 33][:logical_length]

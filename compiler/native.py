@@ -18,6 +18,95 @@ class NativeBackendError(ValueError):
     pass
 
 
+def _x86_collection_index_bounds(length_label: str, *, read: bool) -> list[str]:
+    """Check %rcx before scaled addressing; preserve value/base registers.
+
+    Length is maintained by bounded literal initialization and APPEND. Only GET
+    normalizes negative indices. The speculative sum for nonnegative indices is
+    discarded (including its flags), so signed overflow cannot admit an index.
+    """
+    lines = [f"    mov {length_label}(%rip), %r8"]
+    if read:
+        lines.extend([
+            "    mov %rcx, %r9", "    add %r8, %r9",
+            "    test %rcx, %rcx", "    cmovs %r9, %rcx",
+        ])
+    return lines + ["    cmp %r8, %rcx", "    jae .Lkuro_bounds"]
+
+
+def _untracked_collection_pointers(ir: IRProgram, buffers: set[str]) -> dict[str, set[str]]:
+    """Conservative rejection-only provenance, not collection lowering/type inference.
+
+    An alias, argument or return carries a pointer but no owner/length pair in
+    this ABI. Never let those known collection pointers enter byte-oriented Text
+    operations, even when a parameter shadows a static collection buffer.
+    """
+    bodies = {"": ir.main, **{name: fn.body for name, fn in ir.functions.items()}}
+    pointers = {name: set() for name in bodies}
+    # Variable targets, not spelling, distinguish cross-scope user aliases
+    # from per-body IR temporaries. Names such as target and __bag are legal.
+    variable_targets = {
+        scope: {
+            item.args[0] for item in body
+            if item.op in {"STORE_LIST", "UPDATE", "INPUT", "ADD", "APPEND"}
+        } - (set(ir.functions[scope].params) if scope else set())
+        for scope, body in bodies.items()
+    }
+
+    def global_aliases() -> set[str]:
+        # Actions can assign globals first seen outside main. Share all
+        # non-parameter variable aliases conservatively, never IR destinations
+        # identified only by their spelling. This scan grants no new support.
+        return set().union(*(pointers[scope] & targets for scope, targets in variable_targets.items()))
+    for name, fn in ir.functions.items():
+        pointers[name].update(
+            parameter for parameter in fn.params
+            if _native_kind_for_type(fn.parameter_types.get(parameter)) == "collection"
+        )
+    changed = True
+    while changed:
+        before = sum(map(len, pointers.values()))
+        for scope, body in bodies.items():
+            globals_ = global_aliases()
+            known = buffers | globals_ | pointers[scope]
+            for item in body:
+                source = target = None
+                if item.op in {"LOADVAR", "SAVEVAR"}:
+                    target, source = item.dest, item.args[0]
+                elif item.op == "STORE_LIST" and len(item.args[1]) == 1:
+                    target, source = item.args[0], item.args[1][0]
+                elif item.op in {"UPDATE", "RESTOREVAR"}:
+                    target, source = item.args
+                if source in known and target is not None:
+                    pointers[scope].add(target)
+                    known.add(target)
+                if item.op == "CALL" and item.args[0] in ir.functions:
+                    callee = ir.functions[item.args[0]]
+                    for parameter, argument in zip(callee.params, item.args[1:]):
+                        if argument in known:
+                            pointers[callee.name].add(parameter)
+                    if any(inner.op == "RETURN" and inner.args[0] in (buffers | globals_ | pointers[callee.name]) for inner in callee.body):
+                        pointers[scope].add(item.dest)
+                        known.add(item.dest)
+        changed = sum(map(len, pointers.values())) != before
+    shared_aliases = global_aliases()
+    return {scope: names | shared_aliases for scope, names in pointers.items()}
+
+
+def _arm64_collection_index_bounds(length_label: str, *, read: bool) -> list[str]:
+    """Check x1 against logical length before scaling, preserving x0/x2."""
+    lines = [
+        f"    adrp x3, {length_label}@PAGE",
+        f"    add x3, x3, {length_label}@PAGEOFF", "    ldr x3, [x3]",
+    ]
+    if read:
+        lines.extend([
+            "    cmp x1, #0", "    add x4, x1, x3",
+            "    csel x1, x4, x1, lt",
+        ])
+    return lines + ["    cmp x1, x3", "    b.hs L_kuro_collection_bounds"]
+
+
 def _x87_extended_power10_bytes(power: int) -> bytes:
     """Return the rounded x87 binary80 encoding of the positive integer 10**power."""
     if not 0 <= power <= 341:
@@ -213,6 +302,7 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
                 names.add(arg)
             if item.op in {"LOADVAR", "STORE_LIST", "UPDATE", "ADD", "APPEND", "SAVEVAR", "RESTOREVAR"}:
                 names.add(item.args[0])
+    untracked_collection_pointers = _untracked_collection_pointers(ir, collection_names)
     slots = {name: index * 8 for index, name in enumerate(sorted(names))}
     frame = ((len(slots) * 8 + 15) // 16) * 16 or 16
     lines = [
@@ -366,6 +456,8 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
 
     for item in instructions:
         op = item.op
+        if op in {"GET", "SET", "LENGTH", "APPEND"} and item.args[0] in untracked_collection_pointers[""]:
+            raise NativeBackendError(f"native {op} requires logical length metadata for collection aliases")
         if op == "CONST":
             value = item.args[0]
             if isinstance(value, str):
@@ -516,11 +608,10 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
                 kinds[item.dest] = "text"
                 continue
             load(index_temp, "x1")
+            lines.extend(_arm64_collection_index_bounds(collection_lengths[name], read=True))
             lines.extend([
                 f"    adrp x2, {collection_buffers[name]}@PAGE",
                 f"    add x2, x2, {collection_buffers[name]}@PAGEOFF",
-                f"    cmp x1, #{NATIVE_COLLECTION_CAPACITY}",
-                "    b.hs L_kuro_collection_bounds",
                 "    lsl x1, x1, #3",
                 "    ldr x0, [x2, x1]",
             ])
@@ -558,11 +649,10 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
                 raise NativeBackendError("native SET requires a native collection")
             load(index_temp, "x1")
             load(value_temp, "x0")
+            lines.extend(_arm64_collection_index_bounds(collection_lengths[name], read=False))
             lines.extend([
                 f"    adrp x2, {collection_buffers[name]}@PAGE",
                 f"    add x2, x2, {collection_buffers[name]}@PAGEOFF",
-                f"    cmp x1, #{NATIVE_COLLECTION_CAPACITY}",
-                "    b.hs L_kuro_collection_bounds",
                 "    lsl x1, x1, #3",
                 "    str x0, [x2, x1]",
             ])
@@ -880,6 +970,7 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
             function, collection_buffers, collection_lengths, global_labels,
             data, collection_kinds, function_return_kinds, char_buffers,
             known_lengths, global_kinds, ir.symbol_types, collection_names,
+            untracked_collection_pointers[function.name],
         ))
     if function_sections:
         lines.extend([".section __TEXT,__text", *function_sections, ".section __TEXT,__cstring"])
@@ -986,7 +1077,7 @@ def _emit_dynamic_function(
     function, collection_buffers=None, collection_lengths=None, global_labels=None,
     data=None, collection_kinds=None, function_return_kinds=None, char_buffers=None,
     known_lengths=None, global_kinds=None, symbol_types=None,
-    static_collection_names=None,
+    static_collection_names=None, untracked_collection_pointers=None,
 ) -> str:
     """Emit numeric action bodies, including recursive calls and branches."""
     collection_buffers = collection_buffers or {}
@@ -1064,6 +1155,8 @@ def _emit_dynamic_function(
         store(parameter, f"x{index}")
     for item in function.body:
         op = item.op
+        if op in {"GET", "SET", "LENGTH", "APPEND"} and item.args[0] in (untracked_collection_pointers or set()):
+            raise NativeBackendError(f"native action {op} requires logical length metadata for collection parameters or aliases")
         if op == "CONST" and isinstance(item.args[0], int) and 0 <= item.args[0] <= NATIVE_COLLECTION_CAPACITY:
             lines.append(f"    mov x0, #{item.args[0]}"); store(item.dest); kinds[item.dest] = "number"
         elif op == "CONST" and isinstance(item.args[0], float):
@@ -1100,6 +1193,8 @@ def _emit_dynamic_function(
             store(name)
         elif op == "GET":
             name, index_temp = item.args
+            if name in collection_buffers and name in function.params:
+                raise NativeBackendError("native action GET requires logical length metadata for collection parameters")
             if index_temp is None:
                 raise NativeBackendError(f"native action {function.name!r} cannot load without an index")
             if name not in collection_buffers:
@@ -1118,6 +1213,7 @@ def _emit_dynamic_function(
                 store(item.dest); kinds[item.dest] = "text"
                 continue
             load(index_temp, "x1")
+            lines.extend(_arm64_collection_index_bounds(collection_lengths[name], read=True))
             lines.extend([
                 f"    adrp x2, {collection_buffers[name]}@PAGE",
                 f"    add x2, x2, {collection_buffers[name]}@PAGEOFF",
@@ -1138,6 +1234,8 @@ def _emit_dynamic_function(
             kinds[item.dest] = "text"
         elif op == "SET":
             name, index_temp, value_temp = item.args
+            if name in collection_buffers and name in function.params:
+                raise NativeBackendError("native action SET requires logical length metadata for collection parameters")
             if name not in collection_buffers:
                 load(name, "x2")
                 load(index_temp, "x1")
@@ -1146,11 +1244,10 @@ def _emit_dynamic_function(
                 continue
             load(index_temp, "x1")
             load(value_temp, "x0")
+            lines.extend(_arm64_collection_index_bounds(collection_lengths[name], read=False))
             lines.extend([
                 f"    adrp x2, {collection_buffers[name]}@PAGE",
                 f"    add x2, x2, {collection_buffers[name]}@PAGEOFF",
-                f"    cmp x1, #{NATIVE_COLLECTION_CAPACITY}",
-                "    b.hs L_kuro_collection_bounds",
                 "    lsl x1, x1, #3",
                 "    str x0, [x2, x1]",
             ])
@@ -1439,7 +1536,8 @@ def emit_macos_arm64(ir: IRProgram) -> str:
             if name not in constants or index_temp not in constants:
                 raise NativeBackendError("native arm64 backend requires constant collection access")
             value, index = constants[name], constants[index_temp]
-            if not isinstance(index, int) or not isinstance(value, (str, list)) or not 0 <= index < len(value):
+            lower_bound = -len(value) if isinstance(value, list) else 0
+            if not isinstance(index, int) or not isinstance(value, (str, list)) or not lower_bound <= index < len(value):
                 raise NativeBackendError("native arm64 backend cannot resolve constant collection index")
             constants[instruction.dest] = value[index]
         elif instruction.op == "LENGTH":
@@ -1688,6 +1786,7 @@ def emit_x86_64_linux(
                 f".Lkuro_data_{next_text_label}"
             )
             next_text_label += 1
+    untracked_collection_pointers = _untracked_collection_pointers(ir, collection_names)
     collection_buffers = {name: f".Lkuro_collection_{index}" for index, name in enumerate(sorted(collection_names))}
     collection_lengths = {name: f".Lkuro_collection_len_{index}" for index, name in enumerate(sorted(collection_names))}
     collection_item_lengths = {name: f".Lkuro_collection_item_len_{index}" for index, name in enumerate(sorted(collection_names))}
@@ -2285,6 +2384,8 @@ def emit_x86_64_linux(
     input_sequence = 0
     for instruction_index, instruction in enumerate(items):
         op = instruction.op
+        if op in {"GET", "SET", "LENGTH", "APPEND"} and instruction.args[0] in untracked_collection_pointers[""]:
+            raise NativeBackendError(f"x86_64-linux {op} requires logical length metadata for collection aliases")
         if op == "CONST":
             value = instruction.args[0]
             if isinstance(value, bool) or isinstance(value, int):
@@ -2681,8 +2782,8 @@ def emit_x86_64_linux(
                 store(instruction.dest); kinds[instruction.dest] = "text"; text_lengths[instruction.dest] = 1
             elif name in collection_buffers:
                 load(index, "%rcx")
+                lines.extend(_x86_collection_index_bounds(collection_lengths[name], read=True))
                 lines.extend([
-                    f"    cmp ${NATIVE_COLLECTION_CAPACITY}, %rcx", "    jae .Lkuro_bounds",
                     f"    lea {collection_buffers[name]}(%rip), %rax",
                     "    mov (%rax,%rcx,8), %rax",
                 ])
@@ -2697,8 +2798,8 @@ def emit_x86_64_linux(
             if name not in collection_buffers:
                 raise NativeBackendError("x86_64-linux SET requires a native collection")
             load(index, "%rcx"); load(value, "%rdx")
+            lines.extend(_x86_collection_index_bounds(collection_lengths[name], read=False))
             lines.extend([
-                f"    cmp ${NATIVE_COLLECTION_CAPACITY}, %rcx", "    jae .Lkuro_bounds",
                 f"    lea {collection_buffers[name]}(%rip), %rax",
                 "    mov %rdx, (%rax,%rcx,8)",
             ])
@@ -3583,11 +3684,13 @@ def emit_x86_64_linux(
                 fn_load(index_temp, "%rcx")
                 if (
                     name in collection_buffers
+                    or name in untracked_collection_pointers[function.name]
+                    or fn_kinds.get(name, "") == "collection"
                     or fn_kinds.get(name, "").startswith("collection:")
                 ):
-                    lines.extend([
-                        f"    cmp ${NATIVE_COLLECTION_CAPACITY}, %rcx", "    jae .Lkuro_bounds",
-                    ])
+                    if name in untracked_collection_pointers[function.name] or name not in collection_lengths or name in function.params or name in function_capture_slots.get(function.name, {}):
+                        raise NativeBackendError("x86_64-linux action GET requires logical length metadata for collection parameters or captures")
+                    lines.extend(_x86_collection_index_bounds(collection_lengths[name], read=True))
                     fn_load(name, "%rax")
                     lines.extend([
                         "    mov (%rax,%rcx,8), %rax",
@@ -3610,11 +3713,10 @@ def emit_x86_64_linux(
                 fn_load(index_temp, "%rcx"); fn_load(value_temp, "%rdx")
                 if (
                     name in collection_buffers
+                    or name in untracked_collection_pointers[function.name]
+                    or fn_kinds.get(name, "") == "collection"
                     or fn_kinds.get(name, "").startswith("collection:")
                 ):
-                    lines.extend([
-                        f"    cmp ${NATIVE_COLLECTION_CAPACITY}, %rcx", "    jae .Lkuro_bounds",
-                    ])
                     if fn_kinds.get(name, "").startswith("collection:"):
                         collection_item_kind = fn_collection_kinds.get(name, "unknown")
                         if fn_kinds.get(value_temp, "unknown") != collection_item_kind:
@@ -3625,6 +3727,9 @@ def emit_x86_64_linux(
                             raise NativeBackendError(
                                 "x86_64-linux captured collection SET does not yet update text item lengths"
                             )
+                    if name in untracked_collection_pointers[function.name] or name not in collection_lengths or name in function.params or name in function_capture_slots.get(function.name, {}):
+                        raise NativeBackendError("x86_64-linux action SET requires logical length metadata for collection parameters or captures")
+                    lines.extend(_x86_collection_index_bounds(collection_lengths[name], read=False))
                     fn_load(name, "%rax")
                     lines.append("    mov %rdx, (%rax,%rcx,8)")
                 else:
@@ -3636,6 +3741,8 @@ def emit_x86_64_linux(
                     raise NativeBackendError(
                         "x86_64-linux action LENGTH does not yet support captured collection lengths"
                     )
+                if name in untracked_collection_pointers[function.name] or fn_kinds.get(name) == "collection" and (name not in collection_lengths or name in function.params or name in function_capture_slots.get(function.name, {})):
+                    raise NativeBackendError("x86_64-linux action LENGTH requires logical length metadata for collection parameters or aliases")
                 if name in collection_lengths:
                     lines.append(f"    mov {collection_lengths[name]}(%rip), %rax")
                 elif name in input_lengths:
@@ -3652,6 +3759,8 @@ def emit_x86_64_linux(
                     raise NativeBackendError(
                         "x86_64-linux action APPEND does not yet support captured collection length metadata"
                     )
+                if name in untracked_collection_pointers[function.name] or name in function.params or name in function_capture_slots.get(function.name, {}) or fn_kinds.get(name) == "collection" and name not in collection_lengths:
+                    raise NativeBackendError("x86_64-linux action APPEND requires logical length metadata for collection parameters or aliases")
                 if name not in collection_buffers:
                     raise NativeBackendError(f"x86_64-linux action {function.name!r} cannot append to {name!r}")
                 fn_load(value, "%rdx")

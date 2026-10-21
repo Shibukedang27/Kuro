@@ -170,9 +170,8 @@ def test_negative_collection_get_matches_the_compatibility_oracle():
 @requires_linux_x86
 @pytest.mark.parametrize("operation", ["Get Items 2;\nPrint @_.", 'Set Items 2 to 7;\nPrint "continued".'])
 def test_logical_length_is_not_hosted_native_storage_capacity(tmp_path, operation):
-    # Both accesses are outside the two-element logical collection. The hosted
-    # backend checks backing capacity instead. Keep the discrepancy visible;
-    # never use that backend as the oracle for new unguarded collection lowering.
+    # Both accesses are outside logical length despite spare backing capacity.
+    # Native bounds must agree with the logical runtimes and stop execution.
     source = "Items = 10, 20;\n" + operation + "\n"
     host = run_source(source)
     assert host.compile.ok and host.runtime_error is not None
@@ -182,6 +181,4 @@ def test_logical_length_is_not_hosted_native_storage_capacity(tmp_path, operatio
     image = tmp_path / "logical-length-probe"
     build_native(host.compile.ir, image, target="x86_64-linux")
     executed = subprocess.run([str(image)], text=True, capture_output=True, timeout=5)
-    # Existing behavior is recorded, not characterized as bounds-safe parity.
-    expected = "0\n" if operation.startswith("Get") else "continued\n"
-    assert (executed.returncode, executed.stdout, executed.stderr) == (0, expected, "")
+    assert (executed.returncode, executed.stdout, executed.stderr) == (1, "", "")
