@@ -242,6 +242,12 @@ Action VMGetCollectionItem Name, WantedIndex;
     Else;
         VMFailed = 1;
     Done.
+    # Compatibility oracle: GET accepts logical-end offsets; SET does not.
+    VMGetCollectionItem_Wanted = WantedIndex;
+    If WantedIndex is less than 0;
+        Call VMLengthCollection Name;
+        VMGetCollectionItem_Wanted = @_ + WantedIndex;
+    Done.
     VMGetCollectionItem_Pos = 0;
     VMGetCollectionItem_Seen = 0;
     VMGetCollectionItem_Found = 0;
@@ -250,7 +256,7 @@ Action VMGetCollectionItem Name, WantedIndex;
     While VMGetCollectionItem_Pos is less than VMCollectionEntryCount and VMGetCollectionItem_Found is equal to 0;
         Get VMCollectionOwners VMGetCollectionItem_Pos;
         If @_ is equal to VMGetCollectionItem_Id;
-            If VMGetCollectionItem_Seen is equal to WantedIndex;
+            If VMGetCollectionItem_Seen is equal to VMGetCollectionItem_Wanted;
                 Get VMCollectionItems VMGetCollectionItem_Pos;
                 VMGetCollectionItem_Value = @_;
                 Get VMCollectionItemDisplay VMGetCollectionItem_Pos;

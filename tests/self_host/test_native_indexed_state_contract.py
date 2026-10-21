@@ -157,13 +157,14 @@ def test_real_generator_indexed_state_contract_boundary(tmp_path, x86_linux_code
     (tmp_path / "indexed-state-boundary.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
-def test_negative_collection_get_is_an_unresolved_semantic_boundary():
-    # Observational regression, NOT approval of either behavior for new lowering.
+def test_negative_collection_get_matches_the_compatibility_oracle():
+    # README's frozen oracle and ADR-0012 preserve negative GET, not negative SET.
     source = 'Items = 10, 20;\nGet Items -1;\nPrint @_.\n'
     host = run_source(source)
     assert host.ok and host.stdout == "20\n"
     vm = run_kuro_vm_environment(source)
-    assert vm["VMFailed"] == 1
+    assert vm["VMFailed"] == 0
+    assert vm["VMOutput"] == [20]
 
 
 @requires_linux_x86
