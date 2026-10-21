@@ -6,6 +6,12 @@ Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 ## [Unreleased] — In-house implementation policy and Stage 8 foundation
 
 ### Added
+- Kuro-owned Linux x86-64 execution/output integer collection lowering for an isolated fixed-storage,
+  straight-line bytecode subset: up to sixteen owners and 32 aggregate cells,
+  owner-specific logical GET/SET bounds, negative-read normalization, nonnegative
+  writes and checked signed arithmetic. Unqualified execution hosts, other targets, representations,
+  growth/aliases and control flow fail closed. This is not full analyzer or strict
+  independence completion; see `docs/engineering/kuro-owned-integer-storage.md`.
 - Test-only raw-token loop analysis tracks four explicit independent slots,
   pointwise branch snapshots and slot-labelled entry/backedge read evidence.
   Interleaved literal stores never repair another slot's unsafe reads; copies

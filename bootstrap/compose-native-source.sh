@@ -6,6 +6,7 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MODE=${1:-}
 TARGET=${2:-aarch64-macos}
+EXECUTION_TARGET=${3:-unverified}
 
 filter_file() {
     file=$1
@@ -95,22 +96,31 @@ case "$MODE" in
             aarch64-macos|x86_64-macos|x86_64-linux) ;;
             *) echo "unsupported codegen output target: $TARGET" >&2; exit 2 ;;
         esac
+        case "$EXECUTION_TARGET" in
+            unverified|aarch64-macos|x86_64-macos|x86_64-linux) ;;
+            *) echo "unsupported codegen execution target: $EXECUTION_TARGET" >&2; exit 2 ;;
+        esac
         {
             cat "$ROOT/self_host/artifact_loader.kuro"
             printf '\n'
-            awk -v target="$TARGET" '
+            awk -v target="$TARGET" -v execution_target="$EXECUTION_TARGET" '
                 $0 == "NativeTarget = \"aarch64-macos\";" {
                     print "NativeTarget = \"" target "\";"
                     replacements++
                     next
                 }
+                $0 == "NativeIndexedExecutionTarget = \"unverified\";" {
+                    print "NativeIndexedExecutionTarget = \"" execution_target "\";"
+                    execution_replacements++
+                    next
+                }
                 { print }
-                END { if (replacements != 1) exit 45 }
+                END { if (replacements != 1 || execution_replacements != 1) exit 45 }
             ' "$ROOT/self_host/native_codegen.kuro"
         }
         ;;
     *)
-        echo "usage: compose-native-source.sh <compiler|runtime|artifact-launcher|codegen> [codegen-target]" >&2
+        echo "usage: compose-native-source.sh <compiler|runtime|artifact-launcher|codegen> [codegen-target] [execution-target]" >&2
         exit 2
         ;;
 esac

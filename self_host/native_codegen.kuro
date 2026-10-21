@@ -3043,6 +3043,434 @@ Action NativeBuildFunctions;
     NativeFunctionMode = 0;
 Done.
 
+# A deliberately isolated integer-only collection backend.  This recognizes
+# only initialized, fixed-size BC_MULTI storage followed by a straight-line
+# integer stack program.  It never enters the scalar-kind inference pipeline.
+NativeIndexedAttempted = 0;
+NativeIndexedValid = 1;
+NativeIndexedPos = 0;
+NativeIndexedLength = 0;
+NativeIndexedScanPos = 0;
+NativeIndexedScanLength = 0;
+NativeIndexedOpcode is Text;
+NativeIndexedOperand is Text;
+NativeIndexedName is Text;
+NativeIndexedOperator is Text;
+NativeIndexedCollections = "";
+NativeIndexedCollectionLengths = "";
+NativeIndexedCollectionCount = 0;
+NativeIndexedTotalCells = 0;
+NativeIndexedCollectionSlot = -1;
+NativeIndexedSearch = 0;
+NativeIndexedSearchPos = 0;
+NativeIndexedSearchName is Text;
+NativeIndexedSearchResult = -1;
+NativeIndexedNames = "";
+NativeIndexedAssigned = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeIndexedNameCount = 0;
+NativeIndexedNameSlot = -1;
+NativeIndexedDepth = 0;
+NativeIndexedInitCount = 0;
+NativeIndexedPrintCount = 0;
+NativeIndexedSawOperation = 0;
+NativeIndexedInitValues is Text;
+NativeIndexedCode is Text;
+NativeIndexedData is Text;
+NativeIndexedBss is Text;
+NativeIndexedSlotText is Text;
+NativeIndexedLengthText is Text;
+NativeIndexedLabelText is Text;
+NativeIndexedIntegerValid = 0;
+NativeIndexedIntegerLength = 0;
+NativeIndexedIntegerIndex = 0;
+NativeIndexedNegative = 0;
+NativeIndexedExecutionTarget = "unverified";
+
+Action NativeIndexedFindCollection Name: Text;
+    NativeIndexedSearch = 0;
+    NativeIndexedSearchResult = -1;
+    While NativeIndexedSearch is less than NativeIndexedCollectionCount and NativeIndexedSearchResult is less than 0;
+        NativeIndexedSearchPos = NativeIndexedSearch + 1;
+        Get NativeIndexedCollections NativeIndexedSearchPos;
+        NativeIndexedSearchName = @_;
+        If NativeIndexedSearchName is equal to Name;
+            NativeIndexedSearchResult = NativeIndexedSearch;
+        Else;
+            Add 1 to NativeIndexedSearch;
+        Done.
+    Done.
+    Return NativeIndexedSearchResult;
+Done.
+
+Action NativeIndexedFindName Name: Text;
+    NativeIndexedSearch = 0;
+    NativeIndexedSearchResult = -1;
+    While NativeIndexedSearch is less than NativeIndexedNameCount and NativeIndexedSearchResult is less than 0;
+        NativeIndexedSearchPos = NativeIndexedSearch + 1;
+        Get NativeIndexedNames NativeIndexedSearchPos;
+        NativeIndexedSearchName = @_;
+        If NativeIndexedSearchName is equal to Name;
+            NativeIndexedSearchResult = NativeIndexedSearch;
+        Else;
+            Add 1 to NativeIndexedSearch;
+        Done.
+    Done.
+    Return NativeIndexedSearchResult;
+Done.
+
+Action NativeIndexedSignedLiteral Value: Text;
+    Length Value;
+    NativeIndexedIntegerLength = @_;
+    NativeIndexedIntegerIndex = 0;
+    NativeIndexedIntegerValid = 1;
+    NativeIndexedNegative = 0;
+    NativeIndexedNumeric = 0;
+    NativeIndexedNormalized = "";
+    If NativeIndexedIntegerLength is equal to 0 or NativeIndexedIntegerLength is greater than 5;
+        NativeIndexedIntegerValid = 0;
+    Done.
+    If NativeIndexedIntegerLength is greater than 0;
+        Get Value 0;
+        If @_ is equal to "-";
+            NativeIndexedNegative = 1;
+            NativeIndexedIntegerIndex = 1;
+            If NativeIndexedIntegerLength is equal to 1;
+                NativeIndexedIntegerValid = 0;
+            Done.
+        Done.
+    Done.
+    If NativeIndexedIntegerLength - NativeIndexedNegative is greater than 4;
+        NativeIndexedIntegerValid = 0;
+    Done.
+    While NativeIndexedIntegerIndex is less than NativeIndexedIntegerLength and NativeIndexedIntegerValid is equal to 1;
+        Get Value NativeIndexedIntegerIndex;
+        NativeIndexedDigit = @_;
+        If NativeIndexedDigit is not equal to "0" and NativeIndexedDigit is not equal to "1" and NativeIndexedDigit is not equal to "2" and NativeIndexedDigit is not equal to "3" and NativeIndexedDigit is not equal to "4" and NativeIndexedDigit is not equal to "5" and NativeIndexedDigit is not equal to "6" and NativeIndexedDigit is not equal to "7" and NativeIndexedDigit is not equal to "8" and NativeIndexedDigit is not equal to "9";
+            NativeIndexedIntegerValid = 0;
+        Done.
+        If NativeIndexedDigit is equal to "1";
+            NativeIndexedNumeric = NativeIndexedNumeric * 10 + 1;
+        Done.
+        If NativeIndexedDigit is equal to "2";
+            NativeIndexedNumeric = NativeIndexedNumeric * 10 + 2;
+        Done.
+        If NativeIndexedDigit is equal to "3";
+            NativeIndexedNumeric = NativeIndexedNumeric * 10 + 3;
+        Done.
+        If NativeIndexedDigit is equal to "4";
+            NativeIndexedNumeric = NativeIndexedNumeric * 10 + 4;
+        Done.
+        If NativeIndexedDigit is equal to "5";
+            NativeIndexedNumeric = NativeIndexedNumeric * 10 + 5;
+        Done.
+        If NativeIndexedDigit is equal to "6";
+            NativeIndexedNumeric = NativeIndexedNumeric * 10 + 6;
+        Done.
+        If NativeIndexedDigit is equal to "7";
+            NativeIndexedNumeric = NativeIndexedNumeric * 10 + 7;
+        Done.
+        If NativeIndexedDigit is equal to "8";
+            NativeIndexedNumeric = NativeIndexedNumeric * 10 + 8;
+        Done.
+        If NativeIndexedDigit is equal to "9";
+            NativeIndexedNumeric = NativeIndexedNumeric * 10 + 9;
+        Done.
+        If NativeIndexedDigit is equal to "0";
+            NativeIndexedNumeric = NativeIndexedNumeric * 10;
+        Done.
+        Add 1 to NativeIndexedIntegerIndex;
+    Done.
+    Call NativeLengthToText NativeIndexedNumeric;
+    NativeIndexedNormalized = @_;
+    If NativeIndexedNegative is equal to 1 and NativeIndexedNumeric is greater than 0;
+        NativeIndexedNormalized = "-" + NativeIndexedNormalized;
+    Done.
+    Return NativeIndexedIntegerValid;
+Done.
+
+Action EmitBoundedIntegerState;
+    NativeIndexedScanPos = 0;
+    Length BytecodeOut;
+    NativeIndexedScanLength = @_;
+    While NativeIndexedScanPos is less than NativeIndexedScanLength;
+        Get BytecodeOut NativeIndexedScanPos;
+        NativeIndexedOpcode = @_;
+        If NativeIndexedOpcode is equal to "BC_MULTI_BEGIN" or NativeIndexedOpcode is equal to "BC_STORE_MULTI";
+            NativeIndexedAttempted = 1;
+        Done.
+        # Inspect opcodes, never Text literals or variable-name operands.
+        Call NativeOpcodeArity NativeIndexedOpcode;
+        NativeIndexedScanPos = NativeIndexedScanPos + @_ + 1;
+    Done.
+    If NativeIndexedAttempted is equal to 1;
+        If NativeTarget is not equal to "x86_64-linux" or NativeIndexedExecutionTarget is not equal to "x86_64-linux" or NativeIndexedScanLength is greater than 4096;
+            NativeIndexedValid = 0;
+        Done.
+        NativeIndexedCode = "";
+        NativeIndexedData = "";
+        NativeIndexedBss = "";
+        NativeIndexedPos = 0;
+        NativeIndexedSawOperation = 0;
+        While NativeIndexedPos is less than NativeIndexedScanLength and NativeIndexedValid is equal to 1;
+            Get BytecodeOut NativeIndexedPos;
+            NativeIndexedOpcode = @_;
+            Add 1 to NativeIndexedPos;
+            If NativeIndexedOpcode is equal to "BC_MULTI_BEGIN";
+                If NativeIndexedSawOperation is equal to 1;
+                    NativeIndexedValid = 0;
+                Done.
+                NativeIndexedInitValues = "";
+                NativeIndexedInitCount = 0;
+                NativeIndexedLength = 0;
+                NativeIndexedInitDone = 0;
+                While NativeIndexedPos is less than NativeIndexedScanLength and NativeIndexedInitDone is equal to 0 and NativeIndexedValid is equal to 1;
+                    Get BytecodeOut NativeIndexedPos;
+                    NativeIndexedOpcode = @_;
+                    Add 1 to NativeIndexedPos;
+                    If NativeIndexedOpcode is equal to "BC_CONST";
+                        If NativeIndexedPos is less than NativeIndexedScanLength;
+                            Get BytecodeOut NativeIndexedPos;
+                            NativeIndexedOperand = @_;
+                            Add 1 to NativeIndexedPos;
+                            Call NativeValidateUnsignedInteger NativeIndexedOperand;
+                            NativeIndexedInitLiteralValid = @_;
+                            Call NativeIndexedSignedLiteral NativeIndexedOperand;
+                            If @_ is equal to 1 and NativeIndexedInitLiteralValid is equal to 1 and NativeIndexedInitCount is less than 32 and NativeIndexedTotalCells is less than 32;
+                                If NativeIndexedInitCount is equal to 0;
+                                    NativeIndexedInitValues = NativeIndexedNormalized;
+                                Else;
+                                    NativeIndexedInitValues = NativeIndexedInitValues + ", " + NativeIndexedNormalized;
+                                Done.
+                                Add 1 to NativeIndexedInitCount;
+                                Add 1 to NativeIndexedTotalCells;
+                            Else;
+                                NativeIndexedValid = 0;
+                            Done.
+                        Else;
+                            NativeIndexedValid = 0;
+                        Done.
+                    Else;
+                        If NativeIndexedOpcode is equal to "BC_STORE_MULTI";
+                            If NativeIndexedPos is less than NativeIndexedScanLength;
+                                Get BytecodeOut NativeIndexedPos;
+                                NativeIndexedName = @_;
+                                Add 1 to NativeIndexedPos;
+                                NativeIndexedInitDone = 1;
+                            Else;
+                                NativeIndexedValid = 0;
+                            Done.
+                        Else;
+                            NativeIndexedValid = 0;
+                        Done.
+                    Done.
+                Done.
+                If NativeIndexedInitDone is equal to 0 or NativeIndexedInitCount is less than 2 or NativeIndexedCollectionCount is greater than or equal to 16;
+                    NativeIndexedValid = 0;
+                Done.
+                Call NativeIndexedFindCollection NativeIndexedName;
+                If @_ is greater than or equal to 0;
+                    NativeIndexedValid = 0;
+                Done.
+                If NativeIndexedValid is equal to 1;
+                    Call NativeLengthToText NativeIndexedCollectionCount;
+                    NativeIndexedSlotText = @_;
+                    Call NativeLengthToText NativeIndexedInitCount;
+                    NativeIndexedLengthText = @_;
+                    NativeIndexedData = NativeIndexedData + ".Lku_index_array_" + NativeIndexedSlotText + ":\n    .quad " + NativeIndexedInitValues + "\n";
+                    Append NativeIndexedName to NativeIndexedCollections;
+                    Append NativeIndexedInitCount to NativeIndexedCollectionLengths;
+                    Add 1 to NativeIndexedCollectionCount;
+                Done.
+            Else;
+                NativeIndexedSawOperation = 1;
+                If NativeIndexedOpcode is equal to "BC_CONST";
+                    If NativeIndexedPos is less than NativeIndexedScanLength;
+                        Get BytecodeOut NativeIndexedPos;
+                        NativeIndexedOperand = @_;
+                        Add 1 to NativeIndexedPos;
+                        Call NativeIndexedSignedLiteral NativeIndexedOperand;
+                        If @_ is equal to 1;
+                            NativeIndexedCode = NativeIndexedCode + "    movabsq $" + NativeIndexedNormalized + ", %rax\n    pushq %rax\n";
+                            Add 1 to NativeIndexedDepth;
+                        Else;
+                            NativeIndexedValid = 0;
+                        Done.
+                    Else;
+                        NativeIndexedValid = 0;
+                    Done.
+                Else;
+                    If NativeIndexedOpcode is equal to "BC_BINOP";
+                        If NativeIndexedPos is less than NativeIndexedScanLength and NativeIndexedDepth is greater than or equal to 2;
+                            Get BytecodeOut NativeIndexedPos;
+                            NativeIndexedOperator = @_;
+                            Add 1 to NativeIndexedPos;
+                            NativeIndexedCode = NativeIndexedCode + "    popq %rcx\n    popq %rax\n";
+                                If NativeIndexedOperator is equal to "+";
+                                NativeIndexedCode = NativeIndexedCode + "    addq %rcx, %rax\n    jo .Lku_index_fail\n";
+                            Else;
+                                If NativeIndexedOperator is equal to "-";
+                                    NativeIndexedCode = NativeIndexedCode + "    subq %rcx, %rax\n    jo .Lku_index_fail\n";
+                                Else;
+                                    If NativeIndexedOperator is equal to "*";
+                                        NativeIndexedCode = NativeIndexedCode + "    imulq %rcx, %rax\n    jo .Lku_index_fail\n";
+                                    Else;
+                                        NativeIndexedValid = 0;
+                                    Done.
+                                Done.
+                            Done.
+                            NativeIndexedCode = NativeIndexedCode + "    pushq %rax\n";
+                            Add -1 to NativeIndexedDepth;
+                        Else;
+                            NativeIndexedValid = 0;
+                        Done.
+                    Else;
+                        If NativeIndexedOpcode is equal to "BC_GET";
+                            If NativeIndexedPos + 1 is less than NativeIndexedScanLength and NativeIndexedDepth is greater than 0;
+                                Get BytecodeOut NativeIndexedPos;
+                                NativeIndexedName = @_;
+                                Get BytecodeOut (NativeIndexedPos + 1);
+                                NativeIndexedOperand = @_;
+                                NativeIndexedPos = NativeIndexedPos + 2;
+                                Call NativeIndexedFindCollection NativeIndexedName;
+                                NativeIndexedCollectionSlot = @_;
+                                If NativeIndexedCollectionSlot is greater than or equal to 0 and NativeIndexedOperand is equal to "1";
+                                    NativeIndexedSearchPos = NativeIndexedCollectionSlot + 1;
+                                    Get NativeIndexedCollectionLengths NativeIndexedSearchPos;
+                                    NativeIndexedLength = @_;
+                                    Call NativeLengthToText NativeIndexedCollectionSlot;
+                                    NativeIndexedSlotText = @_;
+                                    Call NativeLengthToText NativeIndexedLength;
+                                    NativeIndexedLengthText = @_;
+                                    Call NativeLengthToText NativeIndexedPos;
+                                    NativeIndexedLabelText = @_;
+                                    NativeIndexedCode = NativeIndexedCode + "    popq %rax\n    testq %rax, %rax\n    jns .Lku_get_nonnegative_" + NativeIndexedLabelText + "\n    addq $" + NativeIndexedLengthText + ", %rax\n    jo .Lku_index_fail\n.Lku_get_nonnegative_" + NativeIndexedLabelText + ":\n    cmpq $0, %rax\n    jl .Lku_index_fail\n    cmpq $" + NativeIndexedLengthText + ", %rax\n    jae .Lku_index_fail\n    leaq .Lku_index_array_" + NativeIndexedSlotText + "(%rip), %rdx\n    movq (%rdx,%rax,8), %rax\n    pushq %rax\n";
+                                    Add 0 to NativeIndexedDepth;
+                                Else;
+                                    NativeIndexedValid = 0;
+                                Done.
+                            Else;
+                                NativeIndexedValid = 0;
+                            Done.
+                        Else;
+                            If NativeIndexedOpcode is equal to "BC_SET";
+                                If NativeIndexedPos is less than NativeIndexedScanLength and NativeIndexedDepth is greater than or equal to 2;
+                                    Get BytecodeOut NativeIndexedPos;
+                                    NativeIndexedName = @_;
+                                    Add 1 to NativeIndexedPos;
+                                    Call NativeIndexedFindCollection NativeIndexedName;
+                                    NativeIndexedCollectionSlot = @_;
+                                    If NativeIndexedCollectionSlot is greater than or equal to 0;
+                                        NativeIndexedSearchPos = NativeIndexedCollectionSlot + 1;
+                                        Get NativeIndexedCollectionLengths NativeIndexedSearchPos;
+                                        NativeIndexedLength = @_;
+                                        Call NativeLengthToText NativeIndexedCollectionSlot;
+                                        NativeIndexedSlotText = @_;
+                                        Call NativeLengthToText NativeIndexedLength;
+                                        NativeIndexedLengthText = @_;
+                                        NativeIndexedCode = NativeIndexedCode + "    popq %rcx\n    popq %rax\n    testq %rax, %rax\n    js .Lku_index_fail\n    cmpq $" + NativeIndexedLengthText + ", %rax\n    jae .Lku_index_fail\n    leaq .Lku_index_array_" + NativeIndexedSlotText + "(%rip), %rdx\n    movq %rcx, (%rdx,%rax,8)\n";
+                                        Add -2 to NativeIndexedDepth;
+                                    Else;
+                                        NativeIndexedValid = 0;
+                                    Done.
+                                Else;
+                                    NativeIndexedValid = 0;
+                                Done.
+                            Else;
+                                If NativeIndexedOpcode is equal to "BC_STORE_LIST";
+                                    If NativeIndexedPos is less than NativeIndexedScanLength and NativeIndexedDepth is greater than 0;
+                                        Get BytecodeOut NativeIndexedPos;
+                                        NativeIndexedName = @_;
+                                        Add 1 to NativeIndexedPos;
+                                        Call NativeIndexedFindCollection NativeIndexedName;
+                                        If @_ is greater than or equal to 0;
+                                            NativeIndexedValid = 0;
+                                        Done.
+                                        Call NativeIndexedFindName NativeIndexedName;
+                                        NativeIndexedNameSlot = @_;
+                                        If NativeIndexedNameSlot is less than 0 and NativeIndexedNameCount is less than 16;
+                                            NativeIndexedNameSlot = NativeIndexedNameCount;
+                                            Append NativeIndexedName to NativeIndexedNames;
+                                            Add 1 to NativeIndexedNameCount;
+                                        Done.
+                                        If NativeIndexedNameSlot is less than 0;
+                                            NativeIndexedValid = 0;
+                                        Else;
+                                            Set NativeIndexedAssigned NativeIndexedNameSlot to 1;
+                                            Call NativeLengthToText NativeIndexedNameSlot;
+                                            NativeIndexedSlotText = @_;
+                                            NativeIndexedCode = NativeIndexedCode + "    popq %rax\n    movq %rax, .Lku_index_scalar_" + NativeIndexedSlotText + "(%rip)\n";
+                                            Add -1 to NativeIndexedDepth;
+                                        Done.
+                                    Else;
+                                        NativeIndexedValid = 0;
+                                    Done.
+                                Else;
+                                    If NativeIndexedOpcode is equal to "BC_LOADVAR";
+                                        If NativeIndexedPos is less than NativeIndexedScanLength;
+                                            Get BytecodeOut NativeIndexedPos;
+                                            NativeIndexedName = @_;
+                                            Add 1 to NativeIndexedPos;
+                                            Call NativeIndexedFindCollection NativeIndexedName;
+                                            If @_ is greater than or equal to 0;
+                                                NativeIndexedValid = 0;
+                                            Done.
+                                            Call NativeIndexedFindName NativeIndexedName;
+                                            NativeIndexedNameSlot = @_;
+                                            If NativeIndexedNameSlot is less than 0;
+                                                NativeIndexedValid = 0;
+                                            Else;
+                                                Get NativeIndexedAssigned NativeIndexedNameSlot;
+                                                If @_ is not equal to 1;
+                                                    NativeIndexedValid = 0;
+                                                Done.
+                                                Call NativeLengthToText NativeIndexedNameSlot;
+                                                NativeIndexedSlotText = @_;
+                                                NativeIndexedCode = NativeIndexedCode + "    movq .Lku_index_scalar_" + NativeIndexedSlotText + "(%rip), %rax\n    pushq %rax\n";
+                                                Add 1 to NativeIndexedDepth;
+                                            Done.
+                                        Else;
+                                            NativeIndexedValid = 0;
+                                        Done.
+                                    Else;
+                                        If NativeIndexedOpcode is equal to "BC_PRINT";
+                                            If NativeIndexedDepth is greater than 0;
+                                                NativeIndexedCode = NativeIndexedCode + "    popq %rax\n    call .Lku_index_print\n";
+                                                Add -1 to NativeIndexedDepth;
+                                                Add 1 to NativeIndexedPrintCount;
+                                            Else;
+                                                NativeIndexedValid = 0;
+                                            Done.
+                                        Else;
+                                            NativeIndexedValid = 0;
+                                        Done.
+                                    Done.
+                                Done.
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+        If NativeIndexedCollectionCount is equal to 0 or NativeIndexedPrintCount is equal to 0 or NativeIndexedDepth is not equal to 0;
+            NativeIndexedValid = 0;
+        Done.
+        If NativeIndexedValid is equal to 1;
+            NativeOut = ".section .text\n.globl _start\n_start:\n" + NativeIndexedCode + "    movq $60, %rax\n    xorq %rdi, %rdi\n    syscall\n.Lku_index_fail:\n    movq $60, %rax\n    movq $1, %rdi\n    syscall\n.Lku_index_print:\n    subq $40, %rsp\n    leaq 39(%rsp), %rsi\n    movb $10, (%rsi)\n    movq $1, %rcx\n    xorq %r9, %r9\n    testq %rax, %rax\n    jns .Lku_index_print_digits\n    negq %rax\n    movq $1, %r9\n.Lku_index_print_digits:\n    movq $10, %r10\n.Lku_index_print_loop:\n    xorq %rdx, %rdx\n    divq %r10\n    addb $48, %dl\n    decq %rsi\n    movb %dl, (%rsi)\n    incq %rcx\n    testq %rax, %rax\n    jne .Lku_index_print_loop\n    testq %r9, %r9\n    je .Lku_index_print_write\n    decq %rsi\n    movb $45, (%rsi)\n    incq %rcx\n.Lku_index_print_write:\n    movq $1, %rax\n    movq $1, %rdi\n    movq %rcx, %rdx\n    syscall\n    addq $40, %rsp\n    ret\n.section .data\n" + NativeIndexedData + ".section .bss\n";
+            NativeIndexedSearch = 0;
+            While NativeIndexedSearch is less than NativeIndexedNameCount;
+                Call NativeLengthToText NativeIndexedSearch;
+                NativeIndexedSlotText = @_;
+                NativeIndexedBss = NativeIndexedBss + ".Lku_index_scalar_" + NativeIndexedSlotText + ":\n    .zero 8\n";
+                Add 1 to NativeIndexedSearch;
+            Done.
+            NativeOut = NativeOut + NativeIndexedBss;
+            Print NativeOut.
+        Else;
+            NativeFailed = 1;
+        Done.
+    Done.
+Done.
+
 NativeIfCounter = 0;
 NativeRepeatCounter = 0;
 NativeWhileCounter = 0;
@@ -3053,34 +3481,36 @@ NativeDecimalLiteralDataOut = "";
 NativeTextPrintCounter = 0;
 NativeFunctionLocalNames = "";
 NativeFunctionLocalNameCount = 1;
-Call NativePrepareProgram;
-If NativeFailed is equal to 0;
-    Call NativeInferFunctionReturnKinds;
+Call EmitBoundedIntegerState;
+If NativeIndexedAttempted is equal to 0;
+    Call NativePrepareProgram;
     If NativeFailed is equal to 0;
-        Call NativeBuildFunctions;
-    Done.
-Done.
-
-Length BytecodeOut;
-NativeProgramLength = @_;
-If NativeTarget is not equal to "aarch64-macos" and NativeTarget is not equal to "x86_64-macos" and NativeTarget is not equal to "x86_64-linux";
-    NativeFailed = 1;
-Done.
-If NativeProgramLength is equal to 3;
-    Get BytecodeOut 0;
-    If @_ is equal to "BC_CONST_TEXT";
-        Call EmitLiteralPrint;
-    Else;
-        Get BytecodeOut 1;
-        Call NativeValidateUnsignedInteger @_;
-        If @_ is equal to 1;
-            Call EmitStraightIntegerProgram;
-        Else;
-            Call EmitLiteralPrint;
+        Call NativeInferFunctionReturnKinds;
+        If NativeFailed is equal to 0;
+            Call NativeBuildFunctions;
         Done.
     Done.
-Else;
-    Call EmitStraightIntegerProgram;
+    Length BytecodeOut;
+    NativeProgramLength = @_;
+    If NativeTarget is not equal to "aarch64-macos" and NativeTarget is not equal to "x86_64-macos" and NativeTarget is not equal to "x86_64-linux";
+        NativeFailed = 1;
+    Done.
+    If NativeProgramLength is equal to 3;
+        Get BytecodeOut 0;
+        If @_ is equal to "BC_CONST_TEXT";
+            Call EmitLiteralPrint;
+        Else;
+            Get BytecodeOut 1;
+            Call NativeValidateUnsignedInteger @_;
+            If @_ is equal to 1;
+                Call EmitStraightIntegerProgram;
+            Else;
+                Call EmitLiteralPrint;
+            Done.
+        Done.
+    Else;
+        Call EmitStraightIntegerProgram;
+    Done.
 Done.
 If NativeFailed is not equal to 0;
     NativeOut = "";
