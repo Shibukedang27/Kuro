@@ -3046,6 +3046,8 @@ Done.
 # A deliberately isolated integer-only collection backend.  This recognizes
 # only initialized, fixed-size BC_MULTI storage followed by a straight-line
 # integer stack program.  It never enters the scalar-kind inference pipeline.
+# Up to 272 cells admit 16 mask lanes plus 16-by-16 fixed snapshot cells.
+# Owner-local logical lengths, not this aggregate budget, govern GET and SET.
 NativeIndexedAttempted = 0;
 NativeIndexedValid = 1;
 NativeIndexedPos = 0;
@@ -3235,7 +3237,7 @@ Action EmitBoundedIntegerState;
                             Call NativeValidateUnsignedInteger NativeIndexedOperand;
                             NativeIndexedInitLiteralValid = @_;
                             Call NativeIndexedSignedLiteral NativeIndexedOperand;
-                            If @_ is equal to 1 and NativeIndexedInitLiteralValid is equal to 1 and NativeIndexedInitCount is less than 32 and NativeIndexedTotalCells is less than 32;
+                            If @_ is equal to 1 and NativeIndexedInitLiteralValid is equal to 1 and NativeIndexedInitCount is less than 272 and NativeIndexedTotalCells is less than 272;
                                 If NativeIndexedInitCount is equal to 0;
                                     NativeIndexedInitValues = NativeIndexedNormalized;
                                 Else;
@@ -3267,9 +3269,11 @@ Action EmitBoundedIntegerState;
                 If NativeIndexedInitDone is equal to 0 or NativeIndexedInitCount is less than 2 or NativeIndexedCollectionCount is greater than or equal to 16;
                     NativeIndexedValid = 0;
                 Done.
-                Call NativeIndexedFindCollection NativeIndexedName;
-                If @_ is greater than or equal to 0;
-                    NativeIndexedValid = 0;
+                If NativeIndexedValid is equal to 1;
+                    Call NativeIndexedFindCollection NativeIndexedName;
+                    If @_ is greater than or equal to 0;
+                        NativeIndexedValid = 0;
+                    Done.
                 Done.
                 If NativeIndexedValid is equal to 1;
                     Call NativeLengthToText NativeIndexedCollectionCount;
