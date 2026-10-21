@@ -53,6 +53,12 @@ def repeat_branch_rejection_cases():
              for name, tokens in branch_join_rejection_cases().items()}
     body = complete_branch_tokens()
     cases.update({
+        # Keep the formerly inherited nested-loop rejection after its top-level
+        # direct-store counterpart moves to positive multitrip coverage.
+        "repeat-loop-first-decimal": in_repeat([
+            "BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST", "Slot",
+            "BC_REPEAT_END",
+        ]),
         "zero-count-complete-branches": in_repeat(body, "0"),
         "two-count-complete-branches": in_repeat(body, "2"),
         "decimal-one-complete-branches": in_repeat(body, "1.0"),

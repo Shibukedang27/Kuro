@@ -60,10 +60,6 @@ def loop_init_rejection_cases() -> dict[str, list[str]]:
             "BC_CONST", "-1", "BC_REPEAT_BEGIN", "BC_CONST", "1.5",
             "BC_STORE_LIST", "D", "BC_REPEAT_END",
         ],
-        "repeat-two": [
-            "BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_CONST", "1.5",
-            "BC_STORE_LIST", "D", "BC_REPEAT_END",
-        ],
         "variable-count": [
             "BC_CONST", "1", "BC_STORE_LIST", "N", "BC_LOADVAR", "N",
             "BC_REPEAT_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST", "D",
