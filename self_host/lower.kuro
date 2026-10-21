@@ -209,15 +209,18 @@ Action LowerAssign;
 Done.
 
 Action LowerAssignTail;
-    Get AstOut LowerPos;
-    LowerAssignTail_Tag = @_;
-    If LowerAssignTail_Tag is equal to "END_VALUES";
-        Add 1 to LowerPos;
-    Else;
+    # LowerValue walks only expression tokens, never another assignment.
+    # Keep no scratch live across it and no Action frame per list element.
+    While LowerFailed is equal to 0;
+        Get AstOut LowerPos;
+        LowerAssignTail_Tag = @_;
+        If LowerAssignTail_Tag is equal to "END_VALUES";
+            Add 1 to LowerPos;
+            Return 1;
+        Done.
         Call LowerValue;
         If LowerFailed is equal to 0;
             Add 1 to LowerPos;
-            Call LowerAssignTail;
         Done.
     Done.
 Done.

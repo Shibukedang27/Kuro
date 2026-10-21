@@ -1,5 +1,7 @@
 # Fixed integer storage for a 16×16 snapshot
 
+Follow-up: the [assignment-list stack-safety repair](stack-safe-initializer-lists.md) addresses the hosted parser/lowerer recursion blocker recorded below. This document preserves the original #94 checkpoint and its validation evidence; it does not describe that later fix as part of #94.
+
 The Kuro-authored generator's fixed integer-storage budget grows from 32 to **272 cells**: sixteen mask lanes plus 256 flattened snapshot cells. This is a capacity increment for the existing straight-line Linux x86-64 backend, not execution of the full analyzer, dynamic collections, broader platform support or strict toolchain independence.
 
 The increment stacks directly on verified, open/unmerged [PR #93](https://github.com/Shibukedang27/Kuro/pull/93), exact head `5f646ac78a67db94382d9dca214b6f23cafebc9f`, whose eight checks succeeded. No merge is authorized.
@@ -56,6 +58,6 @@ Final acceptance requires all eight GitHub checks to succeed on the exact final 
 
 ## Limits and next path
 
-The hosted interpreter's authored-parser call-depth boundary remains a separate follow-up candidate. Before changing that parser, reproduce its recursion depth and failure behavior, and preserve native compiler results with bounded list witnesses. Before adding branches/loops to storage, prove owner initialization, scalar kinds and operand-stack agreement on every path. Growth needs reviewed logical-length/capacity state and reset rules; aliases and parameters need identity/ABI proofs. Text-name storage and the full analyzer's artifact/global-slot limits remain unresolved.
+At the original #94 checkpoint, the hosted interpreter's authored-parser call-depth boundary remained a separate follow-up candidate. The [assignment-list repair](stack-safe-initializer-lists.md) now addresses that parser/lowerer blocker with reproduced boundary failures and hosted/native list witnesses, without raising the guard. Before adding branches/loops to storage, prove owner initialization, scalar kinds and operand-stack agreement on every path. Growth needs reviewed logical-length/capacity state and reset rules; aliases and parameters need identity/ABI proofs. Text-name storage and the full analyzer's artifact/global-slot limits remain unresolved.
 
 **Strict independence remains unfinished.**

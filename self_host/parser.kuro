@@ -27,7 +27,7 @@
 # `Entered ... then ... otherwise ...;` one-liner (desugars to the same
 # canonical IF encoding a real If/Else would produce).
 #
-# NAMING DISCIPLINE, AND WHY EVERY REPEATED-CONSTRUCT LOOP IS RECURSIVE,
+# NAMING DISCIPLINE, AND WHY REENTRANT REPEATED-CONSTRUCT LOOPS ARE RECURSIVE,
 # NOT while+flag (both load-bearing, not style — found while differential-
 # testing this file, not designed in up front):
 #
@@ -58,14 +58,15 @@
 # written as tail recursion here instead of a while-loop-plus-flag: each
 # repetition is one more (frame-isolated) `Call`, and there is no
 # loop-control variable left to survive — and therefore be clobbered by —
-# a nested call at all. Every one of this file's repeated constructs is
+# a nested call at all. Most of this file's repeated constructs are
 # reentrant in principle (expressions nest via parentheses, blocks nest
-# via If/Action/Repeat/While bodies), so this file does not keep any
+# via If/Action/Repeat/While bodies), so this file does not keep mutable
 # while+flag loops around a call that could recurse back through it —
 # `While` (ADR-0009) remains available in the language and is exercised
 # by the *grammar* this parser recognizes (it can parse a Kuro `While`
-# statement fine), it is just not how this parser implements its own
-# repetition.
+# statement fine). The assignment-only ParseValueListTail is an exception:
+# ParseExpr cannot parse a statement or re-enter a value list. Its comma
+# loop keeps no scratch live across ParseExpr and avoids a frame per value.
 #
 # Every non-parameter
 # variable in this file is therefore named `<ActionName>_<purpose>`, which
@@ -740,14 +741,16 @@ Action ParseTakeNamesTail;
 Done.
 
 Action ParseValueListTail;
-    Call CurKind;
-    ParseValueListTail_K = @_;
-    If ParseValueListTail_K is equal to "COMMA";
+    # Expressions may nest, but cannot re-enter assignment value lists.
+    # Inspect the kind before ParseExpr; no scratch must survive that call.
+    While ParseFailed is equal to 0;
+        Call CurKind;
+        ParseValueListTail_K = @_;
+        If ParseValueListTail_K is not equal to "COMMA";
+            Return 1;
+        Done.
         Add 1 to TokPos;
         Call ParseExpr;
-        If ParseFailed is equal to 0;
-            Call ParseValueListTail;
-        Done.
     Done.
 Done.
 
