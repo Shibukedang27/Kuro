@@ -6,6 +6,11 @@ Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 ## [Unreleased] — In-house implementation policy and Stage 8 foundation
 
 ### Added
+- Test-only Kuro-written streaming loop-read obligations preserve sticky failure
+  independently of slot snapshots, check required entry/backedge coverage and
+  fail closed on malformed call order or row overflow. Oracle differential and
+  native execution probes do not widen production acceptance or replace the
+  Python flow solver; see `docs/engineering/native-loop-use-obligations.md`.
 - Test-only per-use loop facts preserve separate entry/backedge evidence through
   branches and later overwrites, with adversarial native-gate regressions and
   independent finite branch-event checks. Production acceptance is unchanged;

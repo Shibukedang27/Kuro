@@ -1,0 +1,107 @@
+# Bounded TEST-ONLY streaming loop-use obligation reducer, not a solver.
+# The trusted caller supplies complete identities, origins, and kind evidence.
+# Reset starts a new independent run; it is never a branch snapshot operation.
+Action LedgerReset Capacity: Integers;
+    LedgerCapacity = Capacity;
+    LedgerUsed = 0;
+    LedgerBad = 0;
+    LedgerOpen = 0;
+    LedgerSealed = 0;
+    CurrentLoop = "";
+    CurrentPc = "";
+    CurrentSlot = "";
+    CurrentNeedEntry = "None";
+    CurrentNeedBackedge = "None";
+    EntryD = 0;
+    BackedgeD = 0;
+    If Capacity is less than 0 or Capacity is greater than 64;
+        LedgerBad = 1;
+    Done.
+    Return 0;
+Done.
+
+Action LedgerBegin LoopId: Text, LoadPc: Text, SlotName: Text, NeedEntry: Text, NeedBackedge: Text;
+    If LedgerOpen is equal to 1 or LedgerSealed is equal to 1;
+        LedgerBad = 1;
+    Done.
+    If LedgerUsed is greater than or equal to LedgerCapacity or LedgerUsed is greater than or equal to 64;
+        LedgerBad = 1;
+    Else;
+        Add 1 to LedgerUsed;
+    Done.
+    LedgerOpen = 1;
+    CurrentLoop = LoopId;
+    CurrentPc = LoadPc;
+    CurrentSlot = SlotName;
+    CurrentNeedEntry = NeedEntry;
+    CurrentNeedBackedge = NeedBackedge;
+    EntryD = 0;
+    BackedgeD = 0;
+    If NeedEntry is not equal to "R" and NeedEntry is not equal to "None";
+        LedgerBad = 1;
+    Done.
+    If NeedBackedge is not equal to "R" and NeedBackedge is not equal to "None";
+        LedgerBad = 1;
+    Done.
+    Return 0;
+Done.
+
+Action LedgerObserve LoopId: Text, LoadPc: Text, SlotName: Text, Origin: Text, Kind: Text;
+    If LedgerOpen is not equal to 1 or LedgerSealed is equal to 1;
+        LedgerBad = 1;
+    Done.
+    If LoopId is not equal to CurrentLoop or LoadPc is not equal to CurrentPc or SlotName is not equal to CurrentSlot;
+        LedgerBad = 1;
+    Done.
+    # Any non-Decimal observation immediately poisons this entire run.
+    If Kind is not equal to "D";
+        LedgerBad = 1;
+    Done.
+    If Origin is equal to "E";
+        If CurrentNeedEntry is not equal to "R";
+            LedgerBad = 1;
+        Done.
+        EntryD = 1;
+    Else;
+        If Origin is equal to "B";
+            If CurrentNeedBackedge is not equal to "R";
+                LedgerBad = 1;
+            Done.
+            BackedgeD = 1;
+        Else;
+            LedgerBad = 1;
+        Done.
+    Done.
+    Return 0;
+Done.
+
+Action LedgerFinish;
+    If LedgerOpen is not equal to 1 or LedgerSealed is equal to 1;
+        LedgerBad = 1;
+    Done.
+    If CurrentNeedEntry is equal to "R" and EntryD is not equal to 1;
+        LedgerBad = 1;
+    Done.
+    If CurrentNeedBackedge is equal to "R" and BackedgeD is not equal to 1;
+        LedgerBad = 1;
+    Done.
+    LedgerOpen = 0;
+    Return 0;
+Done.
+
+Action LedgerSeal;
+    If LedgerOpen is equal to 1 or LedgerSealed is equal to 1;
+        LedgerBad = 1;
+    Done.
+    LedgerSealed = 1;
+    If LedgerBad is equal to 0;
+        Return 1;
+    Else;
+        Return 0;
+    Done.
+Done.
+
+# The harness supplies one trusted Reset and a stream of Begin/Observe/Finish.
+Print "LEDGER_HARNESS_GOES_HERE".
+Call LedgerSeal;
+Print @_.
