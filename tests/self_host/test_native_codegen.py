@@ -2786,3 +2786,141 @@ def test_kuro_owned_x86_linux_codegen_runs_abi_stack_spills(tmp_path, x86_linux_
     assert result.returncode == 0
     assert result.stdout == "9\n1\n1\ntext9\n1\n"
     assert result.stderr == ""
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+def test_kuro_owned_generator_records_analyzer_execution_boundary(tmp_path, x86_linux_codegen):
+    """A real generator rejection is not analyzer execution or self-hosting."""
+    import hashlib
+    from compiler.self_host import compile_with_kuro_driver, native_codegen_source
+    from test_native_loop_use_flow import FLOW_SOURCE, _source, _store, _read, _repeat
+
+    def digest(data):
+        return hashlib.sha256(data).hexdigest()
+
+    def artifact(tokens):
+        # The artifact loader decodes escaped empty values and control bytes.
+        def encode(token):
+            if token == "":
+                return r"\e"
+            if token == "kuro.input/1":
+                return r"\i"
+            return token.replace("\\", "\\\\").replace("\n", r"\n").replace("\r", r"\r").replace("\t", r"\t")
+        return "kuro.bytecode/1\n" + "\n".join(encode(t) for t in tokens) + "\n"
+
+    def generate(name, source):
+        compiled = compile_with_kuro_driver(source)
+        assert compiled["CompilerFailed"] == 0
+        tokens = [str(t) for t in compiled["CompilerOutput"]]
+        assert compiled["CompilerInstructionCount"] == len(tokens)
+        wire = artifact(tokens)
+        (tmp_path / f"{name}.kuro").write_text(source, encoding="utf-8")
+        (tmp_path / f"{name}.bc").write_text(wire, encoding="utf-8")
+        generated = subprocess.run(
+            [str(x86_linux_codegen)], input=wire, text=True,
+            capture_output=True, timeout=60, check=False,
+        )
+        (tmp_path / f"{name}.s").write_text(generated.stdout, encoding="utf-8")
+        return tokens, generated, {
+            "source_sha256": digest(source.encode()),
+            "artifact_sha256": digest(wire.encode()),
+            "token_count": len(tokens),
+            "generator_exit": generated.returncode,
+            "assembly_bytes": len(generated.stdout.encode()),
+            "assembly_sha256": digest(generated.stdout.encode()),
+        }
+
+    generator_source = native_codegen_source("x86_64-linux")
+    (tmp_path / "generator-source.kuro").write_text(generator_source, encoding="utf-8")
+    manifest = {
+        "compiler_path": "compile_with_kuro_driver: Kuro stages in hosted interpreter",
+        "generator_source": "artifact_loader.kuro + native_codegen.kuro; output=x86_64-linux",
+        "generator_source_sha256": digest(generator_source.encode()),
+        "compiler_stages_sha256": {
+            name: digest((ROOT / "self_host" / name).read_bytes())
+            for name in ("lexer.kuro", "parser.kuro", "lower.kuro", "bytecode.kuro", "compiler.kuro")
+        },
+        "generator_image_sha256": digest(x86_linux_codegen.read_bytes()),
+        "generator_bootstrap": "hosted compile_source/build_native (not independent)",
+        "cases": {},
+    }
+    # Establish the live image can emit, link and execute a compiler-produced
+    # artifact. This control is deliberately NOT a reduced analyzer.
+    control = 'Value = 1.5;\nPrint Value.\n'
+    tokens, generated, record = generate("control", control)
+    assert len(tokens) < 4096
+    assert generated.returncode == 0 and generated.stderr == ""
+    image = tmp_path / "analyzer-boundary-control"
+    subprocess.run(
+        ["clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib",
+         "-Wl,-e,_start", "-x", "assembler", "-", "-o", str(image)],
+        input=generated.stdout, text=True, capture_output=True, check=True,
+    )
+    executed = subprocess.run([str(image)], text=True, capture_output=True, timeout=5)
+    assert executed.returncode == 0 and executed.stdout == "1.5\n" and executed.stderr == ""
+    undefined = subprocess.run(["nm", "-u", str(image)], text=True, capture_output=True, check=True)
+    assert undefined.stdout.strip() == ""
+    record.update(executed_image=str(image), executed_image_sha256=digest(image.read_bytes()),
+                  stdout="1.5\n", undefined_symbols=[])
+    manifest["cases"]["control"] = record
+
+    cases = {
+        "unchanged-analyzer": FLOW_SOURCE.read_text(encoding="utf-8"),
+        "safe-raw-input": _source(_repeat(_store() + _read())),
+        "malformed-raw-input": _source(["BC_CONST"]),
+        "slot-overflow-raw-input": _source(_repeat(sum(
+            (_store(name=f"slot{i:02d}") for i in range(17)), []), "0")),
+        # Avoid 129 consecutive source statements in the hosted Kuro parser;
+        # this constructor still materializes exactly 129 raw input tokens.
+        "token-overflow-raw-input": FLOW_SOURCE.read_text(encoding="utf-8").replace(
+            "RawTokens is Text;",
+            'RawTokens is Text;\nRepeat 129;\nAppend "BC_PRINT" to RawTokens;\nDone.',
+            1,
+        ),
+    }
+    for name, source in cases.items():
+        tokens, generated, record = generate(name, source)
+        assert len(tokens) > 4096
+        # Never truncate, omit Actions, raise capacity or substitute hosted
+        # analyzer execution to make this path look successful.
+        assert generated.returncode == 1, (name, generated.stderr)
+        assert generated.stdout == "" and generated.stderr == "", name
+        record["embedded_analyzer_program_executed"] = False
+        manifest["cases"][name] = record
+
+    # Isolate collection lowering from the whole-analyzer token ceiling. Being
+    # recognized by the scanner is not proof these opcodes can be emitted.
+    probes = {
+        "collection-declaration": 'Items is Text;\n',
+        "collection-append": 'Items = "";\nAppend "x" to Items;\n',
+        "collection-get": 'Items = "";\nGet Items 0;\nPrint @_.\n',
+        "collection-set": 'Items = "";\nSet Items 0 to "x";\n',
+        "truncated-bytecode": None,
+    }
+    for name, source in probes.items():
+        if source is None:
+            wire = artifact(["BC_CONST"])
+            generated = subprocess.run(
+                [str(x86_linux_codegen)], input=wire,
+                text=True, capture_output=True, timeout=60, check=False,
+            )
+            (tmp_path / f"{name}.bc").write_text(wire, encoding="utf-8")
+            record = {"token_count": 1, "generator_exit": generated.returncode,
+                      "artifact_sha256": digest(wire.encode())}
+        else:
+            tokens, generated, record = generate(name, source)
+            assert len(tokens) < 4096
+            expected_op = {
+                "collection-declaration": "BC_DECLTYPE", "collection-append": "BC_APPEND",
+                "collection-get": "BC_GET", "collection-set": "BC_SET",
+            }[name]
+            assert expected_op in tokens
+        assert generated.returncode == 1, (name, generated.stderr)
+        assert generated.stdout == "" and generated.stderr == "", name
+        manifest["cases"][name] = record
+    (tmp_path / "generator-boundary-provenance.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8",
+    )
