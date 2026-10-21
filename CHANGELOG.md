@@ -6,6 +6,10 @@ Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 ## [Unreleased] — In-house implementation policy and Stage 8 foundation
 
 ### Added
+- Native codegen composes all-path nested If/Else Decimal initialization with
+  function-free top-level literal `Repeat 1`. General loop joins and first
+  initialization in nested loops remain rejected; see
+  `docs/engineering/native-repeat-branch-joins.md`.
 - `docs/architecture/in-house-implementation.md`: binding policy that Kuro's
   production compiler, runtime, standard library, package format, and tools
   must ultimately be authored in Kuro. The Python compiler is explicitly a

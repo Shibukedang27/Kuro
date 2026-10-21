@@ -215,8 +215,8 @@ def branch_join_rejection_cases() -> dict[str, list[str]]:
             "BC_ELSE_BEGIN", "BC_CONST", "3.5", "BC_STORE_LIST", "Fresh", "BC_IF_END",
             "BC_REPEAT_END",
         ],
-        "nested-under-repeat-nonzero": [
-            "BC_CONST", "1", "BC_REPEAT_BEGIN", "BC_CONST", "1", "BC_IF_BEGIN",
+        "nested-under-repeat-multitrip": [
+            "BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_CONST", "1", "BC_IF_BEGIN",
             "BC_CONST", "1", "BC_IF_BEGIN", "BC_CONST", "1.5", "BC_STORE_LIST", "Fresh",
             "BC_ELSE_BEGIN", "BC_CONST", "2.5", "BC_STORE_LIST", "Fresh", "BC_IF_END",
             "BC_ELSE_BEGIN", "BC_CONST", "3.5", "BC_STORE_LIST", "Fresh", "BC_IF_END",

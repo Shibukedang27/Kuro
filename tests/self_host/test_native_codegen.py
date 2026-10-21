@@ -1554,7 +1554,37 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
             expected, name,
         )
 
-    rejection_cases = {**branch_join_rejection_cases(), **loop_init_rejection_cases()}
+    from test_native_repeat_branch_joins import (
+        CHOICES, repeat_branch_program, repeat_branch_output, repeat_branch_rejection_cases,
+        repeat_branch_boundary_bytecode, repeat_branch_positive_cases,
+    )
+    for outer, middle, inner in CHOICES:
+        compiled = compile_with_kuro_driver(repeat_branch_program(outer, middle, inner))
+        assert_compiled_decimal_program(
+            generator, tmp_path, target, [str(token) for token in compiled["CompilerOutput"]],
+            repeat_branch_output(outer, middle, inner),
+            f"repeat-branches-{outer}-{middle}-{inner}",
+        )
+    for name, tokens in repeat_branch_positive_cases().items():
+        # Non-printing case has no observable output; the others exercise frame reset.
+        expected = {"complete-branches": "1.5\n", "nested-complete-branches": "",
+                    "permission-restored-after-inner-regions": "1.5\n",
+                    "sibling-frame-reset": "4.5\n"}[name]
+        assert_compiled_decimal_program(generator, tmp_path, target, tokens, expected, name)
+    assert_compiled_decimal_program(
+        generator, tmp_path, target, repeat_branch_boundary_bytecode(), "2.5\n",
+        "repeat-branches-boundary",
+    )
+    for invalid in (repeat_branch_boundary_bytecode(depth=17),
+                    repeat_branch_boundary_bytecode(global_count=65)):
+        rejected = subprocess.run(
+            [str(generator)], input="kuro.bytecode/1\n" + "\n".join(invalid) + "\n",
+            capture_output=True, text=True, timeout=30,
+        )
+        assert rejected.returncode == 1
+        assert rejected.stdout == rejected.stderr == ""
+    rejection_cases = {**branch_join_rejection_cases(), **loop_init_rejection_cases(),
+                       **repeat_branch_rejection_cases()}
     for name, tokens in rejection_cases.items():
         rejected = subprocess.run(
             [str(generator)],
