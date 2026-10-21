@@ -6,6 +6,10 @@ Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 ## [Unreleased] — In-house implementation policy and Stage 8 foundation
 
 ### Added
+- Test-only native loop-flow facts distinguish entry, backedge, normal-exit
+  and read-site kinds before any multitrip Decimal initialization extension.
+  Production acceptance is unchanged; see
+  `docs/engineering/native-loop-flow-facts.md`.
 - Native codegen composes all-path nested If/Else Decimal initialization with
   function-free top-level literal `Repeat 1`. General loop joins and first
   initialization in nested loops remain rejected; see
