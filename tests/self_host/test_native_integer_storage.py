@@ -26,8 +26,7 @@ assert eval(MIN_INDEX, {"EndpointMaximum": (1 << 63) - 1}) == -(1 << 63)
 
 
 def endpoint_setup(expression):
-    # The inherited Kuro lowering stage reuses recursive operator scratch state:
-    # do not claim nested subtraction parity from an accidentally different op.
+    # Keep the explicit scalar endpoint construction as an independent witness.
     return f"EndpointMaximum = {MAX_INDEX};\n" if "EndpointMaximum" in str(expression) else ""
 
 
@@ -297,9 +296,8 @@ def test_actual_generator_indexed_token_ceiling(tmp_path, x86_linux_codegen, len
         assert (result.returncode, result.stdout, result.stderr) == (1, '', '')
 
 
-def test_inherited_nested_subtraction_lowering_is_not_source_parity():
-    # This failure precedes the native generator. Keep an executable boundary so
-    # this storage increment cannot accidentally claim general expression parity.
+def test_nested_subtraction_lowering_preserves_source_operator():
+    # Pin the exact bytecode as well as the value: this previously emitted +,+.
     from compiler.pipeline import run_source
     from test_vm_cross import run_kuro_vm_environment
     source = 'Value = 0 - (2 + 1);\nPrint Value.\n'
@@ -307,10 +305,39 @@ def test_inherited_nested_subtraction_lowering_is_not_source_parity():
     assert hosted.ok and hosted.stdout == '-3\n'
     tokens = compiler_tokens(source)
     assert tokens == ['BC_CONST', '0', 'BC_CONST', '2', 'BC_CONST', '1',
-                      'BC_BINOP', '+', 'BC_BINOP', '+', 'BC_STORE_LIST', 'Value',
+                      'BC_BINOP', '+', 'BC_BINOP', '-', 'BC_STORE_LIST', 'Value',
                       'BC_LOADVAR', 'Value', 'BC_PRINT']
     vm = run_kuro_vm_environment(source)
-    assert vm['VMFailed'] == 0 and vm['VMOutput'] == [3]
+    assert vm['VMFailed'] == 0 and vm['VMOutput'] == [-3]
+
+
+@requires_linux
+@pytest.mark.parametrize('body,expected', [
+    ('Get Items 1 - (1 + 1);\nPrint @_.\n', '22\n'),
+    ('Set Items 2 - (0 + 1) to 20 - (2 + 3);\nGet Items 1;\nPrint @_.\n', '15\n'),
+    ('Value = 3 * (8 - (2 + 1));\nPrint Value.\n', '15\n'),
+])
+def test_actual_generator_nested_integer_expression_parity(tmp_path, x86_linux_codegen, body, expected):
+    source = 'Items = 11, 22;\n' + body
+    logical = _logical_runtimes(source)
+    assert all(runtime['stdout'] == expected for runtime in logical.values())
+    assert logical['hosted']['error'] is None and logical['bytecode']['error'] is None
+    assert not logical['kuro_vm']['failed']
+    result = execute(x86_linux_codegen, source, tmp_path)
+    assert (result.returncode, result.stdout, result.stderr) == (0, expected, '')
+
+
+@requires_linux
+def test_actual_generator_nested_negative_write_still_rejects(tmp_path, x86_linux_codegen):
+    # Before the parser repair this became index +1 and silently wrote a cell.
+    source = 'Items = 11, 22;\nSet Items 0 - (0 + 1) to 99;\nPrint 777.\n'
+    logical = _logical_runtimes(source)
+    assert logical['hosted']['error'][0] == 'E6001'
+    assert logical['bytecode']['error'][0] == 'E6001'
+    assert logical['kuro_vm']['failed']
+    assert all(runtime['stdout'] == '' for runtime in logical.values())
+    result = execute(x86_linux_codegen, source, tmp_path)
+    assert (result.returncode, result.stdout, result.stderr) == (1, '', '')
 
 
 def test_actual_generator_integer_storage_execution_host_boundary(tmp_path, x86_linux_codegen):

@@ -355,14 +355,21 @@ Action ParseFactorTail;
         If ParseFactorTail_K is equal to "SLASH";
             ParseFactorTail_Op = "/";
         Done.
-        Add 1 to TokPos;
-        Call ParseAtom;
-        Append "BIN" to AstOut;
-        Append ParseFactorTail_Op to AstOut;
+        Call ParseFactorOperand ParseFactorTail_Op;
         If ParseFailed is equal to 0;
             Call ParseFactorTail;
         Done.
     Done.
+Done.
+
+# A parenthesized operand can re-enter either arithmetic tail and overwrite
+# its global scratch. Only parameters are frame-local: capture the operator
+# before parsing the right operand, then emit that saved value afterward.
+Action ParseFactorOperand Operator: Text;
+    Add 1 to TokPos;
+    Call ParseAtom;
+    Append "BIN" to AstOut;
+    Append Operator to AstOut;
 Done.
 
 Action ParseTerm;
@@ -378,14 +385,18 @@ Action ParseTermTail;
         If ParseTermTail_K is equal to "MINUS";
             ParseTermTail_Op = "-";
         Done.
-        Add 1 to TokPos;
-        Call ParseFactor;
-        Append "BIN" to AstOut;
-        Append ParseTermTail_Op to AstOut;
+        Call ParseTermOperand ParseTermTail_Op;
         If ParseFailed is equal to 0;
             Call ParseTermTail;
         Done.
     Done.
+Done.
+
+Action ParseTermOperand Operator: Text;
+    Add 1 to TokPos;
+    Call ParseFactor;
+    Append "BIN" to AstOut;
+    Append Operator to AstOut;
 Done.
 
 Action ParseExpr;
