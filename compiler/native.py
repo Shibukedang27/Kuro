@@ -269,6 +269,105 @@ def supported_native_targets() -> tuple[str, ...]:
     return ("aarch64-macos", "x86_64-macos", "x86_64-linux")
 
 
+def _arm64_integer_collections(ir: IRProgram, collection_names: set[str]) -> set[str]:
+    """Prove Integer-typed element writes, without trusting names or types alone.
+
+    Union every definition's dependencies, including both sides of branches and
+    every direct caller's arguments. Remove unsupported/non-integer definitions
+    and their dependants to a fixed point. Numeric collection/frame cycles are
+    allowed, but a Text or unknown write anywhere poisons the entire cycle.
+    This does not infer kinds without resolved Integer metadata.
+    """
+    candidates = {n for n in collection_names if ir.symbol_types.get(n) == "Integers"}
+    if not candidates:
+        return set()
+    dependencies: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    invalid: set[tuple[str, str]] = set()
+
+    def define(key, sources=(), *, numeric=True):
+        dependencies.setdefault(key, set()).update(sources)
+        if not numeric:
+            invalid.add(key)
+
+    def collection(name):
+        return ("<collection>", name)
+
+    blocks = [("", (), ir.main)] + [
+        (f.name, f.params, f.body) for f in ir.functions.values()
+    ]
+    indirect_calls = any(
+        i.op == "CALL" and i.args[0] in {"MakeClosure", "Invoke", "Spawn"}
+        for _, _, body in blocks for i in body
+    )
+    for scope, params, body in blocks:
+        def key(name):
+            local = scope and (name in params or name.startswith(scope + "_"))
+            return (scope if local or name.startswith(("t", "__")) else "", name)
+
+        if indirect_calls:
+            for parameter in params:
+                define((scope, parameter), numeric=False)
+        # @_ is an accumulator, not SSA. Only use a producer in the same
+        # straight-line block; never guess its value across a control-flow join.
+        accumulator = None
+        for item in body:
+            op, args = item.op, item.args
+            if op in {"LABEL", "JUMP", "JUMPF", "RETURN"}:
+                accumulator = None
+            if op == "CONST":
+                define(key(item.dest), numeric=type(args[0]) is int)
+            elif op == "LOADVAR":
+                source = accumulator if args[0] == "_" else key(args[0])
+                define(key(item.dest), () if source is None else (source,), numeric=source is not None)
+            elif op == "STORE_LIST":
+                name, values = args
+                if name in candidates:
+                    define(collection(name), (key(v) for v in values))
+                elif name == "_":
+                    accumulator = key(values[0]) if len(values) == 1 else None
+                else:
+                    define(key(name), (key(v) for v in values), numeric=len(values) == 1 and name not in collection_names)
+            elif op in {"APPEND", "SET"}:
+                if args[0] in candidates:
+                    define(collection(args[0]), (key(args[-1]),))
+            elif op == "GET":
+                define(key(item.dest), (collection(args[0]),), numeric=args[0] in candidates)
+            elif op in {"UPDATE", "RESTOREVAR", "ADD"}:
+                define(key(args[0]), (key(args[1]),))
+                if args[0] == "_":
+                    accumulator = None
+            elif op == "SAVEVAR":
+                define(key(item.dest), (key(args[0]),))
+            elif op in {"BINOP", "AND", "OR"}:
+                operands = args[1:] if op == "BINOP" else args
+                define(key(item.dest), (key(v) for v in operands))
+            elif op in {"CMP", "ISCLASS", "LENGTH"}:
+                define(key(item.dest))
+            elif op == "CALL":
+                function = ir.functions.get(args[0])
+                if item.dest:
+                    define(key(item.dest), ((args[0], "<return>"),), numeric=function is not None)
+                if function is not None:
+                    for index, parameter in enumerate(function.params, 1):
+                        define((function.name, parameter), (key(args[index]),) if index < len(args) else (), numeric=index < len(args))
+                accumulator = None
+            elif op == "RETURN":
+                define((scope, "<return>"), (key(args[0]),) if args else ())
+            elif op == "INPUT":
+                define(key(args[0]), numeric=False)
+                if args[0] == "_":
+                    accumulator = None
+            elif item.dest and op != "LABEL":
+                define(key(item.dest), numeric=False)
+
+    proven = set(dependencies) - invalid
+    while True:
+        refined = {n for n in proven if dependencies[n] <= proven}
+        if refined == proven:
+            return {n for n in candidates if collection(n) in proven}
+        proven = refined
+
+
 def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
     """Lower the straight-line IR/control-flow subset to real arm64 code."""
     instructions = ir.main
@@ -303,6 +402,12 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
             if item.op in {"LOADVAR", "STORE_LIST", "UPDATE", "ADD", "APPEND", "SAVEVAR", "RESTOREVAR"}:
                 names.add(item.args[0])
     untracked_collection_pointers = _untracked_collection_pointers(ir, collection_names)
+    # Keep existing unsupported-alias diagnostics ahead of the new proof. A
+    # source binding such as t0 can collide with an IR temporary's spelling.
+    for scope, body in [("", instructions)] + [(f.name, f.body) for f in ir.functions.values()]:
+        for item in body:
+            if item.op in {"GET", "SET", "LENGTH", "APPEND"} and item.args[0] in untracked_collection_pointers[scope]:
+                raise NativeBackendError(f"native {item.op} requires logical length metadata for collection aliases")
     slots = {name: index * 8 for index, name in enumerate(sorted(names))}
     frame = ((len(slots) * 8 + 15) // 16) * 16 or 16
     lines = [
@@ -351,8 +456,12 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
     global_labels = {name: f"_kuro_global_{index}" for index, name in enumerate(sorted(global_names))}
     collection_kinds: dict[str, str] = {}
     # Kuro's compiler/runtime collections are textual streams by default;
-    # concrete literal APPEND/STORE_LIST values below refine this where known.
-    collection_kinds.update({name: "text" for name in collection_names})
+    # refine only Integer-typed owners with proven numeric writes.
+    integer_collections = _arm64_integer_collections(ir, collection_names)
+    collection_kinds.update({
+        name: "number" if name in integer_collections else "text"
+        for name in collection_names
+    })
     all_items = list(instructions)
     for function in ir.functions.values():
         all_items.extend(function.body)
