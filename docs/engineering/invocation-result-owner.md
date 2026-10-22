@@ -1,5 +1,7 @@
 # Invocation-owned results
 
+**Follow-up:** the [bounded x86 direct-native result-owner increment](direct-native-result-owner.md) migrates the no-parameter integer entry boundary described below. ARM64 remains unchanged. This document retains the parent increment's evidence and historical boundaries; use the follow-up for the current x86 channel, fail-closed limitations, and final acceptance requirements.
+
 This implementation is stacked on open, unmerged [PR #101](https://github.com/Shibukedang27/Kuro/pull/101), exact verified head `313973fdc884c1d6c56e1acec9385aa0d8f3f1f6` (eight successful checks rechecked). The owner delegated the semantic choice. The selected direction implements the [prior owner proposal](result-publication-contract.md#proposed-result-only-protocol-for-the-next-implementation), with an explicit policy for source writes. Keep this PR and its ancestors open and unmerged. **Strict independence remains unfinished.**
 
 ## The behavior being repaired
