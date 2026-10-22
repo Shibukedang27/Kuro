@@ -68,6 +68,17 @@ FIXTURES = [
         "42\n",
         id="nested-result",
     ),
+    pytest.param(
+        "Action Read _; _ = 23; Return @_; Done. Call Read 17; Print @_.",
+        [
+            "BC_FUNC_BEGIN", "Read", "BC_PARAM", "_", "NONE", "BC_CONST", "23",
+            "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_RETURN", "BC_FUNC_END",
+            "BC_CALL_BEGIN", "Read", "BC_CONST", "17", "BC_CALL_END", "BC_STORE_LIST", "_",
+            "BC_LOADVAR", "_", "BC_PRINT",
+        ],
+        "23\n",
+        id="explicit-assignment-replaces-parameter-owner",
+    ),
 ]
 
 
@@ -117,11 +128,11 @@ def test_kuro_result_codegen_contract(source, expected_bytecode, native_output, 
         source = source.replace("Action Read _;", "Action Read _: Integers;", 1)
         expected_bytecode = ["Integers" if token == "NONE" else token for token in expected_bytecode]
 
-    # This is the language-level reference result. Both fixtures currently
-    # resolve the action's `_` read to its argument, yielding 17.
+    # The reference engine uses the same writable result owner: entry-only
+    # retains 17, while a successful nested producer or explicit write replaces it.
     reference = budget.run_source(source)
     assert reference.ok, reference.runtime_error
-    assert reference.stdout == "17\n"
+    assert reference.stdout == native_output
 
     # compile_with_kuro_driver calls this module-level run_source; patch it so
     # the hosted compiler and the generator share the same instruction budget.

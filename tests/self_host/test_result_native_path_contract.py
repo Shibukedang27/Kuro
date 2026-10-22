@@ -1,6 +1,7 @@
 """Pin the admitted result behavior of direct native and authored-VM paths.
 
-These are path-specific observations, not a cross-runtime semantic policy.
+These pin the admitted owner slice and the deliberately retained native entry
+boundary; they are not claims of full cross-runtime parity.
 """
 
 import platform
@@ -21,10 +22,10 @@ requires_native_backend = pytest.mark.skipif(
 
 
 # Sources stay inside the small Action/Call/Return subset admitted by both
-# native execution paths except the explicit ARM64 rejection. Output pairs are
-# intentionally explicit: the
-# authored VM's zero-initialized frame result differs from the Python native
-# backend's direct-call/global behavior at entry and fall-through.
+# native execution paths except the explicit ARM64 rejection. The hosted native
+# backend does not yet pass a caller's effective `_` into a no-parameter Action;
+# the authored VM keeps its zero-valued root representation and now inherits
+# its caller's current result slot.
 DIRECT_ENTRY_SOURCE = (
     "Action Seed; Return 17; Done. Action Read; Return @_; Done. "
     "Call Seed; Call Read; Print @_."
@@ -33,14 +34,24 @@ CASES = [
     pytest.param(
         DIRECT_ENTRY_SOURCE,
         "17\n",
+        "17\n",
+        "native action 'Read' reads a dynamic value",
+        id="direct-entry-global-and-authored-inherited-result",
+    ),
+    pytest.param(
+        "Action Seed; Return 17; Done. Action Answer; Return 42; Done. "
+        "Action Read; If @_ is equal to 17; Return 1; Else; Return 0; Done. Done. "
+        "Action Outer _; Call Answer; Call Read; Return @_; Done. "
+        "Call Seed; Call Outer 17; Print @_.",
+        "1\n",
         "0\n",
         "native action 'Read' reads a dynamic value",
-        id="direct-entry-global-versus-authored-zero",
+        id="no-param-native-entry-remains-ambient-not-caller-owner",
     ),
     pytest.param(
         "Action Read _; Return @_; Done. Call Read 17; Print @_.",
         "17\n",
-        "0\n",
+        "17\n",
         None,
         id="underscore-parameter-entry-only",
     ),
@@ -70,6 +81,27 @@ CASES = [
         "42\n9\n",
         None,
         id="explicit-inner-publication-then-outer-return",
+    ),
+    pytest.param(
+        "Action Write _; _ = 23; Return @_; Done. Call Write 17; Print @_.",
+        "23\n",
+        "23\n",
+        None,
+        id="explicit-assignment-updates-parameter-owner",
+    ),
+    pytest.param(
+        "Action Write _; Update _ to 23; Return @_; Done. Call Write 17; Print @_.",
+        "23\n",
+        "23\n",
+        None,
+        id="explicit-update-updates-parameter-owner",
+    ),
+    pytest.param(
+        "Action Write _; Add 6 to _; Return @_; Done. Call Write 17; Print @_.",
+        "23\n",
+        "23\n",
+        None,
+        id="explicit-add-updates-parameter-owner",
     ),
 ]
 

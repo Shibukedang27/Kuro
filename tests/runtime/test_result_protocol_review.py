@@ -1,140 +1,130 @@
-"""Unselected result-owner decisions, exercised on unchanged Python engines.
-
-These are current-behavior witnesses, not acceptance tests for the proposed
-protocol. Keep explicit result writes distinct from lowered producer stores.
-"""
+"""Cross-path protocol regressions for result ownership and publication."""
 
 import pytest
 
+from compiler.interpreter import KuroRuntimeException
 from compiler.pipeline import compile_source
 from compiler.values import ClosureValue
 from test_result_publication_contract import ANSWER, engine, prepare, run
 
 
-@pytest.mark.parametrize("statement, written", [
+@pytest.mark.parametrize("statement, expected", [
     ("_ = 23;", 23),
     ("Update _ to 23;", 23),
     ("Add 6 to _;", 23),
 ])
 @pytest.mark.parametrize("invocation", ["Call Outer 17;", "Call Invoke Handle, 17;"])
-def test_explicit_result_writes_keep_parameter_read_overlay(engine, statement, written, invocation):
+def test_explicit_scalar_result_writes_target_current_owner(engine, statement, expected, invocation):
     runtime, output = run(
-        "Observed = 0; "
-        "Action Observe; Update Observed to @_; Return 0; Done. "
-        "Action Outer _; " + statement + " Call Observe; Print @_. Return @_; Done. "
+        "Action Outer _; " + statement + " Return @_; Done. "
         'Call MakeClosure "Outer"; Handle = @_; ' + invocation + " Print @_.",
         engine,
     )
-    # Assignment, Update and Add target env, even though reads still see the
-    # parameter. Add reads the parameter 17, not the closure-handle global.
-    assert runtime.env["Observed"] == written
-    assert output == "17\n17\n"
-    assert runtime.env["_"] == 17
+    assert output == f"{expected}\n"
+    assert runtime.env["_"] == expected
 
 
-@pytest.mark.parametrize("older", [None, 0, 17])
-def test_absent_top_capture_can_snapshot_older_frame_result_not_effective_read(engine, older):
+def test_input_to_result_register_targets_action_owner(engine):
     runtime, output = run(
-        ANSWER + "Inner = 0; Seen = 0; Handle = 0; Value is Integers; "
-        "Action Leaf Dummy; Return @_; Done. "
-        "Action Worker Dummy; Call Answer; Update Seen to @_; "
-        'Call MakeClosure "Leaf"; Update Inner to @_; Return 9; Done. '
-        "Action Outer _; Call Invoke Handle, 0; Return 0; Done. "
-        # The first snapshot has no result binding at all. The later Outer
-        # parameter is invisible to Worker's ordinary top-frame-only lookup,
-        # but is visible to MakeClosure's all-frame merge.
-        'Call MakeClosure "Worker"; Handle = @_; Call Outer Value; '
-        "Call Invoke Inner, 0; Print @_.",
-        engine, {"Value": older},
+        'Action Read; _ = "before"; Take _; Return @_; Done. Call Read; Print @_.' ,
+        engine,
+        input_fn=lambda _prompt: "captured input",
     )
-    assert "_" not in runtime.env["Handle"].captured
-    assert runtime.env["Seen"] == 42
-    assert runtime.env["Inner"].captured["_"] == older
-    assert output == f"{older}\n"
+    assert output == "captured input\n"
+    assert runtime.env["_"] == "captured input"
 
 
-@pytest.mark.parametrize("initial", [{}, {"_": 17}])
-@pytest.mark.parametrize("body, returned, global_result", [
-    ("Return @_;", None, "absent"),
-    ("Call Answer; Return 9;", 9, 42),
-    ("Call Answer;", None, 42),
-])
-def test_host_call_entry_and_nested_source_publication_are_separate(engine, initial, body, returned, global_result):
-    runtime, _output = prepare(ANSWER + "Action Pick; " + body + " Done.", engine, initial)
+def test_append_and_text_set_to_result_register_mutate_owner(engine):
+    runtime, _output = run(
+        'Action AppendResult _; Append 3 to _; Return @_; Done. '
+        "Items = 1, 2; Call AppendResult Items; "
+        'Action SetText _; Set _ 1 to "X"; Return @_; Done. '
+        'Call SetText "abc";',
+        engine,
+    )
+    # The second action's return replaces the main owner after AppendResult.
+    assert runtime.env["_"] == "aXc"
+    assert runtime.env["Items"] == [1, 2, 3]
+
+
+def test_append_mutates_list_owned_by_result_slot(engine):
+    runtime, _output = run(
+        "Action AppendResult _; Append 3 to _; Return @_; Done. "
+        "Items = 1, 2; Call AppendResult Items;",
+        engine,
+    )
+    assert runtime.env["_"] == [1, 2, 3]
+    assert runtime.env["Items"] == [1, 2, 3]
+
+
+@pytest.mark.parametrize("initial", [{}, {"_": None}, {"_": 0}, {"_": 17}])
+def test_makeclosure_preserves_presence_and_value_snapshot(engine, initial):
+    runtime, _output = run(
+        ANSWER + 'Action Read Dummy; Return @_; Done. Call MakeClosure "Read"; Handle = @_; '
+        "Call Answer; Call Invoke Handle, 0;",
+        engine,
+        initial,
+    )
+    closure = runtime.env["Handle"]
+    assert isinstance(closure, ClosureValue)
+    assert ("_" in closure.captured) is ("_" in initial)
+    if "_" in initial:
+        assert closure.captured["_"] == initial["_"]
+    # Read has no producer: its saved snapshot, not the later main 42, returns.
+    assert runtime.env["_"] == (initial["_"] if "_" in initial else None)
+
+
+def test_host_call_does_not_publish_return_or_nested_producer_to_main(engine):
+    runtime, _output = prepare(
+        ANSWER + "Action HostTarget; Call Answer; Return 9; Done.",
+        engine,
+        {"_": 17},
+    )
     runtime.run()
-    assert ("_" in runtime.env) == ("_" in initial)
     call = runtime.call if engine == "ir" else runtime._call
-    if global_result == "absent":
-        assert call("Pick", []) == initial.get("_")
-        assert ("_" in runtime.env) == ("_" in initial)
-        if "_" in initial:
-            assert runtime.env["_"] == initial["_"]
-    else:
-        assert call("Pick", []) == returned
-        # The host API does not publish Pick's return value, but the source
-        # producer in Pick has already changed the shared global result.
-        assert runtime.env["_"] == global_result
+    assert call("HostTarget", []) == 9
+    # Call Answer changed HostTarget's owner; neither its own producer nor the
+    # host-returned value is published into the root owner.
+    assert runtime.env["_"] == 17
     assert runtime.frames == []
-    assert not any(name.endswith("$") for name in runtime.env)
 
 
-def test_result_snapshot_remains_shallow_for_ordinary_collection_alias(engine):
+def test_host_call_failure_discards_action_owner_and_preserves_global_effects(engine):
+    runtime, _output = prepare(
+        "Action HostTarget; Global = 9; Return 1 / 0; Done.",
+        engine,
+        {"_": 17},
+    )
+    runtime.run()
+    call = runtime.call if engine == "ir" else runtime._call
+    with pytest.raises(KuroRuntimeException):
+        call("HostTarget", [])
+    assert runtime.env["_"] == 17
+    assert runtime.env["Global"] == 9
+    assert runtime.frames == []
+
+
+def test_ordinary_closure_capture_stays_shallow_while_result_snapshot_is_local(engine):
     runtime, output = run(
         ANSWER + "Items = 8, 9; "
-        "Action Worker Dummy; Set Items 0 to 23; Call Answer; Return @_; Done. "
+        'Action Worker Dummy; Set Items 0 to 23; Call Answer; Return @_; Done. '
         'Call MakeClosure "Worker"; Handle = @_; Call Invoke Handle, 0; Print @_.',
-        engine, {"_": 17},
+        engine,
+        {"_": 17},
     )
     handle = runtime.env["Handle"]
     assert isinstance(handle, ClosureValue)
     assert handle.captured["Items"] is runtime.env["Items"]
     assert runtime.env["Items"] == [23, 9]
     assert handle.captured["_"] == 17
-    assert output == "17\n"
+    assert output == "42\n"
 
 
-def test_direct_reader_without_prior_producer_uses_global_not_callers_capture(engine):
-    runtime, output = run(
-        ANSWER + "Seen = 0; "
-        "Action Read; Update Seen to @_; Return @_; Done. "
-        "Action Worker Dummy; Call Read; Return @_; Done. "
-        'Call MakeClosure "Worker"; Handle = @_; Call Answer; '
-        "Call Invoke Handle, 0; Print @_.",
-        engine, {"_": 17},
-    )
-    assert runtime.env["Seen"] == 42
-    assert output == "17\n"
-
-
-@pytest.mark.parametrize("initial, expected", [
-    ({}, 42), ({"_": None}, None), ({"_": 0}, 0), ({"_": 17}, 17),
-])
-def test_repeated_and_deferred_calls_reuse_result_snapshot_in_both_engines(engine, initial, expected):
-    runtime, output = run(
-        ANSWER + "Action Worker Dummy; Call Answer; Return @_; Done. "
-        'Call MakeClosure "Worker"; Handle = @_; '
-        "Call Invoke Handle, 0; Print @_. Call Answer; "
-        "Call Invoke Handle, 0; Print @_. "
-        "Call Spawn Handle, 0; Task = @_; Call Answer; Call Await Task; Print @_.",
-        engine, initial,
-    )
-    assert output == f"{expected}\n" * 3
-    assert ("_" in runtime.env["Handle"].captured) == ("_" in initial)
-    if "_" in initial:
-        assert runtime.env["Handle"].captured["_"] == initial["_"]
-    assert next(iter(runtime.scheduler.tasks.values())).state == "done"
-
-
-def test_explicit_assignment_and_producer_share_result_store_opcode():
-    stores = []
-    for statement in ("_ = 23;", "Call Answer;"):
-        compiled = compile_source(ANSWER + statement)
+def test_successful_lowered_producer_still_has_distinct_publication_store():
+    for statement, opcode in [("Call Answer;", "CALL"), ("Get Items 0;", "GET"), ("Length Word;", "LENGTH")]:
+        compiled = compile_source(ANSWER + 'Items = 8, 9; Word = "ok"; ' + statement)
         assert compiled.ok, compiled.diags.render_all()
-        store = compiled.ir.main[-1]
-        assert store.op == "STORE_LIST"
-        assert store.args[0] == "_"
-        assert len(store.args[1]) == 1
-        stores.append(store)
-    # A rule keyed only on this opcode/destination changes explicit writes as
-    # well as producer publication. The operand temporaries are not policy tags.
-    assert stores[0].op == stores[1].op
+        producer, publication = compiled.ir.main[-2:]
+        assert producer.op == opcode
+        assert publication.op == "STORE_LIST"
+        assert publication.args == ("_", (producer.dest,))

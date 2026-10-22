@@ -1,8 +1,4 @@
-"""Characterize current reference result overlays, not desired cross-engine semantics.
-
-These passing compatibility witnesses do not endorse a stale @_ after
-Call/Get/Length. A future scoped repair must update the contract explicitly.
-"""
+"""Result-owner entry, publication, and closure-snapshot regressions for IR."""
 
 import io
 
@@ -36,40 +32,40 @@ def run_bounded(source, *, initial_env=None):
 _ANSWER = 'Action Answer;\nReturn 42;\nDone.\n'
 
 
-@pytest.mark.parametrize("initial, expected", [
-    ({}, 42), ({"_": 17}, 17), ({"_": None}, None), ({"_": 0}, 0),
-])
-def test_capture_presence_not_truthiness_controls_result_read_priority(initial, expected):
+@pytest.mark.parametrize("initial", [{}, {"_": 17}, {"_": None}, {"_": 0}])
+def test_closure_call_producer_replaces_its_result_owner(initial):
     output, runtime = run_bounded(
         _ANSWER + 'Action Worker Dummy;\nCall Answer;\nPrint @_.\nReturn @_;\nDone.\n'
         'Call MakeClosure "Worker";\nHandle = @_;\nCall Invoke Handle, 0;\nPrint @_.',
         initial_env=initial,
     )
-    assert output == f"{expected}\n{expected}\n"
-    assert runtime.env["_"] == expected
-    assert ("_" in runtime.env["Handle"].captured) == ("_" in initial)
+    assert output == "42\n42\n"
+    assert runtime.env["_"] == 42
+    handle = runtime.env["Handle"]
+    assert isinstance(handle, ClosureValue)
+    assert ("_" in handle.captured) is ("_" in initial)
 
 
 @pytest.mark.parametrize("statement, written", [
     ('Call Answer;', 42), ('Get Items 0;', 8), ('Length Word;', 2),
 ])
-def test_result_producers_write_global_but_reads_keep_existing_capture(statement, written):
+def test_successful_producers_replace_only_the_active_owner(statement, written):
     output, runtime = run_bounded(
         _ANSWER + 'Items = 8, 9;\nWord = "ok";\nObserved = 0;\n'
         'Action Observe;\nUpdate Observed to @_;\nReturn 0;\nDone.\n'
-        'Action Worker Dummy;\n' + statement + '\nCall Observe;\nPrint @_.\nDone.\n'
+        'Action Worker Dummy;\n' + statement + '\nCall Observe;\nPrint @_.\nReturn @_;\nDone.\n'
         'Call MakeClosure "Worker";\nHandle = @_;\nCall Invoke Handle, 0;\nPrint @_.',
         initial_env={"_": 17},
     )
-    # The direct helper sees the producer's global write, not Worker's overlay.
-    # Outer Call Invoke then stores the no-Return result None into global _.
+    # Worker owns the producer result and passes it to Observe. Observe's
+    # explicit Return publishes into Worker, then Invoke publishes to main.
     assert runtime.env["Observed"] == written
-    assert output == '17\nNone\n'
-    assert runtime.env["_"] is None
+    assert output == "0\n0\n"
+    assert runtime.env["_"] == 0
     assert runtime.env["Handle"].captured["_"] == 17
 
 
-def test_makeclosure_snapshots_previous_result_before_call_stores_new_handle():
+def test_makeclosure_snapshots_the_effective_owner_before_call_publication():
     _, runtime = run_bounded(
         'Action Read Dummy;\nReturn @_;\nDone.\nCall MakeClosure "Read";\nHandle = @_;',
         initial_env={"_": 17},
@@ -80,18 +76,35 @@ def test_makeclosure_snapshots_previous_result_before_call_stores_new_handle():
     assert runtime.env["_"] is handle
 
 
-def test_repeated_invocations_reuse_snapshot_instead_of_refreshing_result():
+@pytest.mark.parametrize("initial, expected", [({}, None), ({"_": None}, None), ({"_": 0}, 0), ({"_": 17}, 17)])
+def test_closure_without_producer_keeps_creation_snapshot_across_repeated_and_deferred_calls(initial, expected):
     output, runtime = run_bounded(
-        _ANSWER + 'Action Worker Dummy;\nCall Answer;\nReturn @_;\nDone.\n'
+        _ANSWER + 'Action Worker Dummy;\nReturn @_;\nDone.\n'
         'Call MakeClosure "Worker";\nHandle = @_;\n'
-        'Call Invoke Handle, 0;\nPrint @_.\nCall Answer;\nPrint @_.\n'
-        'Call Invoke Handle, 0;\nPrint @_.', initial_env={"_": 17},
+        'Call Invoke Handle, 0;\nPrint @_.\nCall Answer;\n'
+        'Call Invoke Handle, 0;\nPrint @_.\n'
+        'Call Spawn Handle, 0;\nTask = @_;\nCall Answer;\nCall Await Task;\nPrint @_.',
+        initial_env=initial,
     )
-    assert output == '17\n42\n17\n'
-    assert runtime.env["Handle"].captured["_"] == 17
+    assert output == f"{expected}\n" * 3
+    assert ("_" in runtime.env["Handle"].captured) is ("_" in initial)
+    if "_" in initial:
+        assert runtime.env["Handle"].captured["_"] == initial["_"]
+    assert runtime.runtime_stats()["task_states"] == {"done": 1}
 
 
-def test_direct_callee_does_not_inherit_callers_capture_overlay():
+def test_absent_closure_snapshot_does_not_fall_back_to_later_main_result():
+    output, runtime = run_bounded(
+        _ANSWER + 'Action Read Dummy;\nReturn @_;\nDone.\n'
+        'Call MakeClosure "Read";\nHandle = @_;\nCall Answer;\n'
+        'Call Invoke Handle, 0;\nPrint @_.',
+    )
+    assert output == "None\n"
+    assert "_" not in runtime.env["Handle"].captured
+    assert "_" in runtime.env and runtime.env["_"] is None
+
+
+def test_nested_direct_action_copies_callers_effective_result():
     output, runtime = run_bounded(
         _ANSWER + 'Observed = 0;\n'
         'Action Read;\nUpdate Observed to @_;\nReturn @_;\nDone.\n'
@@ -99,49 +112,28 @@ def test_direct_callee_does_not_inherit_callers_capture_overlay():
         'Call MakeClosure "Worker";\nHandle = @_;\nCall Invoke Handle, 0;\nPrint @_.',
         initial_env={"_": 17},
     )
-    # Only the active frame has read priority; this is not dynamic frame lookup.
     assert runtime.env["Observed"] == 42
-    assert output == '17\n17\n'
+    assert output == "42\n42\n"
 
 
-def test_nested_snapshot_reintroduces_outer_result_even_after_direct_call_write():
-    output, runtime = run_bounded(
-        _ANSWER + 'Inner = 0;\nAction Leaf Dummy;\nReturn @_;\nDone.\n'
-        'Action Factory Dummy;\nCall Answer;\nCall MakeClosure "Leaf";\n'
-        # A direct helper can publish the global handle; Factory's @_ is stale.
-        'Call Publish;\nReturn 0;\nDone.\n'
-        'Action Publish;\nUpdate Inner to @_;\nReturn 0;\nDone.\n'
-        'Call MakeClosure "Factory";\nOuter = @_;\nCall Invoke Outer, 0;\n'
-        'Call Invoke Inner, 0;\nPrint @_.', initial_env={"_": 17},
+def test_failed_action_discards_its_result_but_keeps_global_side_effects():
+    from compiler.interpreter import KuroRuntimeException
+
+    compiled = compile_source(
+        _ANSWER + 'Action Fail;\nGlobal = 9;\nReturn 1 / 0;\nDone.\n'
+        'Action Outer;\nCall Answer;\nCall Fail;\nDone.\nCall Outer;'
     )
-    assert output == '17\n'
-    assert isinstance(runtime.env["Inner"], ClosureValue)
-    assert runtime.env["Inner"].captured["_"] == 17
+    assert compiled.ok, compiled.diags.render_all()
+    runtime = Interpreter(compiled.ir, output=io.StringIO())
+    runtime.env["_"] = 17
+    with pytest.raises(KuroRuntimeException):
+        runtime.run()
+    assert runtime.env["_"] == 17
+    assert runtime.env["Global"] == 9
+    assert runtime.frames == []
 
 
-def test_spawn_await_keeps_creation_snapshot_not_await_time_result():
-    output, runtime = run_bounded(
-        _ANSWER + 'Action Worker Dummy;\nCall Answer;\nReturn @_;\nDone.\n'
-        'Call MakeClosure "Worker";\nHandle = @_;\n'
-        'Call Spawn Handle, 0;\nTask = @_;\nCall Answer;\n'
-        'Call Await Task;\nPrint @_.', initial_env={"_": 17},
-    )
-    assert output == '17\n'
-    assert runtime.runtime_stats()["task_states"] == {"done": 1}
-
-
-def test_source_seeded_result_is_captured_without_host_environment_injection():
-    output, runtime = run_bounded(
-        _ANSWER + 'Action Seed;\nReturn 17;\nDone.\n'
-        'Action Worker Dummy;\nCall Answer;\nReturn @_;\nDone.\n'
-        'Call Seed;\nCall MakeClosure "Worker";\nHandle = @_;\n'
-        'Call Invoke Handle, 0;\nPrint @_.',
-    )
-    assert output == '17\n'
-    assert runtime.env["Handle"].captured["_"] == 17
-
-
-def test_unset_result_read_is_none_without_creating_a_binding():
+def test_unset_main_result_read_is_none_without_creating_a_binding():
     output, runtime = run_bounded('Print @_.')
     assert output == 'None\n'
     assert "_" not in runtime.env
