@@ -1,5 +1,7 @@
 # Logical Length in the Kuro-owned integer generator
 
+> Historical increment: the later [Text-only Length contract reconciliation](length-text-only-contract.md) removes this integer-owner native admission. ADR-0013 explicitly specifies Text-only source Length; the raw VM primitive remains. The evidence below describes PR #104, not current source-language permission.
+
 This increment is stacked directly on verified, open/unmerged [PR #103](https://github.com/Shibukedang27/Kuro/pull/103), exact parent `faf51505f8055bdc739ec52903e5f275332e0312`, with eight successful checks. Keep this increment and its ancestors open and unmerged. **Strict toolchain independence remains unfinished.**
 
 ## Why this next step
