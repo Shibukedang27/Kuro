@@ -30,6 +30,12 @@ DIRECT_ENTRY_SOURCE = (
     "Action Seed; Return 17; Done. Action Read; Return @_; Done. "
     "Call Seed; Call Read; Print @_."
 )
+NESTED_OWNER_SOURCE = (
+    "Action Seed; Return 17; Done. Action Answer; Return 42; Done. "
+    "Action Read; If @_ is equal to 17; Return 1; Else; Return 0; Done. Done. "
+    "Action Outer _; Call Answer; Call Read; Return @_; Done. "
+    "Call Seed; Call Outer 17; Print @_."
+)
 CASES = [
     pytest.param(
         DIRECT_ENTRY_SOURCE,
@@ -39,13 +45,10 @@ CASES = [
         id="direct-entry-global-and-authored-inherited-result",
     ),
     pytest.param(
-        "Action Seed; Return 17; Done. Action Answer; Return 42; Done. "
-        "Action Read; If @_ is equal to 17; Return 1; Else; Return 0; Done. Done. "
-        "Action Outer _; Call Answer; Call Read; Return @_; Done. "
-        "Call Seed; Call Outer 17; Print @_.",
+        NESTED_OWNER_SOURCE,
         "1\n",
         "0\n",
-        "native action 'Read' reads a dynamic value",
+        None,
         id="no-param-native-entry-remains-ambient-not-caller-owner",
     ),
     pytest.param(
@@ -86,21 +89,21 @@ CASES = [
         "Action Write _; _ = 23; Return @_; Done. Call Write 17; Print @_.",
         "23\n",
         "23\n",
-        None,
+        "native action 'Write' uses unsupported STORE_LIST",
         id="explicit-assignment-updates-parameter-owner",
     ),
     pytest.param(
         "Action Write _; Update _ to 23; Return @_; Done. Call Write 17; Print @_.",
         "23\n",
         "23\n",
-        None,
+        "native action 'Write' uses unsupported UPDATE",
         id="explicit-update-updates-parameter-owner",
     ),
     pytest.param(
         "Action Write _; Add 6 to _; Return @_; Done. Call Write 17; Print @_.",
         "23\n",
         "23\n",
-        None,
+        "native action 'Write' uses unsupported ADD",
         id="explicit-add-updates-parameter-owner",
     ),
 ]
@@ -205,9 +208,24 @@ def test_native_paths_publish_results_as_admitted(
     assert launched.stdout == expected_authored_vm
 
 
-def test_arm64_direct_entry_global_read_is_rejected_before_image_emission():
-    # Exercise the exact CI admission boundary even on a Linux development host.
-    compiled = compile_source(DIRECT_ENTRY_SOURCE)
+@pytest.mark.parametrize("source, error", [
+    (case.values[0], case.values[3]) for case in CASES if case.values[3] is not None
+])
+def test_arm64_static_route_rejects_unsupported_actions_before_image_emission(source, error):
+    # Exercise every static-evaluation rejection even on a Linux host. The
+    # dynamic route is selected separately based on top-level Action contents.
+    compiled = compile_source(source)
     assert compiled.ok, compiled.diags.render_all()
-    with pytest.raises(NativeBackendError, match="native action 'Read' reads a dynamic value"):
+    with pytest.raises(NativeBackendError) as caught:
         emit_macos_arm64(compiled.ir)
+    assert str(caught.value) == error
+
+
+def test_arm64_dynamic_route_admits_nested_owner_boundary_without_static_evaluation():
+    compiled = compile_source(NESTED_OWNER_SOURCE)
+    assert compiled.ok, compiled.diags.render_all()
+    assembly = emit_macos_arm64(compiled.ir)
+    assert "_kuro_fn_Read:" in assembly
+    assert "_kuro_fn_Outer:" in assembly
+    # Emission/admission only on Linux; actual ARM64 output is asserted by the
+    # native execution case on macOS CI. This does not extend backend admission.

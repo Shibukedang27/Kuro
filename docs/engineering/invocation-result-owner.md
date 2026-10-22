@@ -35,14 +35,14 @@ The Kuro-authored VM implements the same **scalar direct-call ownership** rule u
 
 | Executable boundary | Modern Python | Authored VM, including native launcher | Python-hosted direct native / Kuro generator |
 | --- | --- | --- | --- |
-| Root result 17, direct reader with no producer | 17 | 17 (previously zero) | Direct x86-64: 17; ARM64 dynamic read still rejects |
+| Root result 17, direct reader with no producer | 17 | 17 (previously zero) | Direct x86-64: 17; ARM64 static-route ambient read rejects |
 | `_` parameter 17 at entry | 17 | 17 (previously zero) | Existing admitted parameter-local paths: 17 |
 | Parameter 17, then successful Answer returning 42 | 42 (previously stale 17) | 42 | Existing admitted paths: 42 |
-| Parameter 17, then assignment/Update/Add to 23 | 23 (previously stale 17) | 23 | Direct native: 23; typed generator assignment control: 23 |
+| Parameter 17, then assignment/Update/Add to 23 | 23 (previously stale 17) | 23 | Direct x86-64: 23; static ARM64 rejects STORE_LIST/UPDATE/ADD; typed generator assignment control: 23 |
 | Inner result 42, implicit outer return | `None` | Zero | Existing zero-comparison control succeeds |
-| Ambient root 17, caller's `_` parameter replaced with 42, nested no-parameter Read | Reads caller-owned 42 | Reads caller-owned 42 | Direct x86-64 still reads ambient 17; ARM64 rejects this dynamic Read |
+| Ambient root 17, caller's `_` parameter replaced with 42, nested no-parameter Read | Reads caller-owned 42 | Reads caller-owned 42 | Direct native retains ambient 17; this complex fixture selects ARM64's already-admitted dynamic route |
 
-The last row is an **outstanding migration boundary**, not parity. Its bounded source branches on `@_ == 17`: direct x86-64 prints `1`, the authored launcher prints `0`; macOS ARM64 retains the precise dynamic-read compile rejection and absent executable. A portable ARM64-emitter test pins the existing admission boundary even on Linux. Safely migrating `compiler/native.py` requires an owner channel across native nested/recursive calls, captures and return/failure boundaries; changing just parameter lookup or global writes would conceal that gap. This increment deliberately leaves that backend's production code unchanged rather than silently broadening native admission or claiming complete adoption.
+The last row is an **outstanding migration boundary**, not parity. Its bounded source branches on `@_ == 17`: direct native is expected to print `1`, the authored launcher prints `0`. ARM64 route selection matters: a top-level call to the simple Read Action uses the static evaluator and rejects its ambient read; the complex Outer Action contains nested calls and selects the existing dynamic emitter, which admits its Read helper. The three simple explicit-write Actions instead use the static evaluator and reject their unsupported STORE_LIST/UPDATE/ADD. Portable tests now assert all four exact static rejection messages and successful dynamic-route function emission even on Linux; actual ARM64 execution belongs to CI. Safely migrating `compiler/native.py` requires an owner channel across native nested/recursive calls, captures and return/failure boundaries; changing just parameter lookup or global writes would conceal that gap. This increment deliberately leaves that backend's production code unchanged rather than silently broadening native admission or claiming complete adoption.
 
 The Kuro-written native generator also stays unchanged. Typed `_ : Integers` parameter programs already use one local slot for entry, successful publication and explicit assignment. The real compiler → generator → assembly/link → executable tests verify 17, 42 and 23 for those admitted cases. Their **untyped** counterparts still reject with `NativeFailed == 1`, `NativePrepareParamType == "NONE"` and empty `NativeOut`; no unsupported output is executed. The generator tests are hosted by the reference interpreter and linked with Clang, not evidence of native generator self-construction. Local execution is Linux x86-64; Darwin ARM64 execution belongs to CI.
 
@@ -54,16 +54,18 @@ The new and revised tests use explicit expectations rather than engine agreement
 
 | Gate | Evidence |
 | --- | --- |
-| Final seven result contract/regression files | **176 passed in 5.21s** |
-| Same 176 cases copied into detached exact-parent worktree, importing its own compiler | **104 failed, 72 passed in 3.97s**, expected old/new failures |
-| Final contracts plus all runtime/IR tests, fresh artifacts | **252 passed in 5.25s** |
-| Focused fresh native/compiler/runtime/IR gate | **570 passed, 19 skipped in 130.95s**; collected before the last strengthened boundary cases, which the final 252-case gate covers |
+| Corrected final seven result contract/regression files | **180 passed in 5.22s** |
+| Same 180 cases copied into detached exact-parent worktree, importing its own compiler | **104 failed, 76 passed in 3.92s**, expected old/new failures |
+| Corrected final contracts plus all runtime/IR tests, fresh artifacts | **256 passed in 5.61s** |
+| Focused fresh native/compiler/runtime/IR gate | **570 passed, 19 skipped in 130.95s**; collected before the last strengthened boundary cases, which the final 256-case gate covers |
 | Authored failure-isolation witness separately | Candidate passes; exact parent fails because root is 42 instead of 17 |
 | Fresh production bootstrap and Python-free smoke | Passed, including full compiler-bytecode reproduction |
 | Candidate/bootstrap production-source identity | All **67** tracked compiler/authored/bootstrap files byte-identical |
 | Changed/new Python files parsed with Python 3.10 grammar, `git diff --check` | Passed; actual Python 3.10 execution belongs to CI |
 | Independent final read-only review and runtime/all-result rerun | **247 passed in 5.46s**; no remaining blocking production defect |
-| Complete fresh suite | Final result recorded in the PR verification comment against the immutable head; acceptance is not claimed by this table |
+| Complete fresh suite before ARM64 expectation correction | **2,112 passed, 20 skipped in 816.79s** |
+| Corrected native result contracts and portable ARM64 admission cases | **30 passed in 4.98s** |
+| Complete fresh suite after correction | Final result recorded in the PR verification comment against the immutable head; acceptance is not claimed by this table |
 
 The parent proof includes generator-file assertions that fail in the Python reference control before reaching unchanged native generator code. It is not evidence that every native generator case was broken. Authored-entry/parameter/scalar-write and failed-publication witnesses independently fail on the parent VM itself. Rejections and unchanged native-boundary controls remain passing evidence, not repaired capabilities.
 
@@ -74,15 +76,19 @@ Fresh bootstrap ran in `/workspace/Kuro-owner-bootstrap`, a detached exact-paren
   tests/self_host/test_vm_result_publication_contract.py \
   tests/self_host/test_result_native_path_contract.py \
   tests/self_host/test_result_codegen_contract.py \
-  --basetemp=/workspace/kuro-owner-contracts-corrected-final --durations=8
+  --basetemp=/workspace/kuro-owner-contracts-corrected-head
 .venv/bin/python -m pytest -q \
-  --basetemp=/workspace/kuro-owner-full-final --durations=20
+  --basetemp=/workspace/kuro-owner-full-corrected-final --durations=20
 # Fresh candidate-production checkout, not pre-existing images:
 make native-hosted-bootstrap PYTHON=/workspace/Kuro/.venv/bin/python NATIVE_TARGET=x86_64-linux
 sh tests/self_host/python_free_native_smoke.sh
 ```
 
 **Final acceptance requires eight successful CI checks on the exact final documentation-updated head**, the complete fresh-suite result, and an independent review. Record acceptance in a PR comment without changing that commit; earlier-head checks and this opening evidence are not acceptance. Keep the PR open and unmerged.
+
+### CI-discovered admission correction
+
+Initial implementation head `0210e540c6d1c8cc3369e6aa2d954271ba9009d9` passed the complete Linux suite but failed macOS CI on four new test assumptions: one dynamic-route witness was wrongly expected to reject, while three static-route write Actions were wrongly expected to compile. The correction changes only tests and this documentation: assert existing static rejections, execute the admitted dynamic case, and cover route selection portably. No production change, new skip/xfail or expanded admission is used to make CI pass. All eight checks must rerun successfully on the corrected documentation-updated head; earlier results do not count. The fresh corrected-tree full rerun and correction review are recorded in the final PR verification comment.
 
 ## Limits and next path
 
