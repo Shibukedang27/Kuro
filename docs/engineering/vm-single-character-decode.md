@@ -1,6 +1,6 @@
 # Reuse one-character constants during VM decoding
 
-**Candidate — local gates pass; final-head CI verification is pending. Do not merge.** This separate prerequisite is stacked directly on draft, open [PR #107](https://github.com/Shibukedang27/Kuro/pull/107), exact parent `1dc7eebadd042175eb9bd54eba824ead545601df`. That parent remains unverified and unchanged. Its verified predecessor is open [PR #106](https://github.com/Shibukedang27/Kuro/pull/106), `f3b053c987524d0ee1807464198ca236c52468df`. All PRs remain open and unmerged.
+**DRAFT / BLOCKED — local Linux gates pass; cross-platform CI has failed. Not verified; do not merge.** [PR #108](https://github.com/Shibukedang27/Kuro/pull/108) is stacked directly on draft, open [PR #107](https://github.com/Shibukedang27/Kuro/pull/107), exact parent `1dc7eebadd042175eb9bd54eba824ead545601df`. That parent remains unverified and unchanged. Its verified predecessor is open [PR #106](https://github.com/Shibukedang27/Kuro/pull/106), `f3b053c987524d0ee1807464198ca236c52468df`. All PRs remain open and unmerged.
 
 ## The small change that unblocks reproduction
 
@@ -35,8 +35,18 @@ The parent's directly compiled full compiler bytecode and the candidate's are by
 
 These are local results, not a substitute for the required **eight successful checks on the exact final documentation-updated head**. Until that gate is confirmed, this increment and dependent Length work are not marked verified. The historical failure record in the parent's frontend note remains accurate for that parent; this note describes the separate descendant fix.
 
+## Why this remains blocked
+
+CI on code-and-documentation head `a97b66ace0644c75db93a0bab5bedc685020c996` failed the macOS suite. [Python 3.11 job](https://github.com/Shibukedang27/Kuro/actions/runs/39831768590/job/120009462318) reports **3 failed, 1,983 passed, 385 skipped**. The failures are `test_native_backend_runs_kuro_authored_compiler_probe`, `test_native_compiler_image_compiles_arbitrary_source_from_stdin`, and `test_native_compiler_matches_kuro_authored_driver`. ARM64 assembly generation raises `NativeBackendError: native dynamic ADD requires numeric operands` at `compiler/native.py:568`; this is not a decoder-test assertion or a linking failure.
+
+Independent investigation reproduced the identical failure from the exact parent without a macOS linker: compile `native_compiler_source()` to IR, then call `emit_macos_arm64(result.ir)`. The offending instruction is `ADD LCParamPos t533`; the literal operand is numeric, but `LCParamPos` is incorrectly inferred Text. `LCFrameAction` is explicitly declared `Integers` in `lengthcheck.kuro`, yet the ARM64 emitter infers its element kind as Text. That kind flows through `Get LCFrameAction LCFrameTop` into `LCActionStart`, then `LCParamPos`, whose numeric increment is rejected. The numeric ADD guard is not bypassed.
+
+The [exact parent's own macOS job](https://github.com/Shibukedang27/Kuro/actions/runs/39828484334/job/119998007065) reports the same three failures. The decoder patch cannot repair this: native compiler composition includes lexer, parser, Length checker, lowerer, encoder and compiler, **not the VM**. `compiler/native.py`, `compiler/self_host.py` and `self_host/lengthcheck.kuro` are unchanged from the parent. The final follow-up commit only records this blocker; no implementation repair or eight-check success is claimed for its updated head.
+
 ## Limits and next path
 
 The parent's aggregate collection accounting predicted only **55 spare entries** under the unchanged 65,536-entry backing-store limit. This patch does not alter compiler source/bytecode or add scanner metadata, so it is not a new aggregate-storage budget for more semantic passes. Character-arena relief likewise is not permission to broaden validation without fresh accounting.
 
-After final-head CI passes, reconcile the descendant evidence with the draft frontend's historical blocker before advancing any additional semantic rule. Full resolver/typechecker integration, unknown aliases/shape inference and reference-validator scope differences remain separate. Strict independence is still unfinished: **Python seeds production images; Clang/LLVM assemble and link them**. Blocked-toolchain use after seeding is continuity, not Python-free clean-checkout construction.
+The next prerequisite is a separately scoped ARM64 element-kind propagation regression/fix preserving declared numeric collection kinds through GET, including the exact parent compiler's assembly-generation witness. Preserve numeric ADD admission, all ceilings and malformed-input behavior; do not weaken the gate or silently fold that emitter repair into this decoder change. Rerun full fresh reproduction and all eight checks on its final documentation head before marking dependent work verified.
+
+After that gate passes, reconcile the descendant evidence with the draft frontend's historical blocker before advancing any additional semantic rule. Full resolver/typechecker integration, unknown aliases/shape inference and reference-validator scope differences remain separate. Strict independence is still unfinished: **Python seeds production images; Clang/LLVM assemble and link them**. Blocked-toolchain use after seeding is continuity, not Python-free clean-checkout construction.

@@ -9,7 +9,8 @@ Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 - The authored VM reuses complete one-character constant Text instead of
   allocating redundant character copies. Exact-parent decoding parity and fresh
   full compiler-bytecode/272-literal reproduction pass locally, with no ceiling
-  increases. Final-head CI verification is pending; see
+  increases. Inherited ARM64 collection-kind inference blocks CI; this remains
+  draft and unverified. See
   `docs/engineering/vm-single-character-decode.md`.
 - The authored source compiler checks known non-Text `Length` operands before
   lowering, recording source E3009 with no partial bytecode publication. Text
