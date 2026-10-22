@@ -1,0 +1,206 @@
+{
+  "parent_sha": "0b2a3fdfc1ffcafff519f69265ab85d30eee9d52",
+  "scope": "Unchanged production launcher; successful final retained-row census, not GC liveness or process RSS. Original assembly equals freshly bootstrapped parent assembly; outputs equal ordinary reproduction outputs.",
+  "measurements": {
+    "self": {
+      "stop": "audit_kuro_main_epilogue",
+      "stop_reason": "normal_epilogue",
+      "vm_failed": 0,
+      "runtime_exit_code": 0,
+      "entry_count": 65481,
+      "column_lengths": {
+        "VMCollectionOwners": 65481,
+        "VMCollectionItems": 65481,
+        "VMCollectionItemDisplay": 65481
+      },
+      "char_bytes": 870724,
+      "text_join_bytes": 2192152,
+      "owners": [
+        {
+          "id": 0,
+          "name": "TokenKinds",
+          "entries": 8771,
+          "currently_named": true
+        },
+        {
+          "id": 1,
+          "name": "TokenStarts",
+          "entries": 8771,
+          "currently_named": true
+        },
+        {
+          "id": 2,
+          "name": "TokenValues",
+          "entries": 8771,
+          "currently_named": true
+        },
+        {
+          "id": 3,
+          "name": "AstOut",
+          "entries": 11654,
+          "currently_named": true
+        },
+        {
+          "id": 4,
+          "name": "LCNames",
+          "entries": 61,
+          "currently_named": true
+        },
+        {
+          "id": 5,
+          "name": "LCTypes",
+          "entries": 61,
+          "currently_named": true
+        },
+        {
+          "id": 6,
+          "name": "LCFrameAction",
+          "entries": 19,
+          "currently_named": true
+        },
+        {
+          "id": 7,
+          "name": "LCFrameRepeat",
+          "entries": 19,
+          "currently_named": true
+        },
+        {
+          "id": 8,
+          "name": "IROut",
+          "entries": 9118,
+          "currently_named": true
+        },
+        {
+          "id": 9,
+          "name": "BytecodeOut",
+          "entries": 9118,
+          "currently_named": true
+        },
+        {
+          "id": 10,
+          "name": "CompilerOutput",
+          "entries": 9118,
+          "currently_named": true
+        }
+      ],
+      "named_entries": 65481,
+      "unnamed_entries": 0,
+      "active_names": {
+        "TokenKinds": 0,
+        "TokenStarts": 1,
+        "TokenValues": 2,
+        "AstOut": 3,
+        "LCNames": 4,
+        "LCTypes": 5,
+        "LCFrameAction": 6,
+        "LCFrameRepeat": 7,
+        "IROut": 8,
+        "BytecodeOut": 9,
+        "CompilerOutput": 10
+      },
+      "inferior_exit_code": 0,
+      "input_sha256": "6476ba0239afe3166b13874fb67d40b08beb196f3720168ae38ce5dd6cf0a596",
+      "launcher_source_sha256": "3ade66b17e082088e3bdf2d28694b036f4976b3044d006358f09510a70c392a2",
+      "original_assembly_sha256": "a679e551519f10681702d418ac5a10294d3666bc55e505dbe30740372665cbbd",
+      "symbolized_assembly_sha256": "4fd79961c77372e94a0d5ce981e673b06dc5dd4eb64a0c03af27b190922d07be",
+      "diagnostic_image_sha256": "51725fd56442ba3ec9960b2f212048d5be9b50d0c3530e0359ddd7ae10a1795c",
+      "stdout_sha256": "ba848047248d8f4af2f3bd7661ef064d8b0234f8a4196b1b2134148b3a1f2a09",
+      "symbol_only_roundtrip": true,
+      "invariants_passed": true,
+      "successful_exit_census": true
+    },
+    "initializer_272": {
+      "stop": "audit_kuro_main_epilogue",
+      "stop_reason": "normal_epilogue",
+      "vm_failed": 0,
+      "runtime_exit_code": 0,
+      "entry_count": 4189,
+      "column_lengths": {
+        "VMCollectionOwners": 4189,
+        "VMCollectionItems": 4189,
+        "VMCollectionItemDisplay": 4189
+      },
+      "char_bytes": 347354,
+      "text_join_bytes": 1188633,
+      "owners": [
+        {
+          "id": 0,
+          "name": "TokenKinds",
+          "entries": 555,
+          "currently_named": true
+        },
+        {
+          "id": 1,
+          "name": "TokenStarts",
+          "entries": 555,
+          "currently_named": true
+        },
+        {
+          "id": 2,
+          "name": "TokenValues",
+          "entries": 555,
+          "currently_named": true
+        },
+        {
+          "id": 3,
+          "name": "AstOut",
+          "entries": 837,
+          "currently_named": true
+        },
+        {
+          "id": 4,
+          "name": "LCNames",
+          "entries": 2,
+          "currently_named": true
+        },
+        {
+          "id": 5,
+          "name": "LCTypes",
+          "entries": 2,
+          "currently_named": true
+        },
+        {
+          "id": 6,
+          "name": "IROut",
+          "entries": 561,
+          "currently_named": true
+        },
+        {
+          "id": 7,
+          "name": "BytecodeOut",
+          "entries": 561,
+          "currently_named": true
+        },
+        {
+          "id": 8,
+          "name": "CompilerOutput",
+          "entries": 561,
+          "currently_named": true
+        }
+      ],
+      "named_entries": 4189,
+      "unnamed_entries": 0,
+      "active_names": {
+        "TokenKinds": 0,
+        "TokenStarts": 1,
+        "TokenValues": 2,
+        "AstOut": 3,
+        "LCNames": 4,
+        "LCTypes": 5,
+        "IROut": 6,
+        "BytecodeOut": 7,
+        "CompilerOutput": 8
+      },
+      "inferior_exit_code": 0,
+      "input_sha256": "fbd7ea26dc05e92e4b2279f3d0f02bda35073e2d197a730187b8a79ea9994975",
+      "launcher_source_sha256": "3ade66b17e082088e3bdf2d28694b036f4976b3044d006358f09510a70c392a2",
+      "original_assembly_sha256": "a679e551519f10681702d418ac5a10294d3666bc55e505dbe30740372665cbbd",
+      "symbolized_assembly_sha256": "4fd79961c77372e94a0d5ce981e673b06dc5dd4eb64a0c03af27b190922d07be",
+      "diagnostic_image_sha256": "9a0248d03b1c44b6fa3e37a330cd6eab47a91fde677e60522ef156499a88b9b3",
+      "stdout_sha256": "6d7c721c6e549924dd693cdcd4537f85f22367ec8514430d66097de94410a904",
+      "symbol_only_roundtrip": true,
+      "invariants_passed": true,
+      "successful_exit_census": true
+    }
+  }
+}
