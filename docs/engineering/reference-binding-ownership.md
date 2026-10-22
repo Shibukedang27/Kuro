@@ -38,6 +38,8 @@ A future repair should give special execution bindings an explicit scoped owner 
 
 These are design constraints and a recommended decomposition, **not an approved or implemented new language specification**. The narrow next implementation should select one binding (preferably the result register), add explicit old/new behavioral witnesses and cross-runtime admission limits, and only then introduce its scoped protocol. Index is a separate follow-up. Do not combine this work with BytecodeVM Repeat support, direct-native cleanup or exception unwinding.
 
+The subsequent [result initialization/publication contract](result-publication-contract.md), directly stacked on this increment's verified final head, adds bounded Python-engine and authored-VM entry/publication witnesses and a concrete unimplemented owner proposal. It confirms differing direct-call initialization and implicit-return policies; it does not repair stale results or select Index precedence. The verification below remains this increment's historical evidence.
+
 ## Verification
 
 Counts overlap and must not be added. The production tree is byte-for-byte unchanged from the exact parent; all twenty-two new tests pass with that parent implementation, rather than showing a parent failure/candidate repair.
