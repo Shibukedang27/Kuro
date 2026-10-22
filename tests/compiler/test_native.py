@@ -396,24 +396,16 @@ def test_native_backend_concatenates_dynamic_text(tmp_path):
 
 def test_native_backend_runs_kuro_authored_compiler_probe(tmp_path):
     """The native image must execute the Kuro-authored compiler path."""
-    import re
-    from pathlib import Path
+    from compiler.self_host import native_compiler_source
 
-    root = Path(__file__).resolve().parents[2]
-    files = [root / "self_host" / name for name in ("lexer.kuro", "parser.kuro", "lower.kuro", "bytecode.kuro", "compiler.kuro")]
     source = 'Print "native bootstrap".'
-    escaped = source.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
-    lexer = re.sub(r'^Source = ".*";$', f'Source = "{escaped}";', files[0].read_text(), count=1, flags=re.M)
-    parser = re.sub(r"^# --- BEGIN_STANDALONE_TOKENS.*?^# --- END_STANDALONE_TOKENS.*?$\n?", "", files[1].read_text(), count=1, flags=re.M | re.S)
-    lower = re.sub(r"^# --- BEGIN_STANDALONE_AST.*?^# --- END_STANDALONE_AST.*?$\n?", "", files[2].read_text(), count=1, flags=re.M | re.S)
-    encoder = re.sub(r"^# --- BEGIN_STANDALONE_IR.*?^# --- END_STANDALONE_IR.*?$\n?", "", files[3].read_text(), count=1, flags=re.M | re.S)
-    result = compile_source("\n".join((lexer, parser, lower, encoder, files[4].read_text(), "Print CompilerFailed.", "Print CompilerInstructionCount.")))
-    assert result.ok
+    result = compile_source(native_compiler_source(source) +
+                            "\nPrint CompilerFailed.\nPrint CompilerInstructionCount.\n")
+    assert result.ok, result.diags.render_all()
     executable = tmp_path / "kuro-native-compiler"
     build_native(result.ir, executable)
     run = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
-    assert run.stdout.splitlines()[:6] == ["IDENT", "Print", "STRING", "native bootstrap", "DOT", "."]
-    assert run.stdout.splitlines()[-2:] == ["0", "3"]
+    assert run.stdout.splitlines() == ["0", "3"]
     linked = _native_dependency_report(executable)
     assert "Python" not in linked
 

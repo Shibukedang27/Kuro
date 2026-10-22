@@ -19,7 +19,8 @@ filter_file() {
         -v begin_marker="$begin_marker" \
         -v end_marker="$end_marker" \
         -v replace_source="$replace_source" \
-        -v strip_debug_prints="$strip_debug_prints" '
+        -v strip_debug_prints="$strip_debug_prints" \
+        -v action="${6-}" -v failed="${7-}" -v condition="${8-}" '
         BEGIN {
             skipping = 0
             begin_count = 0
@@ -47,12 +48,22 @@ filter_file() {
                 next
             }
             if (strip_debug_prints == "yes" && $0 ~ /^[[:space:]]*Print .*/) next
+            if (action != "" && $0 == "Call " action ";") {
+                gate_count++
+                print "If " condition ";"
+                print "    Call " action ";"
+                print "Else;"
+                print "    " failed " = 1;"
+                print "Done."
+                next
+            }
             print
         }
         END {
             if (skipping) exit 42
             if (begin_marker != "" && (begin_count != 1 || end_count != 1)) exit 43
             if (replace_source == "yes" && replacement_count != 1) exit 44
+            if (action != "" && gate_count != 1) exit 45
         }
         ' "$file"
 }
@@ -63,11 +74,17 @@ filter_file() {
     filter_file "$ROOT/self_host/parser.kuro" \
         "BEGIN_STANDALONE_TOKENS" "END_STANDALONE_TOKENS" no no
     printf '\n'
+    cat "$ROOT/self_host/lengthcheck.kuro"
+    printf '\n'
     filter_file "$ROOT/self_host/lower.kuro" \
-        "BEGIN_STANDALONE_AST" "END_STANDALONE_AST" no no
+        "BEGIN_STANDALONE_AST" "END_STANDALONE_AST" no no \
+        LowerBlock LowerFailed \
+            'ParseFailed is equal to 0 and LengthCheckFailed is equal to 0'
     printf '\n'
     filter_file "$ROOT/self_host/bytecode.kuro" \
-        "BEGIN_STANDALONE_IR" "END_STANDALONE_IR" no no
+        "BEGIN_STANDALONE_IR" "END_STANDALONE_IR" no no \
+        BytecodeStep BytecodeFailed \
+            'ParseFailed is equal to 0 and LengthCheckFailed is equal to 0 and LowerFailed is equal to 0'
     printf '\n'
     cat "$ROOT/self_host/compiler.kuro"
     printf '\n'

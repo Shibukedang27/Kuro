@@ -14,6 +14,9 @@ Action CompilerRun;
     If ParseFailed is not equal to 0;
         CompilerFailed = 1;
     Done.
+    If LengthCheckFailed is not equal to 0;
+        CompilerFailed = 1;
+    Done.
     If LowerFailed is not equal to 0;
         CompilerFailed = 1;
     Done.

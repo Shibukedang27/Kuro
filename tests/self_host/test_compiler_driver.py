@@ -1,34 +1,20 @@
 """Tests for the Kuro-authored compiler driver composition."""
-import re
+import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
+from compiler import self_host
 from compiler.pipeline import run_source
 from compiler.self_host import native_compiler_source
 
 ROOT = Path(__file__).resolve().parents[2]
-LEXER = ROOT / "self_host" / "lexer.kuro"
-PARSER = ROOT / "self_host" / "parser.kuro"
-LOWER = ROOT / "self_host" / "lower.kuro"
-ENCODER = ROOT / "self_host" / "bytecode.kuro"
 DRIVER = ROOT / "self_host" / "compiler.kuro"
-SOURCE_RE = re.compile(r'^Source = ".*";$', re.MULTILINE)
-TOKENS_RE = re.compile(r"^# --- BEGIN_STANDALONE_TOKENS.*?^# --- END_STANDALONE_TOKENS.*?$\n?", re.MULTILINE | re.DOTALL)
-AST_RE = re.compile(r"^# --- BEGIN_STANDALONE_AST.*?^# --- END_STANDALONE_AST.*?$\n?", re.MULTILINE | re.DOTALL)
-IR_RE = re.compile(r"^# --- BEGIN_STANDALONE_IR.*?^# --- END_STANDALONE_IR.*?$\n?", re.MULTILINE | re.DOTALL)
-
-
-def escape(source: str) -> str:
-    return source.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
 def compile_with_driver(source: str):
-    replacement = f'Source = "{escape(source)}";'
-    lexer = SOURCE_RE.sub(lambda _: replacement, LEXER.read_text(), count=1)
-    parser = TOKENS_RE.sub("", PARSER.read_text(), count=1)
-    lower = AST_RE.sub("", LOWER.read_text(), count=1)
-    encoder = IR_RE.sub("", ENCODER.read_text(), count=1)
-    result = run_source("\n".join((lexer, parser, lower, encoder, DRIVER.read_text())))
+    result = run_source(native_compiler_source(source))
     assert result.ok, result.compile.diags.render_all() if not result.compile.ok else result.runtime_error
     return result.interpreter.env
 
@@ -78,3 +64,29 @@ def test_shell_native_compiler_source_matches_python_composer():
     )
 
     assert completed.stdout == native_compiler_source()
+
+
+@pytest.mark.parametrize("entry", ["", "Call LowerBlock;\nCall LowerBlock;\n"])
+def test_python_compiler_gate_rejects_missing_or_duplicate_stage_entry(entry):
+    with pytest.raises(self_host.SelfHostError, match="exactly one"):
+        self_host._gate_compiler_stage(entry, "LowerBlock", "LowerFailed", "Ready is equal to 1")
+
+
+@pytest.mark.parametrize("drift", ["marker", "missing-entry", "duplicate-entry"])
+def test_shell_compiler_composer_fails_on_source_drift(tmp_path, drift):
+    shutil.copytree(ROOT / "self_host", tmp_path / "self_host")
+    bootstrap = tmp_path / "bootstrap"
+    bootstrap.mkdir()
+    composer = bootstrap / "compose-native-compiler-source.sh"
+    shutil.copy2(ROOT / "bootstrap" / composer.name, composer)
+    lower_path = tmp_path / "self_host" / "lower.kuro"
+    lower = lower_path.read_text(encoding="utf-8")
+    if drift == "marker":
+        lower = lower.replace("BEGIN_STANDALONE_AST", "MISSING_AST_MARKER")
+    elif drift == "missing-entry":
+        lower = lower.replace("\nCall LowerBlock;\n", "\n")
+    else:
+        lower += "Call LowerBlock;\n"
+    lower_path.write_text(lower, encoding="utf-8")
+    completed = subprocess.run(["sh", str(composer)], capture_output=True, text=True)
+    assert completed.returncode != 0

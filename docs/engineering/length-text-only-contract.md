@@ -1,5 +1,7 @@
 # Keep source Length consistent with its Text-only contract
 
+> Historical compiler boundary: the later [bounded frontend Length gate](compiler-length-frontend.md) now rejects known non-Text targets before lowering. The ungated compiler/token evidence below describes PR #106; unknown aliases and the raw VM remain explicitly separate limitations/capabilities.
+
 This increment is stacked directly on verified, open/unmerged [PR #105](https://github.com/Shibukedang27/Kuro/pull/105), exact parent `8db3f29260fcf3b3701ddc6731359ff41b6f8cec`, whose eight checks were successful when inspected. Keep this increment and its ancestors open and unmerged. **Strict toolchain independence remains unfinished.**
 
 ## The contract decides the direction

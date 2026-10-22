@@ -2846,7 +2846,7 @@ def test_kuro_owned_generator_records_analyzer_execution_boundary(tmp_path, x86_
         "generator_source_sha256": digest(generator_source.encode()),
         "compiler_stages_sha256": {
             name: digest((ROOT / "self_host" / name).read_bytes())
-            for name in ("lexer.kuro", "parser.kuro", "lower.kuro", "bytecode.kuro", "compiler.kuro")
+            for name in ("lexer.kuro", "parser.kuro", "lengthcheck.kuro", "lower.kuro", "bytecode.kuro", "compiler.kuro")
         },
         "generator_image_sha256": digest(x86_linux_codegen.read_bytes()),
         "generator_bootstrap": "hosted compile_source/build_native (not independent)",

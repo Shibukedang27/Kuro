@@ -74,18 +74,19 @@ def _escape(source: str) -> str:
 
 def compile_with_kuro_driver(source: str):
     """Compile source using the compiler stages authored in ``self_host``."""
-    files = [ROOT / "self_host" / name for name in ("lexer.kuro", "parser.kuro", "lower.kuro", "bytecode.kuro", "compiler.kuro")]
-    replacement = f'Source = "{_escape(source)}";'
-    lexer = _SOURCE.sub(lambda _: replacement, files[0].read_text(encoding="utf-8"), count=1)
-    parser = _TOKENS.sub("", files[1].read_text(encoding="utf-8"), count=1)
-    lower = _AST.sub("", files[2].read_text(encoding="utf-8"), count=1)
-    encoder = _IR.sub("", files[3].read_text(encoding="utf-8"), count=1)
-    result = run_source("\n".join((lexer, parser, lower, encoder, files[4].read_text(encoding="utf-8"))))
+    result = run_source(native_compiler_source(source))
     if not result.ok:
         detail = result.compile.diags.render_all() if not result.compile.ok else str(result.runtime_error)
         raise SelfHostError(detail)
     env = result.interpreter.env
     if env.get("CompilerFailed", 0) != 0:
+        if env.get("LengthCheckFailed", 0) != 0:
+            codes = env.get("DiagCodes", [])
+            lines = env.get("DiagLines", [])
+            cols = env.get("DiagCols", [])
+            messages = env.get("DiagMessages", [])
+            if codes:
+                raise SelfHostError(f"{codes[0]} at {lines[0]}:{cols[0]}: {messages[0]}")
         raise SelfHostError("Kuro-authored compiler rejected the source")
     return env
 
@@ -207,6 +208,18 @@ def build_native_codegen(
     )
 
 
+def _gate_compiler_stage(text: str, action: str, failed: str, condition: str) -> str:
+    """Gate exactly the standalone stage entry, preserving all other source."""
+    entry = re.compile(rf"^Call {re.escape(action)};$", re.MULTILINE)
+    replacement = (
+        f"If {condition};\n    Call {action};\n"
+        f"Else;\n    {failed} = 1;\nDone."
+    )
+    if len(entry.findall(text)) != 1:
+        raise SelfHostError(f"expected exactly one {action} stage entry")
+    return entry.sub(lambda _: replacement, text)
+
+
 def native_compiler_source(source: str | None = None) -> str:
     """Return the complete, deterministic Kuro source for the native compiler.
 
@@ -214,18 +227,27 @@ def native_compiler_source(source: str | None = None) -> str:
     compiler a formal self-rebuild input and prevents build-only source
     rewriting from being hidden inside the hosted backend.
     """
-    files = [ROOT / "self_host" / name for name in ("lexer.kuro", "parser.kuro", "lower.kuro", "bytecode.kuro", "compiler.kuro")]
+    files = [ROOT / "self_host" / name for name in ("lexer.kuro", "parser.kuro", "lengthcheck.kuro", "lower.kuro", "bytecode.kuro", "compiler.kuro")]
     replacement = 'Source is Text;\nTake user Source;' if source is None else f'Source = "{_escape(source)}";'
     lexer = _SOURCE.sub(lambda _: replacement, files[0].read_text(encoding="utf-8"), count=1)
     lexer = re.sub(r"(?m)^\s*Print .*$\n", "", lexer)
     parser = _TOKENS.sub("", files[1].read_text(encoding="utf-8"), count=1)
-    lower = _AST.sub("", files[2].read_text(encoding="utf-8"), count=1)
-    encoder = _IR.sub("", files[3].read_text(encoding="utf-8"), count=1)
-    compiler = files[4].read_text(encoding="utf-8")
+    lengthcheck = files[2].read_text(encoding="utf-8")
+    lower = _AST.sub("", files[3].read_text(encoding="utf-8"), count=1)
+    lower = _gate_compiler_stage(
+        lower, "LowerBlock", "LowerFailed",
+        "ParseFailed is equal to 0 and LengthCheckFailed is equal to 0",
+    )
+    encoder = _IR.sub("", files[4].read_text(encoding="utf-8"), count=1)
+    encoder = _gate_compiler_stage(
+        encoder, "BytecodeStep", "BytecodeFailed",
+        "ParseFailed is equal to 0 and LengthCheckFailed is equal to 0 and LowerFailed is equal to 0",
+    )
+    compiler = files[5].read_text(encoding="utf-8")
     if source is None:
         entrypoint = (ROOT / "self_host" / "native_compiler_entry.kuro").read_text(encoding="utf-8")
         compiler = "\n".join((compiler, entrypoint))
-    return "\n".join((lexer, parser, lower, encoder, compiler))
+    return "\n".join((lexer, parser, lengthcheck, lower, encoder, compiler))
 
 
 def build_native_compiler(source: str | None, output: str | Path, target: str | None = None):

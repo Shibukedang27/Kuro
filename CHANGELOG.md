@@ -6,6 +6,12 @@ Keep a Changelog; versioning follows spec section 38 (SemVer, pre-1.0).
 ## [Unreleased] — In-house implementation policy and Stage 8 foundation
 
 ### Added
+- The authored source compiler checks known non-Text `Length` operands before
+  lowering, recording source E3009 with no partial bytecode publication. Text
+  remains accepted; unknown aliases and other semantic rules remain outside
+  this bounded draft stage. Full compiler-bytecode reproduction is still
+  blocked; this is not a verified increment. See
+  `docs/engineering/compiler-length-frontend.md` for scope, failed gates and limits.
 - Kuro-owned Linux x86-64 execution/output integer collection lowering for an isolated fixed-storage,
   straight-line bytecode subset: up to sixteen owners and 32 aggregate cells,
   owner-specific logical GET/SET bounds, negative-read normalization, nonnegative

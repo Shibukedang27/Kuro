@@ -8,6 +8,7 @@ import subprocess
 
 import pytest
 
+from compiler.self_host import SelfHostError
 from test_native_codegen import x86_linux_codegen
 from test_native_collection_bounds import _logical_runtimes
 from test_native_indexed_state_contract import compiler_tokens, frame_artifact
@@ -127,7 +128,19 @@ UNSUPPORTED_SOURCES = [
 @requires_linux
 @pytest.mark.parametrize('name,source', UNSUPPORTED_SOURCES, ids=[case[0] for case in UNSUPPORTED_SOURCES])
 def test_actual_generator_integer_storage_unsupported_rejects(tmp_path, x86_linux_codegen, name, source):
-    result = generate(x86_linux_codegen, compiler_tokens(source), tmp_path)
+    if name == 'scalar-length':
+        with pytest.raises(SelfHostError, match='E3009'):
+            compiler_tokens(source)
+        # The compiler now blocks this source. Preserve independent raw-token
+        # generator defense rather than describing its rejection as frontend work.
+        tokens = [
+            'BC_MULTI_BEGIN', 'BC_CONST', '11', 'BC_CONST', '22',
+            'BC_STORE_MULTI', 'Items', 'BC_CONST', '2', 'BC_STORE_LIST', 'Count',
+            'BC_LENGTH', 'Count', 'BC_STORE_LIST', '_', 'BC_LOADVAR', '_', 'BC_PRINT',
+        ]
+    else:
+        tokens = compiler_tokens(source)
+    result = generate(x86_linux_codegen, tokens, tmp_path)
     assert (result.returncode, result.stdout, result.stderr) == (1, '', '')
 
 

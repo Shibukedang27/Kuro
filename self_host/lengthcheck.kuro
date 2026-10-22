@@ -1,0 +1,241 @@
+# Compiler-only, parsed-token Length validation, not a full semantic pass.
+LengthCheckFailed = 0;
+LCNames is Text;
+LCTypes is Text;
+LCFrameAction is Integers;
+LCFrameRepeat is Integers;
+Append "" to LCNames;
+Append "" to LCTypes;
+LCFrameCapacity = 0;
+LCEnd = TokCount - 1;
+Action LCFind Name;
+    Length LCNames;
+    LCFind_Count = @_;
+    LCFind_Result = "";
+    LCFind_Index = 0;
+    While LCFind_Index is less than LCFind_Count;
+        Get LCNames LCFind_Index;
+        If @_ is equal to Name;
+            Get LCTypes LCFind_Index;
+            LCFind_Result = @_;
+            LCFind_Index = LCFind_Count;
+        Done.
+        Add 1 to LCFind_Index;
+    Done.
+    Return LCFind_Result;
+Done.
+Action LCAdd Name, Typ;
+    If Typ is equal to "";
+        Return 0;
+    Done.
+    Call LCFind Name;
+    If @_ is equal to "";
+        Append Name to LCNames;
+        Append Typ to LCTypes;
+    Done.
+Done.
+Action LCNext Start;
+    LCNext_Pos = Start;
+    LCNext_Loop = 1;
+    While LCNext_Pos is less than TokCount and LCNext_Loop is equal to 1;
+        Get TokenKinds LCNext_Pos;
+        LCNext_Kind = @_;
+        Add 1 to LCNext_Pos;
+        If LCNext_Kind is equal to "SEMI" or LCNext_Kind is equal to "DOT";
+            LCNext_Loop = 0;
+        Done.
+    Done.
+    Return LCNext_Pos;
+Done.
+# Parsed statements begin with identifiers; keyword-looking bindings come first.
+Action LCBinding At;
+    Get TokenKinds At + 1;
+    If @_ is equal to "EQUAL" or @_ is equal to "COLON";
+        Return 1;
+    Done.
+    LCBinding_SavedPos = TokPos;
+    TokPos = At;
+    Call IsDeclAhead;
+    LCBinding_Decl = @_;
+    TokPos = LCBinding_SavedPos;
+    Return LCBinding_Decl;
+Done.
+# Exact homogeneous bare literals only, never aliases or computed expressions.
+Action LCInfer At;
+    Get TokenKinds At + 2;
+    LCInfer_FirstKind = @_;
+    LCInfer_Type = "";
+    If LCInfer_FirstKind is equal to "STRING";
+        LCInfer_Type = "Text";
+    Done.
+    If LCInfer_FirstKind is equal to "INTEGER";
+        LCInfer_Type = "Integers";
+    Done.
+    If LCInfer_FirstKind is equal to "DECIMAL";
+        LCInfer_Type = "Decimals";
+    Done.
+    If LCInfer_Type is equal to "";
+        Return "";
+    Done.
+    LCInfer_Pos = At + 3;
+    LCInfer_Loop = 1;
+    While LCInfer_Loop is equal to 1;
+        Get TokenKinds LCInfer_Pos;
+        LCInfer_Next = @_;
+        If LCInfer_Next is equal to "SEMI";
+            LCInfer_Loop = 0;
+        Else;
+            If LCInfer_Next is equal to "COMMA";
+                Add 1 to LCInfer_Pos;
+                Get TokenKinds LCInfer_Pos;
+                If @_ is not equal to LCInfer_FirstKind;
+                    LCInfer_Type = "";
+                    LCInfer_Loop = 0;
+                Done.
+                Add 1 to LCInfer_Pos;
+            Else;
+                LCInfer_Type = "";
+                LCInfer_Loop = 0;
+            Done.
+        Done.
+    Done.
+    Return LCInfer_Type;
+Done.
+# Phase 1: first known top-level binding. Phase 2: Compare-result Symbols,
+# never overriding global types. Phase 3: Length with lexical scope overlays.
+LCPhase = 1;
+LCDepth = 0;
+LCFrameTop = 0;
+LCActionStart = -1;
+LCRepeatDepth = 0;
+While LCPhase is less than 4 and ParseFailed is equal to 0 and LengthCheckFailed is equal to 0;
+    LCPos = 0;
+    While LCPos is less than LCEnd and LengthCheckFailed is equal to 0;
+        Get TokenValues LCPos;
+        LCWord = @_;
+        Call LCBinding LCPos;
+        LCIsBinding = @_;
+        Compare LCIsOpen LCWord is equal to "If" or LCWord is equal to "While" or LCWord is equal to "Repeat" or LCWord is equal to "Action";
+        If LCPhase is equal to 1;
+            If LCIsBinding is equal to 1;
+                If LCDepth is equal to 0;
+                    Get TokenKinds LCPos + 1;
+                    LCNextKind = @_;
+                    Get TokenValues LCPos + 2;
+                    LCDeclared = @_;
+                    If LCNextKind is equal to "COLON";
+                        Call LCAdd LCWord, LCDeclared;
+                    Else;
+                        If LCNextKind is equal to "EQUAL";
+                            Call LCInfer LCPos;
+                            LCInferred = @_;
+                            Call LCAdd LCWord, LCInferred;
+                        Else;
+                            If LCDeclared is equal to "Integers" or LCDeclared is equal to "Decimals" or LCDeclared is equal to "Text" or LCDeclared is equal to "Symbols";
+                                Call LCAdd LCWord, LCDeclared;
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Else;
+                If LCIsOpen is equal to 1;
+                    Add 1 to LCDepth;
+                Else;
+                    If LCWord is equal to "Done";
+                        Add -1 to LCDepth;
+                    Done.
+                Done.
+            Done.
+        Else;
+            If LCPhase is equal to 2;
+                If LCIsBinding is equal to 0 and LCWord is equal to "Compare";
+                    Get TokenValues LCPos + 1;
+                    LCCompareName = @_;
+                    Call LCAdd LCCompareName, "Symbols";
+                Done.
+            Else;
+                If LCIsBinding is equal to 0;
+                    If LCIsOpen is equal to 1;
+                        If LCFrameTop is less than LCFrameCapacity;
+                            Set LCFrameAction LCFrameTop to LCActionStart;
+                            Set LCFrameRepeat LCFrameTop to LCRepeatDepth;
+                        Else;
+                            Append LCActionStart to LCFrameAction;
+                            Append LCRepeatDepth to LCFrameRepeat;
+                            Add 1 to LCFrameCapacity;
+                        Done.
+                        Add 1 to LCFrameTop;
+                        If LCWord is equal to "Repeat";
+                            Add 1 to LCRepeatDepth;
+                        Done.
+                        If LCWord is equal to "Action";
+                            LCActionStart = LCPos + 2;
+                        Done.
+                    Else;
+                        If LCWord is equal to "Done";
+                            Add -1 to LCFrameTop;
+                            Get LCFrameAction LCFrameTop;
+                            LCActionStart = @_;
+                            Get LCFrameRepeat LCFrameTop;
+                            LCRepeatDepth = @_;
+                        Else;
+                            If LCWord is equal to "Length";
+                                Get TokenValues LCPos + 1;
+                                LCTarget = @_;
+                                Call LCFind LCTarget;
+                                LCType = @_;
+                                LCParamPos = LCActionStart;
+                                LCParamLoop = 1;
+                                While LCParamPos is greater than or equal to 0 and LCParamLoop is equal to 1;
+                                    Get TokenKinds LCParamPos;
+                                    LCParamKind = @_;
+                                    If LCParamKind is equal to "SEMI" or LCParamKind is equal to "RPAREN";
+                                        LCParamLoop = 0;
+                                    Else;
+                                        If LCParamKind is equal to "LPAREN" or LCParamKind is equal to "COMMA";
+                                            Add 1 to LCParamPos;
+                                        Else;
+                                            Get TokenValues LCParamPos;
+                                            LCParamName = @_;
+                                            LCParamType = "";
+                                            Add 1 to LCParamPos;
+                                            Get TokenKinds LCParamPos;
+                                            LCParamKind = @_;
+                                            If LCParamKind is equal to "COLON";
+                                                Get TokenValues LCParamPos + 1;
+                                                LCParamType = @_;
+                                                Add 2 to LCParamPos;
+                                            Done.
+                                            If LCParamName is equal to LCTarget;
+                                                LCType = LCParamType;
+                                            Done.
+                                        Done.
+                                    Done.
+                                Done.
+                                If LCTarget is equal to "Index" and LCRepeatDepth is greater than 0;
+                                    LCType = "Integers";
+                                Done.
+                                If LCTarget is equal to "_";
+                                    LCType = "";
+                                Done.
+                                If LCType is not equal to "" and LCType is not equal to "Text";
+                                    Get TokenStarts LCPos;
+                                    LCOffset = @_;
+                                    Call ComputeLineCol LCOffset;
+                                    Append "E3009" to DiagCodes;
+                                    Append DiagCurLine to DiagLines;
+                                    Append DiagCurCol to DiagCols;
+                                    Append "Length target must be Text, found " + LCType to DiagMessages;
+                                    LengthCheckFailed = 1;
+                                Done.
+                            Done.
+                        Done.
+                    Done.
+                Done.
+            Done.
+        Done.
+        Call LCNext LCPos;
+        LCPos = @_;
+    Done.
+    Add 1 to LCPhase;
+Done.

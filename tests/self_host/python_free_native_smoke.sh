@@ -90,3 +90,35 @@ printf 'Self-hosted stage-1 compiler matches native stage 0 on a probe\n'
 "$ROOT/bin/kuro-native" exec "$STAGE2_INPUT" > "$STAGE2_COMPILER"
 cmp "$STAGE1_COMPILER" "$STAGE2_COMPILER"
 printf 'Self-hosted stage-1 compiler reproduces its full compiler bytecode\n'
+
+# The frontend Length rule must survive the same blocked-toolchain route.
+# The native compiler exits 1; the bytecode launcher retains its runtime exit
+# convention (0 for a compiler-published error frame). Neither may publish BC.
+printf 'Items = 11, 22;\nLength Items;\nPrint @_.\n' > "$PROBE"
+if "$ROOT/dist/kuro-compiler" < "$PROBE" > "$ARTIFACT"; then
+    echo 'native compiler admitted known non-Text Length' >&2
+    exit 1
+else
+    status=$?
+    [ "$status" -eq 1 ] || exit "$status"
+fi
+[ "$(cat "$ARTIFACT")" = 'kuro.compile-error/1' ] || exit 1
+{
+    cat "$STAGE1_COMPILER"
+    printf 'kuro.input/1\n'
+    cat "$PROBE"
+} > "$STAGE2_INPUT"
+"$ROOT/bin/kuro-native" exec "$STAGE2_INPUT" > "$STAGE1_PROBE_ARTIFACT"
+cmp "$ARTIFACT" "$STAGE1_PROBE_ARTIFACT"
+
+printf 'Items = "Kuro";\nLength Items;\nPrint @_.\n' > "$PROBE"
+"$ROOT/bin/kuro-native" compile "$PROBE" > "$ARTIFACT"
+[ "$("$ROOT/bin/kuro-native" exec "$ARTIFACT")" = '4' ] || exit 1
+{
+    cat "$STAGE1_COMPILER"
+    printf 'kuro.input/1\n'
+    cat "$PROBE"
+} > "$STAGE2_INPUT"
+"$ROOT/bin/kuro-native" exec "$STAGE2_INPUT" > "$STAGE1_PROBE_ARTIFACT"
+cmp "$ARTIFACT" "$STAGE1_PROBE_ARTIFACT"
+printf 'Python-free frontend rejects known non-Text Length and preserves Text\n'
