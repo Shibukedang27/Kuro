@@ -99,10 +99,9 @@ CASES = [
     ),
 ]
 
-# The reference lowerer shares __repeat_i1 across distinct Actions/main.
-# Calling a Repeat-owning Action from Repeat can therefore clobber the caller's
-# hidden counter (including nontermination after early Return). These explicit
-# VM contracts must not execute that known-unsafe reference oracle.
+# These were contract-only fixtures until the reference lowerer gained
+# invocation-safe counter and Index restoration. Keep the reference trace
+# bounded below so a future collision regression cannot hang the suite.
 REENTRANT_REPEAT_CASES = [
     pytest.param(
         "Action Pick; Repeat 3; Return 7; Done. Done. N = 0; "
@@ -140,9 +139,16 @@ def artifact(source):
     return "kuro.bytecode/1\n" + "\n".join(compiled["CompilerOutput"]) + "\n"
 
 
-@pytest.mark.parametrize("source,expected", CASES)
+@pytest.mark.parametrize("source,expected", ALL_CASES)
 def test_host_loop_return_oracle(source, expected):
-    host = run_source(source)
+    steps = 0
+
+    def bounded_trace(*_):
+        nonlocal steps
+        steps += 1
+        assert steps <= 10000, "reference Repeat execution exceeded its test budget"
+
+    host = run_source(source, trace=bounded_trace)
     assert host.ok, host.compile.diags.render_all() if not host.compile.ok else host.runtime_error
     assert host.stdout == expected
 
