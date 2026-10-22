@@ -5,6 +5,8 @@
 
 This is the running index for the independence work. Each implementation batch is published as a reviewable GitHub pull request with its own change summary, rationale, verification results, and known limits. Keep this page current as follow-up work is pushed.
 
+**Current storage prerequisite:** the [publication/COW design model](vm-publication-cow-model.md), directly above PR #111, separates snapshot assignments from late-bound stack names and documents frame/result/capture/native root boundaries. It retains production copies, unchanged ceilings and no reclamation. Adversarial partial-failure and kind-erasure witnesses prevent treating the bounded model as a production lifetime proof; no actual peak reduction or completed toolchain independence is claimed.
+
 ## Goal and completion criteria
 
 The goal is to make Kuro build, compile, run, test, and package itself from a clean checkout without requiring the Python-hosted compiler or reference runtime. The strict interpretation also removes reliance on a host-provided assembler and linker for native image construction. Python may remain as an optional development tool or compatibility oracle, but must not be required to build or use Kuro.
