@@ -97,6 +97,12 @@ VMWhileDone is Integers;
 VMWhileBodyDone is Integers;
 VMWhileDone = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 VMWhileBodyDone = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+VMRepeatDepth = 0;
+VMRepeatCapacity = 10;
+VMRepeatRemaining is Integers;
+VMRepeatBodyDone is Integers;
+VMRepeatRemaining = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+VMRepeatBodyDone = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 VMStack = "__vm_empty__", "__vm_empty__";
 VMStackKinds = 0, 0;
 VMStackDisplay = "", "";
@@ -600,23 +606,41 @@ Action VMSkipRepeat Depth;
     Done.
 Done.
 
+# Return is an Action-frame signal. Loop drivers must propagate it unchanged;
+# VMInvoke restores the caller position, and BC_CALL_END consumes a callee's
+# signal before the caller resumes. Like While, Repeat keeps live mutable state
+# by driver depth: authored parameters are read-only in the reference runner.
 Action VMRunRepeat Count, Start;
     If Count is greater than 0;
+        Add 1 to VMRepeatDepth;
+        If VMRepeatDepth is greater than or equal to VMRepeatCapacity;
+            Append 0 to VMRepeatRemaining;
+            Append 0 to VMRepeatBodyDone;
+            Add 1 to VMRepeatCapacity;
+        Done.
+        Set VMRepeatRemaining VMRepeatDepth to Count;
         VMRunRepeat_Remaining = Count;
-        While VMRunRepeat_Remaining is greater than 0 and VMFailed is equal to 0;
+        While VMRunRepeat_Remaining is greater than 0 and VMFailed is equal to 0 and VMReturnPending is equal to 0;
             VMPos = Start;
+            Set VMRepeatBodyDone VMRepeatDepth to 0;
             VMRunRepeat_BodyDone = 0;
-            While VMPos is less than VMCodeLen and VMRunRepeat_BodyDone is equal to 0 and VMFailed is equal to 0;
+            While VMPos is less than VMCodeLen and VMRunRepeat_BodyDone is equal to 0 and VMFailed is equal to 0 and VMReturnPending is equal to 0;
                 Get BytecodeOut VMPos;
                 If @_ is equal to "BC_REPEAT_END";
                     Add 1 to VMPos;
+                    Set VMRepeatBodyDone VMRepeatDepth to 1;
                     VMRunRepeat_BodyDone = 1;
                 Else;
                     Call VMStep;
+                    Get VMRepeatBodyDone VMRepeatDepth;
+                    VMRunRepeat_BodyDone = @_;
                 Done.
             Done.
-            VMRunRepeat_Remaining = VMRunRepeat_Remaining - 1;
+            Get VMRepeatRemaining VMRepeatDepth;
+            VMRunRepeat_Remaining = @_ - 1;
+            Set VMRepeatRemaining VMRepeatDepth to VMRunRepeat_Remaining;
         Done.
+        VMRepeatDepth = VMRepeatDepth - 1;
     Else;
         Call VMSkipRepeat 0;
     Done.
@@ -652,7 +676,7 @@ Action VMRunWhile Start;
     Done.
     Set VMWhileDone VMWhileDepth to 0;
     VMRunWhile_Done = 0;
-    While VMPos is less than VMCodeLen and VMRunWhile_Done is equal to 0 and VMFailed is equal to 0;
+    While VMPos is less than VMCodeLen and VMRunWhile_Done is equal to 0 and VMFailed is equal to 0 and VMReturnPending is equal to 0;
         Get BytecodeOut VMPos;
         If @_ is equal to "BC_WHILE_TEST";
             VMPos = VMPos + 1;
@@ -664,7 +688,7 @@ Action VMRunWhile Start;
             Else;
                 Set VMWhileBodyDone VMWhileDepth to 0;
                 VMRunWhile_BodyDone = 0;
-                While VMPos is less than VMCodeLen and VMRunWhile_BodyDone is equal to 0 and VMFailed is equal to 0;
+                While VMPos is less than VMCodeLen and VMRunWhile_BodyDone is equal to 0 and VMFailed is equal to 0 and VMReturnPending is equal to 0;
                     Get BytecodeOut VMPos;
                     If @_ is equal to "BC_WHILE_END";
                         VMPos = VMPos + 1;
@@ -676,7 +700,9 @@ Action VMRunWhile Start;
                         VMRunWhile_BodyDone = @_;
                     Done.
                 Done.
-                VMPos = Start;
+                If VMReturnPending is equal to 0 and VMFailed is equal to 0;
+                    VMPos = Start;
+                Done.
             Done.
         Else;
             Call VMStep;
