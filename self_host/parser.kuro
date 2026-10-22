@@ -134,7 +134,9 @@ Action ComputeLineCol TargetPos;
         Get Source ComputeLineCol_I;
         ComputeLineCol_Ch = @_;
         If ComputeLineCol_Ch is equal to "\n";
-            ComputeLineCol_Line = ComputeLineCol_Line + 1;
+            # Explicit integer Add avoids native Text-name inference for Line.
+            # Diagnostic scanning must not concatenate the numeric line count.
+            Add 1 to ComputeLineCol_Line;
             ComputeLineCol_Col = 1;
         Else;
             ComputeLineCol_Col = ComputeLineCol_Col + 1;
