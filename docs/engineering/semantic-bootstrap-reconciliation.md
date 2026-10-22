@@ -40,7 +40,7 @@ A focused semantic success alone is insufficient: the parent's aggregate-store e
 
 This PR changes documentation only. All tracked production, test and bootstrap files remain byte-identical to verified #109; the scratch checker patch is neither committed nor included in its branch.
 
-This follow-up is stacked directly above the exact verified #109 head. Its own final documentation-updated head requires independent review, a full fresh suite, fresh four-image hosted bootstrap, Python/toolchain-blocked smoke including full reproduction, and **all eight CI checks** before it is called verified. The immutable final SHA and workflow receipts belong in the PR verification record rather than a subsequent documentation commit that would invalidate that receipt. Keep this PR and every ancestor open/unmerged.
+This follow-up is open, draft [PR #110](https://github.com/Shibukedang27/Kuro/pull/110), stacked directly above the exact verified #109 head. Its own final documentation-updated head requires independent review, a full fresh suite, fresh four-image hosted bootstrap, Python/toolchain-blocked smoke including full reproduction, and **all eight CI checks** before it is called verified. The immutable final SHA and workflow receipts belong in the PR verification record rather than a subsequent documentation commit that would invalidate that receipt. Keep this PR and every ancestor open/unmerged.
 
 ## Fresh local verification of the retained documentation branch
 
