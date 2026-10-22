@@ -1,5 +1,7 @@
 # Check known Length targets before lowering
 
+> **Later cumulative status:** [The stack reconciliation](semantic-bootstrap-reconciliation.md) records #109 at `5af148a8272dfa40fb6445ba5f5b305c68672dcf` with all eight checks successful. #107/#108 remain open/draft and unverified at their own unchanged heads. Historical blocker and pending-gate language below describes this record’s original checkpoint, not the current cumulative tip.
+
 **DRAFT / BLOCKED — not verified; do not merge.** The focused rule passes its checks, but full compiler-bytecode reproduction still fails. No final-head 8/8 CI success is claimed.
 
 **Separate descendant prerequisite:** [one-character VM decoder reuse](vm-single-character-decode.md) records a narrow allocation fix and passing local full-reproduction gates. This note retains the historical evidence for the exact draft parent; the descendant does not retroactively verify that parent, and its own final-head CI gate must be checked separately.
