@@ -1,0 +1,561 @@
+{
+  "parent": "1933b5e67cb0b6447a6a36fb805de85345a4c05e",
+  "production_files_compared": 71,
+  "production_changed": [
+    "self_host/vm.kuro"
+  ],
+  "source_files_sha256": {
+    "Makefile": "1bee84679ae6a079d359d5862e900d13612c79405858ddb1bb78ac183963022a",
+    "bin/kuro": "cafc26be89f6130e159984b1a1d191906fbb1615ac120118cc9f6067d1a729d5",
+    "bin/kuro-native": "c88c4559f2c13f029073594b3d94b378180f8d5c30012d8b5483fc292e65d7d3",
+    "bootstrap/compose-native-compiler-source.sh": "d4c375814591f32069e82028936873982ef69d457bdd372c3967c12c90aa11e2",
+    "bootstrap/compose-native-source.sh": "7e57c9ba97f5b6bf18d1378a0f70d832af775d4be144c59474b935a312507a61",
+    "bootstrap/python/TEST_REPORT.txt": "861c89d4b4081f13b8097b6aeeb5fbf2bb30b5985f01132fe68331d07ec48577",
+    "bootstrap/python/examples/stage4.kuro": "1a9b46df27ce95eab8cc0ef19dabec6d8fb2a8466b7f07893c361193973d1519",
+    "bootstrap/python/kuro.py": "747f571c47e6cc12d63739d9be90e26dd24d31917f9902af7b1bcab11f4c788c",
+    "bootstrap/python/tests/actions.kuro": "774fb8a48f50f172e5c5c966e4800d160a2527c0336f64c951937ee8b353d90e",
+    "bootstrap/python/tests/add_text.kuro": "11e8c3c192b242beec86d5d2ed2173effb2d620681ea17e02a7cbcce6b50ed8e",
+    "bootstrap/python/tests/bad_call.kuro": "774e481814ee5ac7f89547f2c23b48653289e87bc7ca42593cc05b389ef86e2d",
+    "bootstrap/python/tests/bad_get.kuro": "a38c4a58b15159d0a47261161ae144fb2fe1b03bf1887ac24131fb9383414375",
+    "bootstrap/python/tests/comments.kuro": "cd2b84bfafbc2e0f0ffb1e34432dd8ef096691e960840365a2fd4bbe3924ba61",
+    "bootstrap/python/tests/compare.kuro": "5e038a1d435a77767be37acfa9af4fb0b0881591918b2072447792e1ee2cf356",
+    "bootstrap/python/tests/error_add_text.kuro": "11e8c3c192b242beec86d5d2ed2173effb2d620681ea17e02a7cbcce6b50ed8e",
+    "bootstrap/python/tests/error_bad_call.kuro": "409c54816e0537a8fbcd5ef39e228c3c24696767ae9ad375088a63d952543c50",
+    "bootstrap/python/tests/error_bad_get.kuro": "a38c4a58b15159d0a47261161ae144fb2fe1b03bf1887ac24131fb9383414375",
+    "bootstrap/python/tests/error_return_top.kuro": "47b234a778a26ad7d3d00a540623b320c00865a170aa5842cd2be0d18bf1c016",
+    "bootstrap/python/tests/error_unknown_type.kuro": "9d1ec86c0e5b4e907b120887c9c9a09a331510ee17d512083bce8c416178ab59",
+    "bootstrap/python/tests/get.kuro": "6adff5251ec64319ef6238ce131ebae132e0053bf2e91de95d9052f2f91e7ad3",
+    "bootstrap/python/tests/legacy_if.kuro": "6d6cf8f088e3614d574cb4c1be8bc1c802e83f352837e1f6057ea8ce2b6f8411",
+    "bootstrap/python/tests/length.kuro": "bb9347a4c3e91125e03b610789eef0f186a321bed3f6422d3c6d2716873deb2f",
+    "bootstrap/python/tests/nested.kuro": "c6e28410f338bd3baac4803b43352f685bd3b2aae4775018d1eb9dd728cb58ee",
+    "bootstrap/python/tests/repeat_index.kuro": "959e03f16f38609bd61a138556b02d2e4cb69493626b4de88b4cb020698768d4",
+    "bootstrap/python/tests/return_top.kuro": "47b234a778a26ad7d3d00a540623b320c00865a170aa5842cd2be0d18bf1c016",
+    "bootstrap/python/tests/set_list.kuro": "ed3dc6cf965f8b70eb29e5b5d61f88d38f735724f26875dc04585cda46957870",
+    "bootstrap/python/tests/set_text.kuro": "dbf0adaf254720c781e72dce271c5b98e3be76f8b02ecc8b2f215e86ace5eb17",
+    "bootstrap/python/tests/typed.kuro": "3f78335590893f7aa8a07253bfa093f235f6d906530013b88787f28b153c3a49",
+    "bootstrap/python/tests/unknown_type.kuro": "9d1ec86c0e5b4e907b120887c9c9a09a331510ee17d512083bce8c416178ab59",
+    "compiler/__init__.py": "b246057809d2c9dd1505169464212b16991a1a50ab1530ad813a3b205707cfc1",
+    "compiler/artifacts.py": "6f733b75c420c33fcbac2d57796728c99c09323d1ba60d3f9487feff71c124ab",
+    "compiler/ast_canon.py": "0d7cb2aa851d6494c74ad50e3ba97d875837c7205fb498612b91656b2117d28b",
+    "compiler/ast_nodes.py": "b428191ba7ff9c631621e032cfcd58446c30c8a3f84b0aa58bee30437777789b",
+    "compiler/bytecode.py": "fefde2dd53805807e4206ede8d8a5083bcf571c0493fa5ca0c1a39a750963161",
+    "compiler/concurrency.py": "9a7853f77315c5b95e0d6a716aaee38b37617c8f5f6b02476ac05fa5d634f5d7",
+    "compiler/diagnostics.py": "f2c57e08acc735f1bb04ebfc218ffa43ad39cb261a218108e60143de81828861",
+    "compiler/formatter.py": "52969b49677bb1ad6581805926b2de4999325d3ef5df631b5eb326a05c619c83",
+    "compiler/interpreter.py": "00ba8fd4b8b8a6250054a1b9aadd644162848e93ca8e449e53cc0eca2dbf781a",
+    "compiler/ir.py": "1504ba2353e3e7d9277e665c4358fd70a8cc50404be2ed8f91bcb95a50a7b311",
+    "compiler/lexer.py": "ccec69029836d2fdaeda244c91c153c23047b8c24ac9b70e5cdc604d6ccd998e",
+    "compiler/linter.py": "6567654c22b420650e68a3987ae91e6b6bfa4ddea1858f3771030f0e1dbd8818",
+    "compiler/lower.py": "007af6ce7c3e44032060ac512e99a838cbcf7cd3911091c75a6aa311b28b8bd6",
+    "compiler/memory.py": "5a03bbcb481425bcc012a598e2c2745ca68182f5b83c903df677a97c34fc3827",
+    "compiler/modules.py": "001793ec6efc42aec0e3b0c9ad3fc7b1604de17b5766dda27562b8d70a169a92",
+    "compiler/native.py": "c9831c546203e85fa7918336f8e7a73fa19002a252aac04572ea25da630f4ddc",
+    "compiler/packages.py": "64e8071684b52b34b7a3697937dab4722f2bbd71e28860f9b826998fa0c307b3",
+    "compiler/parser.py": "e6815ea680044e1646697a207097cd0dcef05784ac527fc67264203456f1fdf7",
+    "compiler/pipeline.py": "212e4a5074a7292bcd3d8932b15461ef50a4016ab1789ce26cc8f2e4d7895bd7",
+    "compiler/profiler.py": "fd20a5252826cc4640c9eadc000646d35678a6f06232e81b3d2ba1fcfd5f7dcf",
+    "compiler/resolver.py": "1e632842a936ade0cf9965fc99244759b503e87e998b056fa266d15d7d8c156d",
+    "compiler/scaffold.py": "49c7f3f726038ded1bd87cbd822a050d5a5f0535f5776daaaa5cbdf37bf7a09a",
+    "compiler/self_host.py": "0fb1cb9aa33d4538eca0d502049fb59dbc3dc67f21405b0ee0fc0ae95ad63885",
+    "compiler/semantic_canon.py": "099779f7cf7f322513ebf11972fae51272a97616feb18fb63474ac8096c90878",
+    "compiler/test_runner.py": "bb9cb435d70e40bef64d4067bb7d4ccc86f582555f15924ab46e8c6a2b443c7f",
+    "compiler/tokens.py": "73fb06897ba8c14023d182d47a3f7fa9ea6aaaf3c606409b0eb5337fa62726c8",
+    "compiler/typecheck.py": "19ee7cbd0d950a2c6101731c65df9c23d3b61a6d874c03c5c35d40d6323b6d2d",
+    "compiler/values.py": "6f5a3f10ba67b9fbfc80270d5b43a24a1877c0ec4a153847aa294ee563f5cff5",
+    "self_host/artifact_loader.kuro": "803197a8b1fe5a624cab32ba40188f90be92ab00b9914f55a6aae19195b5dd2b",
+    "self_host/bytecode.kuro": "da340f6dbbf87ab77bcf1e061bdfd2f318935722c8bf27f30203741b69b006ee",
+    "self_host/compiler.kuro": "0ea73636c8016c51a64c42b214651e364f091d13eb8f40668795dd08f6630ff7",
+    "self_host/decimal_formatter.c": "d81d658250578301ada378561a405c0d2a3436f49970f76632eed58da92545e4",
+    "self_host/lengthcheck.kuro": "986d54f3429b84a6028f0d67006a96dd318f2e9a19ea94e30fe5b48f6676f10c",
+    "self_host/lexer.kuro": "bf789614eda2c0eb3455618c8af3329e25145dcff379b79762681d6220599996",
+    "self_host/lower.kuro": "044020807602a7438d749e58b67b20ec80ea16f51dce210d0ccc83d8e7d9071c",
+    "self_host/native_codegen.kuro": "c9ac101328e372254bbebe27881e1c37488807a4a72acbae9336b8badf46c94f",
+    "self_host/native_compiler_entry.kuro": "59381826a649a4d2bcd66d5f8837c590a3b6a406c1e8f629bfce8c711a38aa8f",
+    "self_host/parser.kuro": "9c8ad6639fc7352e8e415ee19a42ccc7ca132809484f4daf92bd8e326dc0437c",
+    "self_host/resolver.kuro": "1af766aae0e354044e4b30ffb7ae779e77425381ffafc07c29cf9f409b3c70c2",
+    "self_host/runtime.kuro": "a1430eee40c63db8190ead7982b8737bbbfa957b181ae79b20817328e21e28ff",
+    "self_host/typecheck.kuro": "de277affb23545beb4a74619d1e98dc7d36d6dae98c73432c43ebafac6dcd3ea",
+    "self_host/vm.kuro": "5ed00fcdb78b13e2905a04ebf09592f6e916ea5ee672edf201e3d8a25f26249a"
+  },
+  "bootstrap_images_removed_before_build": [
+    "kuro-compiler",
+    "kuro-runtime",
+    "kuro-bytecode",
+    "kuro-codegen"
+  ],
+  "ordinary_launcher_assembly_equals_census_original": true,
+  "independent_reproduction_input_and_stdout_equal": true,
+  "malformed_witness": {
+    "spelling": "xabcdefghijklmnopq",
+    "repetitions": 100,
+    "program": "kuro.bytecode/1\\n followed by 100 repetitions of BC_CONST\\nxabcdefghijklmnopq\\nBC_PRINT\\n",
+    "actual_character_bytes_saved": 3400,
+    "full_self_character_bytes_saved": 0,
+    "row_savings": 0
+  },
+  "measurements": {
+    "self": {
+      "before": {
+        "stop": "audit_kuro_main_epilogue",
+        "stop_reason": "normal_epilogue",
+        "vm_failed": 0,
+        "runtime_exit_code": 0,
+        "entry_count": 65481,
+        "column_lengths": {
+          "VMCollectionOwners": 65481,
+          "VMCollectionItems": 65481,
+          "VMCollectionItemDisplay": 65481
+        },
+        "char_bytes": 870724,
+        "text_join_bytes": 2192152,
+        "owners": [
+          {
+            "id": 0,
+            "name": "TokenKinds",
+            "entries": 8771,
+            "currently_named": true
+          },
+          {
+            "id": 1,
+            "name": "TokenStarts",
+            "entries": 8771,
+            "currently_named": true
+          },
+          {
+            "id": 2,
+            "name": "TokenValues",
+            "entries": 8771,
+            "currently_named": true
+          },
+          {
+            "id": 3,
+            "name": "AstOut",
+            "entries": 11654,
+            "currently_named": true
+          },
+          {
+            "id": 4,
+            "name": "LCNames",
+            "entries": 61,
+            "currently_named": true
+          },
+          {
+            "id": 5,
+            "name": "LCTypes",
+            "entries": 61,
+            "currently_named": true
+          },
+          {
+            "id": 6,
+            "name": "LCFrameAction",
+            "entries": 19,
+            "currently_named": true
+          },
+          {
+            "id": 7,
+            "name": "LCFrameRepeat",
+            "entries": 19,
+            "currently_named": true
+          },
+          {
+            "id": 8,
+            "name": "IROut",
+            "entries": 9118,
+            "currently_named": true
+          },
+          {
+            "id": 9,
+            "name": "BytecodeOut",
+            "entries": 9118,
+            "currently_named": true
+          },
+          {
+            "id": 10,
+            "name": "CompilerOutput",
+            "entries": 9118,
+            "currently_named": true
+          }
+        ],
+        "named_entries": 65481,
+        "unnamed_entries": 0,
+        "active_names": {
+          "TokenKinds": 0,
+          "TokenStarts": 1,
+          "TokenValues": 2,
+          "AstOut": 3,
+          "LCNames": 4,
+          "LCTypes": 5,
+          "LCFrameAction": 6,
+          "LCFrameRepeat": 7,
+          "IROut": 8,
+          "BytecodeOut": 9,
+          "CompilerOutput": 10
+        },
+        "inferior_exit_code": 0,
+        "input_sha256": "6476ba0239afe3166b13874fb67d40b08beb196f3720168ae38ce5dd6cf0a596",
+        "launcher_source_sha256": "3ade66b17e082088e3bdf2d28694b036f4976b3044d006358f09510a70c392a2",
+        "original_assembly_sha256": "a679e551519f10681702d418ac5a10294d3666bc55e505dbe30740372665cbbd",
+        "symbolized_assembly_sha256": "4fd79961c77372e94a0d5ce981e673b06dc5dd4eb64a0c03af27b190922d07be",
+        "diagnostic_image_sha256": "9f5c3c3c0ca249691b55993859e0a057b4fada6b033f8f1d36d44fbf0f63df7c",
+        "stdout_sha256": "ba848047248d8f4af2f3bd7661ef064d8b0234f8a4196b1b2134148b3a1f2a09",
+        "symbol_only_roundtrip": true,
+        "invariants_passed": true,
+        "successful_exit_census": true
+      },
+      "after": {
+        "stop": "audit_kuro_main_epilogue",
+        "stop_reason": "normal_epilogue",
+        "vm_failed": 0,
+        "runtime_exit_code": 0,
+        "entry_count": 65481,
+        "column_lengths": {
+          "VMCollectionOwners": 65481,
+          "VMCollectionItems": 65481,
+          "VMCollectionItemDisplay": 65481
+        },
+        "char_bytes": 870724,
+        "text_join_bytes": 2192152,
+        "owners": [
+          {
+            "id": 0,
+            "name": "TokenKinds",
+            "entries": 8771,
+            "currently_named": true
+          },
+          {
+            "id": 1,
+            "name": "TokenStarts",
+            "entries": 8771,
+            "currently_named": true
+          },
+          {
+            "id": 2,
+            "name": "TokenValues",
+            "entries": 8771,
+            "currently_named": true
+          },
+          {
+            "id": 3,
+            "name": "AstOut",
+            "entries": 11654,
+            "currently_named": true
+          },
+          {
+            "id": 4,
+            "name": "LCNames",
+            "entries": 61,
+            "currently_named": true
+          },
+          {
+            "id": 5,
+            "name": "LCTypes",
+            "entries": 61,
+            "currently_named": true
+          },
+          {
+            "id": 6,
+            "name": "LCFrameAction",
+            "entries": 19,
+            "currently_named": true
+          },
+          {
+            "id": 7,
+            "name": "LCFrameRepeat",
+            "entries": 19,
+            "currently_named": true
+          },
+          {
+            "id": 8,
+            "name": "IROut",
+            "entries": 9118,
+            "currently_named": true
+          },
+          {
+            "id": 9,
+            "name": "BytecodeOut",
+            "entries": 9118,
+            "currently_named": true
+          },
+          {
+            "id": 10,
+            "name": "CompilerOutput",
+            "entries": 9118,
+            "currently_named": true
+          }
+        ],
+        "named_entries": 65481,
+        "unnamed_entries": 0,
+        "active_names": {
+          "TokenKinds": 0,
+          "TokenStarts": 1,
+          "TokenValues": 2,
+          "AstOut": 3,
+          "LCNames": 4,
+          "LCTypes": 5,
+          "LCFrameAction": 6,
+          "LCFrameRepeat": 7,
+          "IROut": 8,
+          "BytecodeOut": 9,
+          "CompilerOutput": 10
+        },
+        "inferior_exit_code": 0,
+        "input_sha256": "6476ba0239afe3166b13874fb67d40b08beb196f3720168ae38ce5dd6cf0a596",
+        "launcher_source_sha256": "e29f8cded61423be17664dbf80d6e10483eccee153a8f85918a7e78887d41372",
+        "original_assembly_sha256": "300f1fe5ee4f88d2e09dc2a7380f68cf7dd154cbc79481f7d5e7cb5f4126db43",
+        "symbolized_assembly_sha256": "e4bc91c967d6a96268799db40b9bb440e0c45ab70bb4ace9242531924094697d",
+        "diagnostic_image_sha256": "016be8cfd35dc4c6b5189dd79071cfaeb1816801046f9aa446560e832d99c8b3",
+        "stdout_sha256": "ba848047248d8f4af2f3bd7661ef064d8b0234f8a4196b1b2134148b3a1f2a09",
+        "symbol_only_roundtrip": true,
+        "invariants_passed": true,
+        "successful_exit_census": true
+      }
+    },
+    "control": {
+      "before": {
+        "stop": "audit_kuro_main_epilogue",
+        "stop_reason": "normal_epilogue",
+        "vm_failed": 0,
+        "runtime_exit_code": 0,
+        "entry_count": 4189,
+        "column_lengths": {
+          "VMCollectionOwners": 4189,
+          "VMCollectionItems": 4189,
+          "VMCollectionItemDisplay": 4189
+        },
+        "char_bytes": 347354,
+        "text_join_bytes": 1188633,
+        "owners": [
+          {
+            "id": 0,
+            "name": "TokenKinds",
+            "entries": 555,
+            "currently_named": true
+          },
+          {
+            "id": 1,
+            "name": "TokenStarts",
+            "entries": 555,
+            "currently_named": true
+          },
+          {
+            "id": 2,
+            "name": "TokenValues",
+            "entries": 555,
+            "currently_named": true
+          },
+          {
+            "id": 3,
+            "name": "AstOut",
+            "entries": 837,
+            "currently_named": true
+          },
+          {
+            "id": 4,
+            "name": "LCNames",
+            "entries": 2,
+            "currently_named": true
+          },
+          {
+            "id": 5,
+            "name": "LCTypes",
+            "entries": 2,
+            "currently_named": true
+          },
+          {
+            "id": 6,
+            "name": "IROut",
+            "entries": 561,
+            "currently_named": true
+          },
+          {
+            "id": 7,
+            "name": "BytecodeOut",
+            "entries": 561,
+            "currently_named": true
+          },
+          {
+            "id": 8,
+            "name": "CompilerOutput",
+            "entries": 561,
+            "currently_named": true
+          }
+        ],
+        "named_entries": 4189,
+        "unnamed_entries": 0,
+        "active_names": {
+          "TokenKinds": 0,
+          "TokenStarts": 1,
+          "TokenValues": 2,
+          "AstOut": 3,
+          "LCNames": 4,
+          "LCTypes": 5,
+          "IROut": 6,
+          "BytecodeOut": 7,
+          "CompilerOutput": 8
+        },
+        "inferior_exit_code": 0,
+        "input_sha256": "fbd7ea26dc05e92e4b2279f3d0f02bda35073e2d197a730187b8a79ea9994975",
+        "launcher_source_sha256": "3ade66b17e082088e3bdf2d28694b036f4976b3044d006358f09510a70c392a2",
+        "original_assembly_sha256": "a679e551519f10681702d418ac5a10294d3666bc55e505dbe30740372665cbbd",
+        "symbolized_assembly_sha256": "4fd79961c77372e94a0d5ce981e673b06dc5dd4eb64a0c03af27b190922d07be",
+        "diagnostic_image_sha256": "247d29bff2d38d9f104b9ecf581301cd824dd9a70924a1ab3aea53e6b8f99455",
+        "stdout_sha256": "6d7c721c6e549924dd693cdcd4537f85f22367ec8514430d66097de94410a904",
+        "symbol_only_roundtrip": true,
+        "invariants_passed": true,
+        "successful_exit_census": true
+      },
+      "after": {
+        "stop": "audit_kuro_main_epilogue",
+        "stop_reason": "normal_epilogue",
+        "vm_failed": 0,
+        "runtime_exit_code": 0,
+        "entry_count": 4189,
+        "column_lengths": {
+          "VMCollectionOwners": 4189,
+          "VMCollectionItems": 4189,
+          "VMCollectionItemDisplay": 4189
+        },
+        "char_bytes": 347354,
+        "text_join_bytes": 1188633,
+        "owners": [
+          {
+            "id": 0,
+            "name": "TokenKinds",
+            "entries": 555,
+            "currently_named": true
+          },
+          {
+            "id": 1,
+            "name": "TokenStarts",
+            "entries": 555,
+            "currently_named": true
+          },
+          {
+            "id": 2,
+            "name": "TokenValues",
+            "entries": 555,
+            "currently_named": true
+          },
+          {
+            "id": 3,
+            "name": "AstOut",
+            "entries": 837,
+            "currently_named": true
+          },
+          {
+            "id": 4,
+            "name": "LCNames",
+            "entries": 2,
+            "currently_named": true
+          },
+          {
+            "id": 5,
+            "name": "LCTypes",
+            "entries": 2,
+            "currently_named": true
+          },
+          {
+            "id": 6,
+            "name": "IROut",
+            "entries": 561,
+            "currently_named": true
+          },
+          {
+            "id": 7,
+            "name": "BytecodeOut",
+            "entries": 561,
+            "currently_named": true
+          },
+          {
+            "id": 8,
+            "name": "CompilerOutput",
+            "entries": 561,
+            "currently_named": true
+          }
+        ],
+        "named_entries": 4189,
+        "unnamed_entries": 0,
+        "active_names": {
+          "TokenKinds": 0,
+          "TokenStarts": 1,
+          "TokenValues": 2,
+          "AstOut": 3,
+          "LCNames": 4,
+          "LCTypes": 5,
+          "IROut": 6,
+          "BytecodeOut": 7,
+          "CompilerOutput": 8
+        },
+        "inferior_exit_code": 0,
+        "input_sha256": "fbd7ea26dc05e92e4b2279f3d0f02bda35073e2d197a730187b8a79ea9994975",
+        "launcher_source_sha256": "e29f8cded61423be17664dbf80d6e10483eccee153a8f85918a7e78887d41372",
+        "original_assembly_sha256": "300f1fe5ee4f88d2e09dc2a7380f68cf7dd154cbc79481f7d5e7cb5f4126db43",
+        "symbolized_assembly_sha256": "e4bc91c967d6a96268799db40b9bb440e0c45ab70bb4ace9242531924094697d",
+        "diagnostic_image_sha256": "f3ab7d714894ad872efd93c4b06ca895f6e1e51cab54de3c4eaa40d36854f8cb",
+        "stdout_sha256": "6d7c721c6e549924dd693cdcd4537f85f22367ec8514430d66097de94410a904",
+        "symbol_only_roundtrip": true,
+        "invariants_passed": true,
+        "successful_exit_census": true
+      }
+    },
+    "malformed": {
+      "before": {
+        "stop": "audit_kuro_main_epilogue",
+        "stop_reason": "normal_epilogue",
+        "vm_failed": 0,
+        "runtime_exit_code": 0,
+        "entry_count": 0,
+        "column_lengths": {
+          "VMCollectionOwners": 2,
+          "VMCollectionItems": 2,
+          "VMCollectionItemDisplay": 2
+        },
+        "char_bytes": 17832,
+        "text_join_bytes": 56435,
+        "owners": [],
+        "named_entries": 0,
+        "unnamed_entries": 0,
+        "active_names": {},
+        "inferior_exit_code": 0,
+        "input_sha256": "e2ddbdd32cca818f8afc0287563761438b4ac1efc1217ac36771dc1c7bb170c4",
+        "launcher_source_sha256": "3ade66b17e082088e3bdf2d28694b036f4976b3044d006358f09510a70c392a2",
+        "original_assembly_sha256": "a679e551519f10681702d418ac5a10294d3666bc55e505dbe30740372665cbbd",
+        "symbolized_assembly_sha256": "4fd79961c77372e94a0d5ce981e673b06dc5dd4eb64a0c03af27b190922d07be",
+        "diagnostic_image_sha256": "da1e8c5d9b9a7b0fc46a286886d26c527cf9cfaf0b0ff7069511802a20afbf35",
+        "stdout_sha256": "8a2d3be65e2b43d3280853a6e356caccb0b5c22b180851ec0817f6f6acbd10e0",
+        "symbol_only_roundtrip": true,
+        "invariants_passed": true,
+        "successful_exit_census": true
+      },
+      "after": {
+        "stop": "audit_kuro_main_epilogue",
+        "stop_reason": "normal_epilogue",
+        "vm_failed": 0,
+        "runtime_exit_code": 0,
+        "entry_count": 0,
+        "column_lengths": {
+          "VMCollectionOwners": 2,
+          "VMCollectionItems": 2,
+          "VMCollectionItemDisplay": 2
+        },
+        "char_bytes": 14432,
+        "text_join_bytes": 56435,
+        "owners": [],
+        "named_entries": 0,
+        "unnamed_entries": 0,
+        "active_names": {},
+        "inferior_exit_code": 0,
+        "input_sha256": "e2ddbdd32cca818f8afc0287563761438b4ac1efc1217ac36771dc1c7bb170c4",
+        "launcher_source_sha256": "e29f8cded61423be17664dbf80d6e10483eccee153a8f85918a7e78887d41372",
+        "original_assembly_sha256": "300f1fe5ee4f88d2e09dc2a7380f68cf7dd154cbc79481f7d5e7cb5f4126db43",
+        "symbolized_assembly_sha256": "e4bc91c967d6a96268799db40b9bb440e0c45ab70bb4ace9242531924094697d",
+        "diagnostic_image_sha256": "533ceffdbed14fd2eb80e17c4cb34a2dd3179bdabd76612cb791e4334fa7d7a9",
+        "stdout_sha256": "8a2d3be65e2b43d3280853a6e356caccb0b5c22b180851ec0817f6f6acbd10e0",
+        "symbol_only_roundtrip": true,
+        "invariants_passed": true,
+        "successful_exit_census": true
+      }
+    }
+  },
+  "interpretation": "Bounded invalid-token allocation avoidance only. No full-self peak reduction, collection compaction, reclamation, RSS improvement or independence claim. Avoided allocations can expand success domain near resource exhaustion; ceiling unchanged."
+}
