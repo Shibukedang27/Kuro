@@ -1,5 +1,7 @@
 # Result ownership: cross-path review and the unresolved decision
 
+**Historical review:** The owner subsequently delegated the semantic choice. The [invocation-owner implementation](invocation-result-owner.md) selects the writable owner policy and records its actual admitted paths and regressions. The observations below describe this review's unchanged parent behavior, not the implementation's new contract.
+
 This review is directly stacked on verified open/unmerged [PR #100](https://github.com/Shibukedang27/Kuro/pull/100), exact head `52408a7e07468623b1812db2a991d9f08936a25d` (eight successful checks rechecked live). It changes tests and documentation only. No production behavior, Index precedence, opcode or image format changes. Keep the review PR open and unmerged. **Strict independence is unfinished.**
 
 ## Finding first: the owner proposal is not a compatibility-preserving repair

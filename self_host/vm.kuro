@@ -460,6 +460,11 @@ Done.
 
 Action VMStore Name, Value;
     VMStore_WroteFrame = 0;
+    If Name is equal to "_";
+        VMSetResultDisplay = VMStoreDisplayValue;
+        Call VMSetResult Value;
+        VMStoreDisplayValue = "";
+    Else;
     If VMFrameDepth is greater than 0;
         Get VMFrameStarts VMFrameDepth;
         VMStore_Start = @_;
@@ -495,6 +500,7 @@ Action VMStore Name, Value;
         Done.
     Done.
     VMStoreDisplayValue = "";
+    Done.
 Done.
 
 Action VMStoreFrame Name, Value;
@@ -775,12 +781,22 @@ Action VMInvoke Name;
             Append VMPos to VMReturnPositions;
             Add 1 to VMReturnPositionCapacity;
         Done.
-        If VMFrameDepth is less than VMFrameReturnCapacity;
-            Set VMFrameReturns VMFrameDepth to 0;
-            Set VMFrameReturnDisplay VMFrameDepth to "";
+        If VMFrameDepth is greater than 1;
+            VMInvoke_ParentDepth = VMFrameDepth - 1;
+            Get VMFrameReturns VMInvoke_ParentDepth;
+            VMInvoke_EntryValue = @_;
+            Get VMFrameReturnDisplay VMInvoke_ParentDepth;
+            VMInvoke_EntryDisplay = @_;
         Else;
-            Append 0 to VMFrameReturns;
-            Append "" to VMFrameReturnDisplay;
+            VMInvoke_EntryValue = VMLastResult;
+            VMInvoke_EntryDisplay = VMLastResultDisplay;
+        Done.
+        If VMFrameDepth is less than VMFrameReturnCapacity;
+            Set VMFrameReturns VMFrameDepth to VMInvoke_EntryValue;
+            Set VMFrameReturnDisplay VMFrameDepth to VMInvoke_EntryDisplay;
+        Else;
+            Append VMInvoke_EntryValue to VMFrameReturns;
+            Append VMInvoke_EntryDisplay to VMFrameReturnDisplay;
             Add 1 to VMFrameReturnCapacity;
         Done.
         If VMFrameDepth is less than VMFrameSlotCapacity;
@@ -799,7 +815,13 @@ Action VMInvoke Name;
             Get VMParamNames VMInvoke_NamePos;
             VMInvoke_Name = @_;
             VMStoreDisplayValue = VMLastPoppedDisplay;
-            Call VMStoreFrame VMInvoke_Name, VMInvoke_Value;
+            If VMInvoke_Name is equal to "_";
+                VMSetResultDisplay = VMStoreDisplayValue;
+                Call VMSetResult VMInvoke_Value;
+                VMStoreDisplayValue = "";
+            Else;
+                Call VMStoreFrame VMInvoke_Name, VMInvoke_Value;
+            Done.
             VMInvoke_Index = VMInvoke_Index - 1;
         Done.
         VMReturnPending = 0;
@@ -812,12 +834,14 @@ Action VMInvoke Name;
         Get VMFrameStarts VMFrameDepth;
         VMFrameEntryCount = @_;
         VMFrameDepth = VMFrameDepth - 1;
-        VMSetResultDisplay = VMReturnDisplay;
-        Call VMSetResult VMReturnValue;
-        If VMReturnDisplay is not equal to "";
-            Call VMPushDecimal VMReturnValue, VMReturnDisplay;
-        Else;
-            Call VMPush VMReturnValue;
+        If VMFailed is equal to 0;
+            VMSetResultDisplay = VMReturnDisplay;
+            Call VMSetResult VMReturnValue;
+            If VMReturnDisplay is not equal to "";
+                Call VMPushDecimal VMReturnValue, VMReturnDisplay;
+            Else;
+                Call VMPush VMReturnValue;
+            Done.
         Done.
     Done.
 Done.

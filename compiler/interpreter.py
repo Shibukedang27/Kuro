@@ -1,14 +1,13 @@
 """The Kuro IR interpreter — Stage 4's runtime (spec section 4/22).
 
 Executes `IRProgram` (compiler/ir.py) directly; nothing here looks at the
-AST. Variable scoping intentionally matches the bootstrap engine (see
-docs/architecture/current-state.md section 7): there is one global
-environment (`self.env`), and calling an Action pushes only its parameters
-as a read-priority overlay (`self.frames`) — an Action body can still read
-*and write* globals, because every STORE-shaped instruction always targets
-`self.env`, never the current frame. This is a deliberate compatibility
-choice, not an oversight; a real lexical-scoping model is future work
-(tracked, not faked — see docs/design/memory.md's note on scoping).
+AST. Ordinary bindings retain the global-write/parameter-overlay model.
+The result binding `_` is different: main and each Action invocation own
+one writable slot, whose absence is distinct from a present None. Direct
+calls copy the caller's slot; Invoke copies the closure snapshot. A `_`
+parameter initializes that slot, rather than permanently shadowing it.
+Source producers and explicit writes replace only the current owner's slot.
+This is not general lexical scoping; the frozen bootstrap oracle is unchanged.
 
 Unlike the bootstrap engine, uncontrolled Python exceptions are not allowed
 to reach the caller: deep recursion, division by zero, and out-of-range
@@ -81,17 +80,26 @@ class Interpreter:
         self.max_call_depth = 0
 
     # --- variable access --------------------------------------------
+    def _result_owner(self):
+        return self.frames[-1] if self.frames else self.env
+
+    def _has_value(self, name):
+        if name == "_":
+            return name in self._result_owner()
+        return name in self.env or (self.frames and name in self.frames[-1])
+
     def _read(self, name: str, span: Span | None):
+        if name == "_":
+            return self._result_owner().get(name)
         if self.frames and name in self.frames[-1]:
             return self.frames[-1][name]
         if name in self.env:
             return self.env[name]
-        if name == "_":
-            return None
         raise KuroRuntimeException("E4001", f"undefined value {name!r}", span)
 
     def _write(self, name: str, value):
-        self.env[name] = value
+        owner = self._result_owner() if name == "_" else self.env
+        owner[name] = value
 
     # --- program entry -------------------------------------------------
     def run(self):
@@ -126,6 +134,11 @@ class Interpreter:
             captured = dict(self.env)
             for frame in self.frames:
                 captured.update(frame)
+            # Absence in the current owner must not resurrect an older slot.
+            captured.pop("_", None)
+            owner = self._result_owner()
+            if "_" in owner:
+                captured["_"] = owner["_"]
             # lower.py's hygienic counters are invocation bookkeeping, not
             # source-visible captures. An immutable Invoke overlay would hide
             # subsequent loop writes to env and can freeze a live counter.
@@ -160,7 +173,10 @@ class Interpreter:
             raise KuroRuntimeException("E4003", f"unknown action {name!r}", None)
         if len(self.frames) >= _MAX_CALL_DEPTH:
             raise KuroRuntimeException("E6005", "maximum recursion depth exceeded", None)
-        frame = dict(zip(fn.params, args))
+        # Copy before pushing: direct entry inherits the effective caller slot.
+        owner = self._result_owner()
+        frame = {"_": owner["_"]} if "_" in owner else {}
+        frame.update(zip(fn.params, args))
         self.frames.append(frame)
         self.max_call_depth = max(self.max_call_depth, len(self.frames))
         try:
@@ -228,14 +244,14 @@ class Interpreter:
                 self._write(name, value)
             elif op == "ADD":
                 target, tmp = instr.args
-                current = self._read(target, span) if (target in self.env or (self.frames and target in self.frames[-1])) else 0
+                current = self._read(target, span) if self._has_value(target) else 0
                 self._write(target, current + temps[tmp])
             elif op == "UPDATE":
                 name, tmp = instr.args
                 self._write(name, temps[tmp])
             elif op == "APPEND":
                 name, tmp = instr.args
-                current = self._read(name, span) if (name in self.env or (self.frames and name in self.frames[-1])) else None
+                current = self._read(name, span) if self._has_value(name) else None
                 if current is None:
                     self._write(name, [temps[tmp]])
                 elif isinstance(current, list):
@@ -277,7 +293,7 @@ class Interpreter:
                         raise KuroRuntimeException("E3004", "Set on Text requires one character", span)
                     if not 0 <= idx < len(target):
                         raise KuroRuntimeException("E6001", "Text index out of range", span)
-                    self.env[name] = target[:idx] + val + target[idx + 1 :]
+                    self._write(name, target[:idx] + val + target[idx + 1 :])
                 elif isinstance(target, list):
                     if not 0 <= idx < len(target):
                         raise KuroRuntimeException("E6001", "collection index out of range", span)

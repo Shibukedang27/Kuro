@@ -1,4 +1,4 @@
-"""Current result entry/publication behavior, not a scoped-result implementation.
+"""Result entry/publication contract for the Python IR and serialized JSON VM.
 
 No Repeat or Index cases: the JSON VM does not admit Repeat save/restore.
 The two engines are checked against explicit expectations, not just each other.
@@ -37,7 +37,7 @@ def engine(request):
     return request.param
 
 
-def prepare(source, engine, initial=None):
+def prepare(source, engine, initial=None, input_fn=input):
     compiled = compile_source(source)
     assert compiled.ok, compiled.diags.render_all()
     steps = 0
@@ -49,18 +49,18 @@ def prepare(source, engine, initial=None):
 
     output = io.StringIO()
     if engine == "ir":
-        runtime = Interpreter(compiled.ir, output=output, trace=tick)
+        runtime = Interpreter(compiled.ir, input_fn=input_fn, output=output, trace=tick)
     else:
         # Exercise the serialized representation, not only encode_ir objects.
         program = BytecodeProgram.from_data(json.loads(json.dumps(encode_ir(compiled.ir).to_data())))
-        runtime = _BudgetedVM(program, output=output)
+        runtime = _BudgetedVM(program, input_fn=input_fn, output=output)
         runtime.tick = tick
     runtime.env.update(initial or {})
     return runtime, output
 
 
-def run(source, engine, initial=None):
-    runtime, output = prepare(source, engine, initial)
+def run(source, engine, initial=None, input_fn=input):
+    runtime, output = prepare(source, engine, initial, input_fn)
     runtime.run()
     assert runtime.frames == []
     assert not any(name.endswith("$") for name in runtime.env)
@@ -74,7 +74,7 @@ SEED = "Action Seed; Return 17; Done.\n"
 @pytest.mark.parametrize("initial, expected", [
     ({}, None), ({"_": None}, None), ({"_": 0}, 0), ({"_": 17}, 17),
 ])
-def test_direct_entry_reads_live_global_without_initializing_a_slot(engine, initial, expected):
+def test_direct_entry_copies_main_result_presence_and_value(engine, initial, expected):
     runtime, output = run(
         "Action Read; Print @_. Return @_; Done. Call Read; Print @_.",
         engine, initial,
@@ -86,7 +86,7 @@ def test_direct_entry_reads_live_global_without_initializing_a_slot(engine, init
 
 
 @pytest.mark.parametrize("initial, expected", [
-    ({}, 42), ({"_": None}, None), ({"_": 0}, 0), ({"_": 17}, 17),
+    ({}, None), ({"_": None}, None), ({"_": 0}, 0), ({"_": 17}, 17),
 ])
 def test_invoke_entry_uses_capture_presence_not_callers_live_result(engine, initial, expected):
     runtime, output = run(
@@ -101,17 +101,17 @@ def test_invoke_entry_uses_capture_presence_not_callers_live_result(engine, init
 
 
 @pytest.mark.parametrize("invocation", ["Call Outer 17;", "Call Invoke Handle, 17;"])
-def test_parameter_named_result_hides_successful_caller_publication(engine, invocation):
+def test_parameter_named_result_is_an_initializer_replaced_by_producer(engine, invocation):
     runtime, output = run(
         ANSWER + "Action Outer _; Call Answer; Print @_. Return @_; Done.\n"
         'Call MakeClosure "Outer"; Handle = @_; ' + invocation + " Print @_.",
         engine,
     )
-    assert output == "17\n17\n"
-    assert runtime.env["_"] == 17
+    assert output == "42\n42\n"
+    assert runtime.env["_"] == 42
 
 
-def test_nested_direct_entry_does_not_inherit_effective_caller_result(engine):
+def test_nested_direct_entry_inherits_effective_caller_result(engine):
     runtime, output = run(
         ANSWER + "Observed = 0;\n"
         "Action Read; Update Observed to @_; Return @_; Done.\n"
@@ -120,7 +120,7 @@ def test_nested_direct_entry_does_not_inherit_effective_caller_result(engine):
         engine,
     )
     assert runtime.env["Observed"] == 42
-    assert output == "17\n17\n"
+    assert output == "42\n42\n"
 
 
 @pytest.mark.parametrize("tail, expected", [("", None), ("Return @_;", 42), ("Return 9;", 9)])
@@ -139,7 +139,7 @@ def test_implicit_return_publishes_none_not_callees_last_result(engine, tail, ex
     ("Length Value;", "E3005"),
     ("Call Fail;", "E6003"),
 ])
-def test_failed_producer_skips_publication_but_does_not_rollback_inner_success(engine, failure, code):
+def test_failed_producer_discards_callee_owner_without_caller_publication(engine, failure, code):
     runtime, output = prepare(
         ANSWER + "Items = 8, 9;\n"
         "Action Fail; Return 1 / 0; Done.\n"
@@ -151,8 +151,9 @@ def test_failed_producer_skips_publication_but_does_not_rollback_inner_success(e
     assert caught.value.code == code
     assert output.getvalue() == ""
     assert runtime.frames == []
-    # Outer never completes, but its successful nested Call already wrote 42.
-    assert runtime.env["_"] == 42
+    # The nested success changed only Outer. Its owner is discarded on failure;
+    # the main result is untouched.
+    assert runtime.env["_"] == 17
     assert not any(name.endswith("$") for name in runtime.env)
 
 
@@ -166,13 +167,13 @@ def test_host_call_returns_value_without_source_level_publication(engine, body, 
     assert runtime.frames == []
 
 
-def test_source_seeded_captured_caller_rejects_nested_return_publication(engine):
+def test_source_seeded_closure_owner_accepts_nested_producer_publication(engine):
     runtime, output = run(
         SEED + ANSWER + "Action Outer Dummy; Call Answer; Return @_; Done.\n"
         'Call Seed; Call MakeClosure "Outer"; Handle = @_; '
         "Call Invoke Handle, 0; Print @_.", engine,
     )
-    assert output == "17\n"
+    assert output == "42\n"
     assert runtime.env["Handle"].captured["_"] == 17
 
 

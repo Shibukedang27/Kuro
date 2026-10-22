@@ -108,18 +108,27 @@ class BytecodeVM:
         self.memory = MemoryManager()
         self.scheduler = Scheduler()
 
+    def _result_owner(self):
+        return self.frames[-1] if self.frames else self.env
+
+    def _has_value(self, name):
+        if name == "_":
+            return name in self._result_owner()
+        return name in self.env or (self.frames and name in self.frames[-1])
+
     def _read(self, name):
+        if name == "_":
+            return self._result_owner().get(name)
         if self.frames and name in self.frames[-1]:
             return self.frames[-1][name]
         if name in self.env:
             return self.env[name]
-        if name == "_":
-            return None
         raise KuroRuntimeException("E4001", f"undefined value {name!r}")
 
     def _write(self, name, value):
         self.memory.track(value)
-        self.env[name] = value
+        owner = self._result_owner() if name == "_" else self.env
+        owner[name] = value
 
     def run(self):
         self._execute(self.program.main)
@@ -143,6 +152,11 @@ class BytecodeVM:
             captured = dict(self.env)
             for frame in self.frames:
                 captured.update(frame)
+            # Snapshot only the effective owner, including frozen absence.
+            captured.pop("_", None)
+            owner = self._result_owner()
+            if "_" in owner:
+                captured["_"] = owner["_"]
             return ClosureValue(args[0], captured)
         if name == "Invoke" and args and isinstance(args[0], ClosureValue):
             closure, call_args = args[0], args[1:]
@@ -168,7 +182,10 @@ class BytecodeVM:
         if len(self.frames) >= 200:
             raise KuroRuntimeException("E6005", "maximum recursion depth exceeded")
         params, body = function
-        self.frames.append(dict(zip(params, args)))
+        owner = self._result_owner()
+        frame = {"_": owner["_"]} if "_" in owner else {}
+        frame.update(zip(params, args))
+        self.frames.append(frame)
         try:
             self._execute(body)
         except _Return as returned:
@@ -214,13 +231,13 @@ class BytecodeVM:
                 self._write(name, value)
             elif op == "ADD":
                 name, temp = item.args
-                current = self._read(name) if name in self.env or (self.frames and name in self.frames[-1]) else 0
+                current = self._read(name) if self._has_value(name) else 0
                 self._write(name, current + temps[temp])
             elif op == "UPDATE":
                 self._write(item.args[0], temps[item.args[1]])
             elif op == "APPEND":
                 name, temp = item.args
-                current = self._read(name) if (name in self.env or (self.frames and name in self.frames[-1])) else None
+                current = self._read(name) if self._has_value(name) else None
                 if current is None:
                     self._write(name, [temps[temp]])
                 elif isinstance(current, list):
@@ -258,7 +275,7 @@ class BytecodeVM:
                         raise KuroRuntimeException("E3004", "Set on Text requires one character")
                     if not 0 <= index < len(target):
                         raise KuroRuntimeException("E6001", "Text index out of range")
-                    self.env[name] = target[:index] + value + target[index + 1:]
+                    self._write(name, target[:index] + value + target[index + 1:])
                 elif isinstance(target, list) and 0 <= index < len(target):
                     target[index] = value
                 else:
