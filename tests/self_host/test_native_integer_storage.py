@@ -117,7 +117,7 @@ UNSUPPORTED_SOURCES = [
     ('text-index', 'Items = 11, 22;\nGet Items "0";\nPrint @_.\n'),
     ('alias', 'Items = 11, 22;\nAlias = Items;\nGet Alias 0;\nPrint @_.\n'),
     ('append', 'Items = 11, 22;\nAppend 33 to Items;\nGet Items 2;\nPrint @_.\n'),
-    ('length', 'Items = 11, 22;\nLength Items;\nPrint @_.\n'),
+    ('scalar-length', 'Items = 11, 22;\nCount = 2;\nLength Count;\nPrint @_.\n'),
     ('conditional-init', 'If 1 is equal to 1;\nItems = 11, 22;\nDone.\nGet Items 0;\nPrint @_.\n'),
     ('repeat-init', 'Repeat 1;\nItems = 11, 22;\nDone.\nGet Items 0;\nPrint @_.\n'),
     ('capture', 'Items = 11, 22;\nAction Read;\nGet Items 0;\nReturn @_;\nDone.\nCall Read;\nPrint @_.\n'),

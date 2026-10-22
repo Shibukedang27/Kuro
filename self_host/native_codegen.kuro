@@ -3445,7 +3445,31 @@ Action EmitBoundedIntegerState;
                                                 NativeIndexedValid = 0;
                                             Done.
                                         Else;
-                                            NativeIndexedValid = 0;
+                                            If NativeIndexedOpcode is equal to "BC_LENGTH";
+                                                If NativeIndexedPos is less than NativeIndexedScanLength;
+                                                    Get BytecodeOut NativeIndexedPos;
+                                                    NativeIndexedName = @_;
+                                                    Add 1 to NativeIndexedPos;
+                                                    Call NativeIndexedFindCollection NativeIndexedName;
+                                                    NativeIndexedCollectionSlot = @_;
+                                                    If NativeIndexedCollectionSlot is greater than or equal to 0;
+                                                        # Fixed owners cannot grow or rebind; SET changes cells, never this logical length.
+                                                        NativeIndexedSearchPos = NativeIndexedCollectionSlot + 1;
+                                                        Get NativeIndexedCollectionLengths NativeIndexedSearchPos;
+                                                        Call NativeLengthToText @_;
+                                                        NativeIndexedLengthText = @_;
+                                                        # Like GET, leave publication to the compiler's following STORE_LIST _.
+                                                        NativeIndexedCode = NativeIndexedCode + "    movq $" + NativeIndexedLengthText + ", %rax\n    pushq %rax\n";
+                                                        Add 1 to NativeIndexedDepth;
+                                                    Else;
+                                                        NativeIndexedValid = 0;
+                                                    Done.
+                                                Else;
+                                                    NativeIndexedValid = 0;
+                                                Done.
+                                            Else;
+                                                NativeIndexedValid = 0;
+                                            Done.
                                         Done.
                                     Done.
                                 Done.
