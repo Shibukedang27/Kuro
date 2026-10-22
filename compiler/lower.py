@@ -5,8 +5,9 @@ named temporary; every statement becomes zero or more instructions,
 operating on named variables (STORE/LOADVAR) rather than the AST directly.
 Control flow (`If`, `Repeat`) becomes explicit LABEL/JUMP/JUMPF.
 
-`Repeat`'s loop variable `Index` is saved with SAVEVAR before the loop and
-restored with RESTOREVAR after, matching the bootstrap engine's behavior of
+`Repeat`'s loop variable `Index` and hidden counter are saved with SAVEVAR
+before the loop and restored with RESTOREVAR on normal exit or Return,
+matching the bootstrap engine's behavior of
 not leaking `Index` into surrounding code (see resolver.py's scoping note
 and docs/architecture/current-state.md section 6) — but implemented as real
 IR instructions instead of ad hoc Python dict save/restore, so a native
@@ -36,6 +37,7 @@ class Lowering:
         self.symbols = symbols
         self.ir = IRProgram()
         self._repeat_depth = 0
+        self._repeat_bindings: list[tuple[str, str]] = []
 
     def run(self) -> IRProgram:
         b = IRBuilder()
@@ -162,6 +164,11 @@ class Lowering:
             return
         if isinstance(st, ReturnStmt):
             v = self._lower_expr(st.value, b)
+            # Capture the value (notably Return Index) before unwinding.
+            # Only this instruction path exits; sibling paths still need
+            # the active bindings, so do not mutate the lowering stack.
+            for name, saved in reversed(self._repeat_bindings):
+                b.emit("RESTOREVAR", name, saved, span=st.span)
             b.emit("RETURN", v, span=st.span)
             return
         if isinstance(st, CallStmt):
@@ -188,10 +195,14 @@ class Lowering:
 
     def _lower_repeat(self, st: RepeatStmt, b: IRBuilder):
         self._repeat_depth += 1
-        counter = f"__repeat_i{self._repeat_depth}"
+        # '$' cannot occur in a source identifier, including parameters.
+        # Depth alone separates nested loops, not reentrant invocations:
+        # save/restore the counter in invocation-local IR temporaries too.
+        counter = f"__repeat_i{self._repeat_depth}$"
         try:
             count = self._lower_expr(st.count, b)
             b.emit("CHECK_NONNEG", count, span=st.span)
+            saved_counter = b.emit_value("SAVEVAR", counter, span=st.span)
             saved_index = b.emit_value("SAVEVAR", "Index", span=st.span)
             zero = b.emit_value("CONST", 0, span=st.span)
             b.emit("STORE_LIST", counter, (zero,), span=st.span)
@@ -202,7 +213,11 @@ class Lowering:
             cond = b.emit_value("CMP", "lt", i, count, span=st.span)
             b.emit("JUMPF", end, cond, span=st.span)
             b.emit("STORE_LIST", "Index", (i,), span=st.span)
-            self._lower_block(st.body, b)
+            self._repeat_bindings.extend(((counter, saved_counter), ("Index", saved_index)))
+            try:
+                self._lower_block(st.body, b)
+            finally:
+                del self._repeat_bindings[-2:]
             i2 = b.emit_value("LOADVAR", counter, span=st.span)
             one = b.emit_value("CONST", 1, span=st.span)
             inc = b.emit_value("BINOP", "+", i2, one, span=st.span)
@@ -210,6 +225,7 @@ class Lowering:
             b.emit("JUMP", start, span=st.span)
             b.label(end)
             b.emit("RESTOREVAR", "Index", saved_index, span=st.span)
+            b.emit("RESTOREVAR", counter, saved_counter, span=st.span)
         finally:
             self._repeat_depth -= 1
 
