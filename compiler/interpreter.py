@@ -24,6 +24,7 @@ for recursion depth.
 """
 from __future__ import annotations
 
+import re
 import sys
 
 from .diagnostics import Span
@@ -125,6 +126,14 @@ class Interpreter:
             captured = dict(self.env)
             for frame in self.frames:
                 captured.update(frame)
+            # lower.py's hygienic counters are invocation bookkeeping, not
+            # source-visible captures. An immutable Invoke overlay would hide
+            # subsequent loop writes to env and can freeze a live counter.
+            # Keep Index and all user bindings under the existing policy.
+            captured = {
+                name: value for name, value in captured.items()
+                if re.fullmatch(r"__repeat_i[1-9][0-9]*\$", name) is None
+            }
             return ClosureValue(args[0], captured)
         if name == "Invoke" and len(args) >= 1 and isinstance(args[0], ClosureValue):
             fn = self.ir.functions.get(args[0].action)
