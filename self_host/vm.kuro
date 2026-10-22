@@ -907,6 +907,14 @@ Action VMDecodeNumber Value, Pos, Count, Accumulated, DecimalDivisor, DecimalMod
         Else;
             Call VMDecodeDigit VMDecodeNumber_Char;
             VMDecodeNumber_Digit = @_;
+            # Invalidity is sticky; VMDecodeConstant discards this result and
+            # returns the original immutable Text. Only skip a suffix when the
+            # complete spelling is short enough that the old accumulator and
+            # divisor cannot overflow: at most 18 digits, both below 10^18.
+            # Longer spellings retain their exact arithmetic/failure path.
+            If VMNumericOk is equal to 0 and Count is less than 19;
+                Return 0;
+            Done.
             VMDecodeNumber_NextAcc = Accumulated * 10 + VMDecodeNumber_Digit;
             If DecimalMode is equal to 1;
                 VMDecodeNumber_NextDivisor = DecimalDivisor * 10;
