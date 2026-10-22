@@ -2,6 +2,8 @@
 
 **DRAFT / BLOCKED — not verified; do not merge.** The focused rule passes its checks, but full compiler-bytecode reproduction still fails. No final-head 8/8 CI success is claimed.
 
+**Separate descendant prerequisite:** [one-character VM decoder reuse](vm-single-character-decode.md) records a narrow allocation fix and passing local full-reproduction gates. This note retains the historical evidence for the exact draft parent; the descendant does not retroactively verify that parent, and its own final-head CI gate must be checked separately.
+
 This increment is stacked directly on open, unmerged [PR #106](https://github.com/Shibukedang27/Kuro/pull/106), exact parent `f3b053c987524d0ee1807464198ca236c52468df`. Its eight CI checks were successful when inspected. This increment and its ancestors must remain open and unmerged. **Strict toolchain independence remains unfinished.**
 
 ## The frontend now owns one rejection rule

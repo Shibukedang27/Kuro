@@ -941,11 +941,13 @@ Action VMDecodeConstant Value;
     # decoder converts them to floating point only at the final division, so
     # native integer literals and decimal literals share no ambiguous ABI.
     If VMDecodeConstant_Count is equal to 1;
-        Get Value 0;
-        Call VMDecodeDigit @_;
+        # Value already is the complete one-character Text. Do not allocate
+        # a second copy with Get, or decode a failed digit a second time.
+        Call VMDecodeDigit Value;
         If VMNumericOk is equal to 1;
             Return @_;
         Done.
+        Return Value;
     Done.
     Call VMDecodeNumber Value, 0, VMDecodeConstant_Count, 0, 1, 0;
     VMDecodeConstant_Number = @_;
