@@ -1,5 +1,7 @@
 # Preserve Integer scanner-frame kinds on ARM64
 
+> **Later cumulative status:** [The stack reconciliation](semantic-bootstrap-reconciliation.md) records #109 at `5af148a8272dfa40fb6445ba5f5b305c68672dcf` with all eight checks successful. #107/#108 remain open/draft and unverified at their own unchanged heads. Historical blocker and pending-gate language below describes this record’s original checkpoint, not the current cumulative tip.
+
 **DRAFT — not verified until all eight CI checks pass on the exact final documentation-updated head. Do not merge.** This increment is stacked on open, draft [PR #108](https://github.com/Shibukedang27/Kuro/pull/108), exact parent `a97687859e9669745c39e7ddf1eeb2f8938f741b`. Its parent, draft [PR #107](https://github.com/Shibukedang27/Kuro/pull/107), remains historically unverified at `1dc7eebadd042175eb9bd54eba824ead545601df`. The latest previously verified base is open [PR #106](https://github.com/Shibukedang27/Kuro/pull/106), `f3b053c987524d0ee1807464198ca236c52468df`. This work is [PR #109](https://github.com/Shibukedang27/Kuro/pull/109). No ancestor is rewritten, promoted, or merged.
 
 ## The actual blocker

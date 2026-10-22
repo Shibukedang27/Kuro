@@ -1,5 +1,7 @@
 # Reuse one-character constants during VM decoding
 
+> **Later cumulative status:** [The stack reconciliation](semantic-bootstrap-reconciliation.md) records #109 at `5af148a8272dfa40fb6445ba5f5b305c68672dcf` with all eight checks successful. #107/#108 remain open/draft and unverified at their own unchanged heads. Historical blocker and pending-gate language below describes this record’s original checkpoint, not the current cumulative tip.
+
 **DRAFT / BLOCKED — local Linux gates pass; cross-platform CI has failed. Not verified; do not merge.** [PR #108](https://github.com/Shibukedang27/Kuro/pull/108) is stacked directly on draft, open [PR #107](https://github.com/Shibukedang27/Kuro/pull/107), exact parent `1dc7eebadd042175eb9bd54eba824ead545601df`. That parent remains unverified and unchanged. Its verified predecessor is open [PR #106](https://github.com/Shibukedang27/Kuro/pull/106), `f3b053c987524d0ee1807464198ca236c52468df`. All PRs remain open and unmerged.
 
 ## The small change that unblocks reproduction
