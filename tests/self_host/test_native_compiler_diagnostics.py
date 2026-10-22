@@ -164,14 +164,13 @@ def test_bytecode_hosted_self_compiler_rejects_print_semicolon_after_newline(
     )
 
 
-def test_ungated_repeated_integer_lengths_keep_compiler_token_and_raw_vm_parity(
+def test_repeated_text_lengths_keep_compiler_token_and_raw_vm_parity(
     native_compiler_image,
 ):
-    # This is a syntax/diagnostic regression, not valid source admission:
-    # ADR-0013 rejects integer Length in both semantic passes. These compiler
-    # drivers still omit those passes; native generation separately rejects it.
+    # Keep the newline/repeated-operation control valid under ADR-0013 and
+    # the bounded frontend Length gate. Raw integer VM behavior is separate.
     source = (
-        "Short = 11, 22;\nLong = 1, 2, 3, 4;\n"
+        'Short = "aa";\nLong = "bbbb";\n'
         "Length Long; Length Short; Print @_.\n"
         "Length Long; Print @_.\nLength Short; Print @_.\n"
     )

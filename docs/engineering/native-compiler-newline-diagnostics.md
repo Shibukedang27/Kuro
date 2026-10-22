@@ -1,6 +1,6 @@
 # Safe native compiler errors after a newline
 
-> Contract clarification: the repeated integer-Length control below is syntactically valid, not semantically admitted source. Both semantic passes reject it under ADR-0013; the authored compiler driver omits those passes. The later [Text-only reconciliation](length-text-only-contract.md) removes integer-owner native generation while retaining this parser/token/raw-VM diagnostic control.
+> Historical contract clarification: the repeated integer-Length control below was syntactically valid, not semantically admitted source. Both semantic passes reject it under ADR-0013. The later [Text-only reconciliation](length-text-only-contract.md) removed integer-owner native generation; the [bounded frontend Length gate](compiler-length-frontend.md) now rejects known non-Text operands before lowering. The current newline/repeated-operation control uses Text; raw integer VM behavior remains covered separately.
 
 This repair is stacked directly on verified, open/unmerged [PR #104](https://github.com/Shibukedang27/Kuro/pull/104), exact parent `271e6557da45d28b969e53798fd6c15a6e4b04d0`, with eight successful checks. Keep this increment and its ancestors open and unmerged. **Strict toolchain independence remains unfinished.**
 

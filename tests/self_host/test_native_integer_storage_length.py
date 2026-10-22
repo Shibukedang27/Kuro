@@ -1,16 +1,17 @@
-"""Text-only source Length contract and fail-closed integer-owner generation.
+"""Text-only source Length frontend gate and fail-closed integer generation.
 
-The authored compiler driver deliberately has no semantic gate yet. Its tokens
-and the raw VM are tested as lower-level capabilities, not source admission.
+Unknown alias tokens and the raw VM remain lower-level capabilities, not proof
+of complete source validation.
 """
 from __future__ import annotations
 
 import json
+import subprocess
 
 import pytest
 
 from compiler.pipeline import compile_source, run_source
-from compiler.self_host import compile_with_kuro_driver
+from compiler.self_host import SelfHostError, compile_with_kuro_driver
 from test_native_codegen import run_codegen, x86_linux_codegen
 from test_native_integer_storage import execute, generate, requires_linux
 from test_native_integer_storage_capacity import (
@@ -79,14 +80,28 @@ def test_unknown_alias_type_is_not_misrepresented_as_static_length_rejection():
 @requires_linux
 @pytest.mark.parametrize("source", INTEGER_SOURCES + [
     pytest.param(f"Items = {_values(272)};\nLength Items;\nPrint @_.\n", id="maximum-owner"),
-    pytest.param("Items = 11, 22;\nAlias = Items;\nLength Alias;\nPrint @_.\n", id="unknown-alias"),
 ])
-def test_ungated_authored_compiler_tokens_do_not_authorize_integer_length_native_output(
-    source, tmp_path, native_compiler, x86_linux_codegen
+def test_known_integer_length_is_rejected_before_native_artifact_publication(
+    source, native_compiler_image
 ):
-    # Complete fresh native/hosted token parity is NOT source validation. Both
-    # compiler drivers omit resolver/typecheck. The generator must close its own
-    # integer-owner admission boundary despite receiving their well-framed tokens.
+    completed = subprocess.run(
+        [str(native_compiler_image)], input=source, text=True,
+        capture_output=True, check=False, timeout=30,
+    )
+    assert (completed.returncode, completed.stdout, completed.stderr) == (
+        1, "kuro.compile-error/1\n", "",
+    )
+    with pytest.raises(SelfHostError):
+        compile_with_kuro_driver(source)
+
+
+@requires_linux
+def test_unknown_alias_tokens_do_not_authorize_integer_length_native_output(
+    tmp_path, native_compiler, x86_linux_codegen
+):
+    # The bounded frontend rule deliberately does not infer VarRef aliases.
+    # Generator rejection remains independent defense for that unknown route.
+    source = "Items = 11, 22;\nAlias = Items;\nLength Alias;\nPrint @_.\n"
     tokens = native_compiler(source, tmp_path)
     assert "BC_LENGTH" in tokens
     generated = generate(x86_linux_codegen, tokens, tmp_path)
