@@ -8,7 +8,7 @@ import subprocess
 
 import pytest
 
-from compiler.native import build_native
+from compiler.native import NativeBackendError, build_native, emit_macos_arm64
 from compiler.pipeline import compile_source, run_source
 import compiler.self_host as self_host
 from compiler.self_host import build_native_artifact_launcher, compile_with_kuro_driver
@@ -21,21 +21,27 @@ requires_native_backend = pytest.mark.skipif(
 
 
 # Sources stay inside the small Action/Call/Return subset admitted by both
-# native execution paths.  Output pairs are intentionally explicit: the
+# native execution paths except the explicit ARM64 rejection. Output pairs are
+# intentionally explicit: the
 # authored VM's zero-initialized frame result differs from the Python native
 # backend's direct-call/global behavior at entry and fall-through.
+DIRECT_ENTRY_SOURCE = (
+    "Action Seed; Return 17; Done. Action Read; Return @_; Done. "
+    "Call Seed; Call Read; Print @_."
+)
 CASES = [
     pytest.param(
-        "Action Seed; Return 17; Done. Action Read; Return @_; Done. "
-        "Call Seed; Call Read; Print @_.",
+        DIRECT_ENTRY_SOURCE,
         "17\n",
         "0\n",
+        "native action 'Read' reads a dynamic value",
         id="direct-entry-global-versus-authored-zero",
     ),
     pytest.param(
         "Action Read _; Return @_; Done. Call Read 17; Print @_.",
         "17\n",
         "0\n",
+        None,
         id="underscore-parameter-entry-only",
     ),
     pytest.param(
@@ -44,6 +50,7 @@ CASES = [
         "Call Read 17; Print @_.",
         "42\n",
         "42\n",
+        None,
         id="underscore-parameter-replaced-by-producer",
     ),
     pytest.param(
@@ -52,6 +59,7 @@ CASES = [
         'Print "not-zero". Done.',
         "zero\n",
         "zero\n",
+        None,
         id="implicit-return-zero-in-native-paths",
     ),
     pytest.param(
@@ -60,6 +68,7 @@ CASES = [
         "Call Outer; Print @_ .",
         "42\n9\n",
         "42\n9\n",
+        None,
         id="explicit-inner-publication-then-outer-return",
     ),
 ]
@@ -118,7 +127,7 @@ def _native_stream_from_authored_compiler(source: str, monkeypatch) -> str:
 
 @requires_native_backend
 @pytest.mark.parametrize(
-    "source, expected_python_native, expected_authored_vm",
+    "source, expected_python_native, expected_authored_vm, arm64_error",
     CASES,
 )
 def test_native_paths_publish_results_as_admitted(
@@ -128,18 +137,28 @@ def test_native_paths_publish_results_as_admitted(
     source,
     expected_python_native,
     expected_authored_vm,
+    arm64_error,
 ):
     """Compare execution of hosted-compiled native code and authored bytecode."""
     compiled = compile_source(source)
     assert compiled.ok, compiled.diags.render_all()
 
     executable = tmp_path / "program"
-    build_native(compiled.ir, executable)
-    native = subprocess.run(
-        [str(executable)], capture_output=True, text=True, check=False, timeout=30
+    macos_arm64 = (
+        platform.system() == "Darwin"
+        and platform.machine().lower() in {"arm64", "aarch64"}
     )
-    assert native.returncode == 0, native.stderr
-    assert native.stdout == expected_python_native
+    if macos_arm64 and arm64_error:
+        with pytest.raises(NativeBackendError, match=arm64_error):
+            build_native(compiled.ir, executable)
+        assert not executable.exists()
+    else:
+        build_native(compiled.ir, executable)
+        native = subprocess.run(
+            [str(executable)], capture_output=True, text=True, check=False, timeout=30
+        )
+        assert native.returncode == 0, native.stderr
+        assert native.stdout == expected_python_native
 
     artifact = _native_stream_from_authored_compiler(source, monkeypatch)
     launched = subprocess.run(
@@ -152,3 +171,11 @@ def test_native_paths_publish_results_as_admitted(
     )
     assert launched.returncode == 0, launched.stderr
     assert launched.stdout == expected_authored_vm
+
+
+def test_arm64_direct_entry_global_read_is_rejected_before_image_emission():
+    # Exercise the exact CI admission boundary even on a Linux development host.
+    compiled = compile_source(DIRECT_ENTRY_SOURCE)
+    assert compiled.ok, compiled.diags.render_all()
+    with pytest.raises(NativeBackendError, match="native action 'Read' reads a dynamic value"):
+        emit_macos_arm64(compiled.ir)

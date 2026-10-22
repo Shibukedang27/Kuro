@@ -18,17 +18,19 @@ The retained [`bootstrap/python/kuro.py`](../../bootstrap/python/kuro.py) is als
 
 ## Authored VM and native pathways are not one policy
 
-[`test_result_native_path_contract.py`](../../tests/self_host/test_result_native_path_contract.py) adds five source-level cases through two actual native execution routes: the Python-hosted native backend compiling source IR, and a freshly built native launcher executing the Kuro-authored compiler's framed bytecode. Each output has an explicit path-specific expectation. The authored compiler composition has a two-million host-IR instruction budget and 10,000 While-iteration guard; native execution has a 30-second timeout. One module-scoped launcher build avoids redundant builds.
+[`test_result_native_path_contract.py`](../../tests/self_host/test_result_native_path_contract.py) adds five source-level cases across two native routes plus one portable ARM64 admission regression: the Python-hosted native backend compiling source IR, and a freshly built native launcher executing the Kuro-authored compiler's framed bytecode. Each output or compile rejection has an explicit path-specific expectation. The authored compiler composition has a two-million host-IR instruction budget and 10,000 While-iteration guard; native execution has a 30-second timeout. One module-scoped launcher build avoids redundant builds.
 
 | Source boundary | Modern Python IR/JSON VM | Python-hosted direct native | Native authored-VM launcher |
 | --- | --- | --- | --- |
-| Seed 17, then direct Action first reads `@_` | 17 | 17 | 0 |
+| Seed 17, then direct Action first reads `@_` | 17 | 17 on Linux x86-64; macOS ARM64 compilation rejects | 0 |
 | Action parameter `_ = 17`, first reads `@_` | 17 | 17 | 0 |
 | Same parameter, then successful `Call Answer` returning 42 | 17 | 42 | 42 |
 | Action falls through after calling Answer | `None` | Integer-zero comparison succeeds | Integer-zero comparison succeeds |
 | Explicit nested result 42, then outer Return 9 | 42 then 9 | 42 then 9 | 42 then 9 |
 
 The Python observations are established by inherited/new bounded engine tests, not by executing Python inside the native-path test. In particular, the implicit-return native witness compares the result to zero before printing; it does not assert a full dynamic representation or `None` parity.
+
+The first review head `007dedc15e19f5a12851ea9af2a8fb293557779a` passed the Linux suite but failed macOS CI because the new direct-entry test assumed ARM64 admission. `emit_macos_arm64` instead attempts to evaluate the zero-argument Read Action during compilation and raises `NativeBackendError: native action 'Read' reads a dynamic value`. The corrected witness asserts that exact rejection and no executable on macOS ARM64, then still executes the authored-launcher half. The additional portable test calls the ARM64 emitter even on Linux, so this admission mismatch is now caught locally. It is neither skipped nor repaired by changing production code; no ARM64 runtime value is invented for an image that does not exist. Earlier-head CI is not acceptance for the correction.
 
 The authored VM's `VMLoad` special-cases `_` ahead of ordinary frame parameters; `VMInvoke` initializes the frame result to zero, and `VMSetResult` replaces that result on successful producers. Merely adopting its owner storage in Python would discard `_` arguments at entry, not preserve them as initializers. The Python native backend has a different rule: parameter-local reads and stores make successful publication replace the parameter. These are three observable policies, none uniquely selected by the language's older “most recent result” wording.
 
@@ -64,10 +66,11 @@ Acceptance requires eight successful CI checks on the exact final documentation-
 
 | Gate | Result |
 | --- | --- |
-| Final new bounded review cases | **56 passed in 3.16s** |
+| Corrected final new bounded review cases | **57 passed in 2.93s** |
+| Corrected new cases plus native compiler regression gate | **137 passed, 1 skipped in 32.50s** |
 | Focused fresh toolchain/runtime gate, collected before final additions | **648 passed, 18 skipped in 198.85s** |
-| Complete suite with fresh artifacts | **2,049 passed, 20 skipped in 934.60s** |
-| Independent final read-only review and separate per-file reruns | **56 passed**; no material blocker |
+| Complete suite with fresh artifacts, before CI admission correction | **2,049 passed, 20 skipped in 934.60s**; corrected-tree rerun recorded in the PR verification comment |
+| Independent initial final read-only review and separate per-file reruns | **56 passed**; no material blocker; correction review recorded separately |
 | Fresh production bootstrap and Python-free smoke, complete compiler-bytecode reproduction | Passed |
 | Production identity, all 67 tracked compiler/authored/bootstrap files | Identical to exact parent |
 | Python 3.10 syntax grammar and staged `git diff --check` | Passed; actual Python 3.10 runtime execution belongs to CI |
