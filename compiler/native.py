@@ -1606,6 +1606,144 @@ def emit_macos_arm64(ir: IRProgram) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _check_x86_result_owner_channel(
+    ir: IRProgram, global_names: set[str], collection_names: set[str],
+    input_names: set[str], capture_slots: dict[str, dict[str, int]],
+) -> None:
+    """Reject shapes lacking an integer proof for an inherited owner read.
+
+    This is rejection-only provenance, not new native type inference. The hidden
+    channel transports one word, not a runtime kind/length pair. Unioning facts
+    across writes/branches is intentionally conservative; it never admits a new
+    instruction, collection representation, or closure invocation shape.
+    """
+    if not ir.functions:
+        return
+    if "_" in collection_names or "_" in input_names:
+        raise NativeBackendError(
+            "x86_64 result owner channel does not support collection/input-backed '_'"
+        )
+
+    def contains_result(value) -> bool:
+        if isinstance(value, (tuple, list)):
+            return any(contains_result(part) for part in value)
+        return value == "_"
+
+    inherited_readers = set()
+    for name, function in ir.functions.items():
+        if "_" in function.params or "_" in capture_slots.get(name, {}):
+            continue
+        labels = {item.dest: index for index, item in enumerate(function.body) if item.op == "LABEL"}
+        pending = [0] if function.body else []
+        visited = set()
+        while pending:
+            index = pending.pop()
+            if index in visited or index >= len(function.body):
+                continue
+            visited.add(index)
+            item = function.body[index]
+            args = item.args
+            # Constants, labels, type/class/operator names are not variable
+            # reads. In particular the authored VM compares names to literal
+            # "_" without reading its native Action's inherited result.
+            if item.op in {"CONST", "DECLTYPE", "LABEL", "JUMP"}:
+                args = ()
+            elif item.op in {"STORE_LIST", "UPDATE", "RESTOREVAR", "INPUT", "CALL", "BINOP", "CMP"}:
+                args = args[1:]
+            elif item.op == "ISCLASS":
+                args = args[:1]
+            if contains_result(args):
+                inherited_readers.add(name)
+                break
+            overwritten = item.dest == "_" or (
+                item.op in {"STORE_LIST", "UPDATE", "RESTOREVAR", "INPUT"}
+                and item.args[0] == "_"
+            )
+            if overwritten or item.op == "RETURN":
+                continue
+            if item.op in {"JUMP", "JUMPF"}:
+                pending.append(labels[item.args[0]])
+            if item.op != "JUMP":
+                pending.append(index + 1)
+    if not inherited_readers:
+        return
+
+    bodies = {"": ir.main, **{name: fn.body for name, fn in ir.functions.items()}}
+    noninteger: set[tuple[str, str]] = set()
+
+    def key(scope, name):
+        if name == "_" or (scope and name in ir.functions[scope].params):
+            return scope, name
+        return ("", name) if name in global_names or name in collection_names or name in input_names else (scope, name)
+
+    def unsafe(scope, name):
+        return key(scope, name) in noninteger
+
+    def mark(scope, name):
+        if name is not None:
+            noninteger.add(key(scope, name))
+
+    for scope, body in bodies.items():
+        for name in collection_names | input_names:
+            mark(scope, name)
+        if scope:
+            for parameter, type_name in ir.functions[scope].parameter_types.items():
+                if type_name not in {"Integers", "Symbols"}:
+                    mark(scope, parameter)
+            # Existing environment captures are not carried by the new channel.
+            # Do not guess their kind for a downstream inherited-owner read.
+            for capture in capture_slots.get(scope, {}):
+                mark(scope, capture)
+
+    integer_builtins = {"EnumIs", "IsSome", "IsNone", "IsOk", "IsErr", "MapHas"}
+    while True:
+        before = len(noninteger)
+        for scope, body in bodies.items():
+            for item in body:
+                op, args = item.op, item.args
+                if op == "CONST" and not isinstance(args[0], (bool, int)):
+                    mark(scope, item.dest)
+                elif op in {"INPUT", "ARTIFACT_SUFFIX", "GET"}:
+                    mark(scope, args[0] if op == "INPUT" else item.dest)
+                elif op in {"LOADVAR", "SAVEVAR"}:
+                    if unsafe(scope, args[0]):
+                        mark(scope, item.dest)
+                elif op in {"STORE_LIST", "UPDATE", "RESTOREVAR"}:
+                    sources = args[1] if op == "STORE_LIST" else [args[1]]
+                    if len(sources) != 1 or any(unsafe(scope, source) for source in sources):
+                        mark(scope, args[0])
+                elif op == "BINOP":
+                    if unsafe(scope, args[1]) or unsafe(scope, args[2]):
+                        mark(scope, item.dest)
+                elif op == "ADD":
+                    if unsafe(scope, args[1]):
+                        mark(scope, args[0])
+                elif op == "CALL":
+                    callee, *arguments = args
+                    if callee in ir.functions:
+                        target = ir.functions[callee]
+                        if "_" not in target.params and unsafe(scope, "_"):
+                            mark(callee, "_")
+                        for parameter, argument in zip(target.params, arguments):
+                            if unsafe(scope, argument):
+                                mark(callee, parameter)
+                        if any(inner.op == "RETURN" and unsafe(callee, inner.args[0]) for inner in target.body):
+                            mark(scope, item.dest)
+                    elif callee not in integer_builtins:
+                        mark(scope, item.dest)
+                    if callee in {"Invoke", "Spawn", "Await"}:
+                        raise NativeBackendError(
+                            "x86_64 result owner inherited reads require direct integer calls, not closure/task channels"
+                        )
+        if len(noninteger) == before:
+            break
+    for name in sorted(inherited_readers):
+        if unsafe(name, "_"):
+            raise NativeBackendError(
+                f"x86_64 result owner inherited read in action {name!r} requires an integer-only channel"
+            )
+
+
 def emit_x86_64_linux(
     ir: IRProgram, *, text_heap_capacity: int | None = None
 ) -> str:
@@ -1801,7 +1939,9 @@ def emit_x86_64_linux(
             name = item.args[0]
             if isinstance(name, str) and not name.startswith(("t", "__")):
                 main_global_names.add(name)
-    global_names = set(main_global_names)
+    # The root result is zero-initialized BSS even when main never names it.
+    # Action calls copy it (or their caller's local owner) through %rax.
+    global_names = set(main_global_names) | {"_"}
     for function in ir.functions.values():
         prefix = f"{function.name}_"
         for item in function.body:
@@ -1887,7 +2027,9 @@ def emit_x86_64_linux(
             )
 
     for captures in supplied_captures.values():
-        global_names.difference_update(captures)
+        # A captured result can initialize an Action, but does not replace the
+        # independent root owner used by main's hidden call channel.
+        global_names.difference_update(set(captures) - {"_"})
     global_names -= set(collection_buffers) | set(input_buffers)
     function_capture_names: dict[str, tuple[str, ...]] = {
         name: tuple(sorted(supplied_captures.get(name, set())))
@@ -2353,6 +2495,9 @@ def emit_x86_64_linux(
             returned = function_return_closure_targets.get(instruction.args[0])
             if returned:
                 closure_target_seeds[instruction_index] = set(returned)
+    _check_x86_result_owner_channel(
+        ir, global_names, collection_names, input_names, function_capture_slots,
+    )
     closure_targets_before = propagate_static_targets(closure_target_seeds)
     field_text_targets_before = propagate_static_targets(static_text_value_seeds)
     lines = [
@@ -3040,6 +3185,7 @@ def emit_x86_64_linux(
                 ])
                 for index, argument in enumerate(action_arguments):
                     load(argument, registers[index])
+                load("_")
                 lines.append("    call *%r11")
                 store(instruction.dest)
                 kinds[instruction.dest] = next(iter(return_kinds))
@@ -3068,6 +3214,7 @@ def emit_x86_64_linux(
                 label = task_argument_refs[arguments[0]]
                 lines.append(f"    mov {label}(%rip), %rdi")
                 lines.append("    xor %r10d, %r10d")
+                load("_")
                 lines.append(f"    call .Lkuro_fn_{action}")
                 store(instruction.dest)
                 kinds[instruction.dest] = action_return_kind(action, (task_argument_values[arguments[0]],))
@@ -3171,6 +3318,7 @@ def emit_x86_64_linux(
                 for index, argument in enumerate(arguments):
                     load(argument, f"%{('rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9')[index]}")
                 lines.append("    xor %r10d, %r10d")
+                load("_")
                 lines.append(f"    call .Lkuro_fn_{call_name}")
                 store(instruction.dest)
                 kinds[instruction.dest] = action_return_kind(call_name, tuple(arguments))
@@ -3291,7 +3439,10 @@ def emit_x86_64_linux(
     # with no call frame or arguments.
     lines.append("    jmp .Lkuro_main_epilogue")
     for function in ir.functions.values():
-        fn_names = set(function.params)
+        # Result storage belongs to this stack frame, never an ambient global
+        # or mutable capture. %rax carries its entry value independently of the
+        # six argument registers and %r10 closure-environment channel.
+        fn_names = set(function.params) | {"_"}
         for item in function.body:
             if item.dest:
                 if item.dest not in global_names:
@@ -3382,10 +3533,19 @@ def emit_x86_64_linux(
         lines.extend([
             "    .p2align 4", f".Lkuro_fn_{function.name}:", "    push %rbp", "    mov %rsp, %rbp",
             f"    sub ${fn_frame}, %rsp", f"    mov %r10, {fn_env_slot}(%rbp)",
+            f"    mov %rax, {fn_slots['_']}(%rbp)",
         ])
+        result_capture_index = function_capture_slots.get(function.name, {}).get("_")
+        if result_capture_index is not None:
+            # Preserve an already-admitted captured result as an entry snapshot,
+            # but writes/producers must not mutate that snapshot on later Invoke.
+            lines.extend([
+                f"    mov {result_capture_index * 8}(%r10), %rax",
+                f"    mov %rax, {fn_slots['_']}(%rbp)",
+            ])
 
         def fn_load(name: str, register: str = "%rax") -> None:
-            capture_index = function_capture_slots.get(function.name, {}).get(name)
+            capture_index = function_capture_slots.get(function.name, {}).get(name) if name != "_" else None
             if capture_index is not None:
                 lines.append(f"    mov {fn_env_slot}(%rbp), %r11")
                 lines.append(f"    mov {capture_index * 8}(%r11), {register}")
@@ -3405,7 +3565,7 @@ def emit_x86_64_linux(
             raise NativeBackendError(f"x86_64-linux action {function.name!r} cannot load {name!r}")
 
         def fn_store(name: str, register: str = "%rax") -> None:
-            capture_index = function_capture_slots.get(function.name, {}).get(name)
+            capture_index = function_capture_slots.get(function.name, {}).get(name) if name != "_" else None
             if capture_index is not None:
                 lines.append(f"    mov {fn_env_slot}(%rbp), %r11")
                 lines.append(f"    mov {register}, {capture_index * 8}(%r11)")
@@ -3993,6 +4153,7 @@ def emit_x86_64_linux(
                 registers = ("rdi", "rsi", "rdx", "rcx", "r8", "r9")
                 for index, argument in enumerate(arguments): fn_load(argument, f"%{registers[index]}")
                 lines.append("    xor %r10d, %r10d")
+                fn_load("_")
                 lines.append(f"    call .Lkuro_fn_{name}")
                 fn_store(item.dest)
                 fn_kinds[item.dest] = "text" if action_returns_text(name) else "number"

@@ -22,10 +22,10 @@ requires_native_backend = pytest.mark.skipif(
 
 
 # Sources stay inside the small Action/Call/Return subset admitted by both
-# native execution paths except the explicit ARM64 rejection. The hosted native
-# backend does not yet pass a caller's effective `_` into a no-parameter Action;
-# the authored VM keeps its zero-valued root representation and now inherits
-# its caller's current result slot.
+# native execution paths except the explicit ARM64 rejection. The hosted x86
+# backend and authored VM now pass the caller's effective `_` into no-parameter
+# Actions. ARM64's admitted dynamic route deliberately retains ambient storage;
+# its static-route rejections below also remain unchanged.
 DIRECT_ENTRY_SOURCE = (
     "Action Seed; Return 17; Done. Action Read; Return @_; Done. "
     "Call Seed; Call Read; Print @_."
@@ -46,10 +46,10 @@ CASES = [
     ),
     pytest.param(
         NESTED_OWNER_SOURCE,
-        "1\n",
+        "0\n",
         "0\n",
         None,
-        id="no-param-native-entry-remains-ambient-not-caller-owner",
+        id="no-param-x86-entry-inherits-owner-arm64-remains-ambient",
     ),
     pytest.param(
         "Action Read _; Return @_; Done. Call Read 17; Print @_.",
@@ -193,7 +193,9 @@ def test_native_paths_publish_results_as_admitted(
             [str(executable)], capture_output=True, text=True, check=False, timeout=30
         )
         assert native.returncode == 0, native.stderr
-        assert native.stdout == expected_python_native
+        # Do not infer ARM64 owner parity from Linux x86 executable evidence.
+        expected = "1\n" if macos_arm64 and source == NESTED_OWNER_SOURCE else expected_python_native
+        assert native.stdout == expected
 
     artifact = _native_stream_from_authored_compiler(source, monkeypatch)
     launched = subprocess.run(
