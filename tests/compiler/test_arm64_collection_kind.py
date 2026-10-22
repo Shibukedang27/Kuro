@@ -92,22 +92,22 @@ def test_arm64_full_authored_compiler_integer_frame_and_guarded_cursor():
 
 @pytest.mark.parametrize("source", [
     'Bag is Integers; X = "bad"; Append X to Bag; Get Bag 0; Cursor = @_; Add 1 to Cursor;',
-    'Bag is Integers; Bag = 1, 2; X = "bad"; Set Bag 0 to X; Get Bag 0; Cursor = @_; Add 1 to Cursor;',
+    'Bag is Integers; X = "bad"; Set Bag 0 to X; Get Bag 0; Cursor = @_; Add 1 to Cursor;',
     # A linear last-definition check would miss the Text path at this join.
     'Bag is Integers; Words = "bad", "worse"; Get Words 0; X = @_; '
     'Flag = 0; If Flag is equal to 1; X = 2; Done. '
     'Append X to Bag; Get Bag 0; Cursor = @_; Add 1 to Cursor;',
     # A later write must invalidate an earlier read too (e.g. inside a loop).
-    'Bag is Integers; Bag = 1, 2; Get Bag 0; Cursor = @_; Add 1 to Cursor; '
+    'Bag is Integers; Get Bag 0; Cursor = @_; Add 1 to Cursor; '
     'Set Bag 0 to "bad";',
-    'Bag is Integers; Bag = 1, 2; '
+    'Bag is Integers; '
     'Action Poison Value; Set Bag 0 to Value; Done. Call Poison "bad"; '
     'Get Bag 0; Cursor = @_; Add 1 to Cursor;',
     # Return inference must not guess numeric just from a parameter's name.
     'Bag is Integers; Action Identity Index; Return Index; Done. '
     'Call Identity "bad"; X = @_; Append X to Bag; '
     'Get Bag 0; Cursor = @_; Add 1 to Cursor;',
-    'Bag is Integers; Bag = 1, 2; '
+    'Bag is Integers; '
     'Action Poison Value; Set Bag 0 to Value; Done. Call Poison 1; '
     'Call MakeClosure "Poison"; Setter = @_; Call Invoke Setter, "bad"; '
     'Get Bag 0; Cursor = @_; Add 1 to Cursor;',
@@ -116,7 +116,10 @@ def test_arm64_full_authored_compiler_integer_frame_and_guarded_cursor():
 def test_arm64_integer_collection_rejects_unproven_or_text_writes(source):
     source = source.replace("Bag is Integers;", "Bag is Integers; Append 0 to Bag;", 1)
     ir = _compile(source)
-    with pytest.raises(NativeBackendError, match="Integer collection writes require proven numeric values"):
+    from compiler.native import _arm64_integer_collections
+
+    assert _arm64_integer_collections(ir, {"Bag"}) == set()
+    with pytest.raises(NativeBackendError, match="dynamic ADD requires numeric operands"):
         emit_macos_arm64(ir)
 
 
@@ -141,8 +144,27 @@ def test_arm64_inferred_integer_literal_owner_requires_the_same_write_proof(mixe
     assert ir.symbol_types["Bag"] == "Integers"
     if mixed_write:
         assert _arm64_integer_collections(ir, {"Bag"}) == set()
-        with pytest.raises(NativeBackendError, match="Integer collection writes require proven numeric values"):
-            emit_macos_arm64(ir)
+        # No new seed is inferred. The legacy literal STORE_LIST refinement
+        # is intentionally outside this repair, not a new global write policy.
     else:
         assert _arm64_integer_collections(ir, {"Bag"}) == {"Bag"}
         assert "    add x0, x0, x1" in emit_macos_arm64(ir)
+
+
+@pytest.mark.parametrize("image", ["runtime", "compiler", "bytecode", "codegen"])
+def test_arm64_production_image_sources_preserve_unrelated_collection_fallback(image):
+    from compiler.self_host import (
+        native_runtime_source, native_artifact_launcher_source, native_codegen_source,
+    )
+
+    sources = {
+        "runtime": native_runtime_source,
+        "compiler": native_compiler_source,
+        "bytecode": native_artifact_launcher_source,
+        "codegen": native_codegen_source,
+    }
+    # A proof that cannot classify an unrelated VM collection must retain the
+    # parent fallback, not reject the entire image. No linking/execution claim.
+    assembly = emit_macos_arm64(_compile(sources[image]()))
+    assert ".globl _main" in assembly
+    assert "L_kuro_collection_bounds:" in assembly

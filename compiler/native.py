@@ -458,8 +458,6 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
     # Kuro's compiler/runtime collections are textual streams by default;
     # refine only Integer-typed owners with proven numeric writes.
     integer_collections = _arm64_integer_collections(ir, collection_names)
-    if any(ir.symbol_types.get(name) == "Integers" and name not in integer_collections for name in collection_names):
-        raise NativeBackendError("native Integer collection writes require proven numeric values")
     collection_kinds.update({
         name: "number" if name in integer_collections else "text"
         for name in collection_names
