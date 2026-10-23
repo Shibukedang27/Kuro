@@ -2029,6 +2029,234 @@ def test_composed_native_compiler_has_a_fixed_text_record_diag_code_contract():
         for instruction in body
     )
 
+    # Message's fixed callers are Text by construction, but the three
+    # scratch-message loads still cross the shared-scalar kind boundary.
+    assert result.ir.functions["RecordDiag"].parameter_types.get("Message") is None
+    expected_scratch = {
+        "ExpectKind": "ExpectKind_Msg",
+        "ExpectWord": "ExpectWord_Msg",
+        "ParseStatement": "ParseStatement_Msg",
+    }
+    expected_literals = {
+        "ExpectIdent": "expected an identifier",
+        "ParseAtom": "expected a value",
+        "ParseComparisonOp": "expected a comparison operator",
+    }
+    record_messages = {}
+    for scope, body in bodies:
+        for index, instruction in enumerate(body):
+            if instruction.op == "CALL" and instruction.args[0] == "RecordDiag":
+                record_messages[scope] = body[index - 1]
+    assert set(record_messages) == set(expected_scratch) | set(expected_literals)
+    for scope, expected in expected_literals.items():
+        message = record_messages[scope]
+        assert message.op == "CONST" and message.args[0] == expected
+    for scope, scratch_name in expected_scratch.items():
+        message = record_messages[scope]
+        assert message.op == "LOADVAR" and message.args[0] == scratch_name
+        body = result.ir.functions[scope].body
+        scratch_writes = [
+            instruction for instruction in body
+            if instruction.op in write_target_ops
+            and instruction.args and instruction.args[0] == scratch_name
+        ]
+        assert len(scratch_writes) == 1 and scratch_writes[0].op == "STORE_LIST"
+        write_index = body.index(scratch_writes[0])
+        concatenation = body[write_index - 1]
+        assert concatenation.op == "BINOP" and concatenation.args[0] == "+"
+        assert concatenation.dest == scratch_writes[0].args[1][0]
+        definitions = {instruction.dest: instruction for instruction in body if instruction.dest}
+        left = definitions[concatenation.args[1]]
+        right = definitions[concatenation.args[2]]
+        expected_prefix = {
+            "ExpectKind": "expected ",
+            "ExpectWord": "expected '",
+            "ParseStatement": "unknown statement starting with ",
+        }[scope]
+        assert left.op == "CONST" and left.args[0] == expected_prefix
+        assert right.op == "LOADVAR"
+        assert right.args[0] == {
+            "ExpectKind": "ExpectedKind",
+            "ExpectWord": "ExpectedWord",
+            "ParseStatement": "ParseStatement_BadV",
+        }[scope]
+
+    text_forwarding_calls = 0
+    for _, body in bodies:
+        for index, instruction in enumerate(body):
+            if instruction.op == "CALL" and instruction.args[0] in {"ExpectKind", "ExpectWord"}:
+                argument = body[index - 1]
+                assert argument.op == "CONST" and type(argument.args[0]) is str
+                text_forwarding_calls += 1
+    assert text_forwarding_calls > 0
+
+    message_reads = [
+        scope for scope, body in bodies
+        for instruction in body
+        if instruction.op == "LOADVAR" and instruction.args[0] == "Message"
+    ]
+    assert message_reads == ["RecordDiag"]
+    assert not any(
+        instruction.op in write_target_ops
+        and instruction.args and instruction.args[0] == "Message"
+        for _, body in bodies
+        for instruction in body
+    )
+
+    assert "TokenValues is Text;" in source
+    assert result.ir.symbol_types["TokenValues"] == "Text"
+    peek_value_body = result.ir.functions["PeekValue"].body
+    token_get_index = next(
+        index for index, instruction in enumerate(peek_value_body)
+        if instruction.op == "GET" and instruction.args[0] == "TokenValues"
+    )
+    token_get = peek_value_body[token_get_index]
+    text_store = peek_value_body[token_get_index + 1]
+    text_load = peek_value_body[token_get_index + 2]
+    text_return = peek_value_body[token_get_index + 3]
+    assert text_store.op == "STORE_LIST" and text_store.args[0] == "_"
+    assert text_store.args[1][0] == token_get.dest
+    assert text_load.op == "LOADVAR" and text_load.args[0] == "_"
+    assert text_return.op == "RETURN" and text_return.args[0] == text_load.dest
+    empty_text_returns = [
+        (index, instruction)
+        for index, instruction in enumerate(peek_value_body)
+        if instruction.op == "CONST" and instruction.args and instruction.args[0] == ""
+    ]
+    assert len(empty_text_returns) == 1
+    empty_index, empty_text = empty_text_returns[0]
+    assert peek_value_body[empty_index + 1].op == "RETURN"
+    assert peek_value_body[empty_index + 1].args[0] == empty_text.dest
+    peek_definitions = {
+        instruction.dest: instruction
+        for instruction in peek_value_body
+        if instruction.dest
+    }
+    get_position = peek_definitions[token_get.args[1]]
+    assert get_position.op == "LOADVAR" and get_position.args[0] == "PeekValue_P"
+    position_writes = [
+        instruction for instruction in peek_value_body
+        if instruction.op == "STORE_LIST" and instruction.args[0] == "PeekValue_P"
+    ]
+    assert len(position_writes) == 1
+    position_expression = peek_definitions[position_writes[0].args[1][0]]
+    assert position_expression.op == "BINOP" and position_expression.args[0] == "+"
+    position_base = peek_definitions[position_expression.args[1]]
+    position_offset = peek_definitions[position_expression.args[2]]
+    assert position_base.op == "LOADVAR" and position_base.args[0] == "TokPos"
+    assert position_offset.op == "LOADVAR" and position_offset.args[0] == "Offset"
+    bounds_writes = [
+        (index, instruction)
+        for index, instruction in enumerate(peek_value_body)
+        if instruction.op == "STORE_LIST" and instruction.args[0] == "PeekValue_InBounds"
+    ]
+    assert len(bounds_writes) == 1
+    bounds_write_index, bounds_write = bounds_writes[0]
+    bounds_compare = peek_definitions[bounds_write.args[1][0]]
+    assert bounds_compare.op == "CMP" and bounds_compare.args[0] == "lt"
+    bounds_position = peek_definitions[bounds_compare.args[1]]
+    bounds_count = peek_definitions[bounds_compare.args[2]]
+    assert bounds_position.op == "LOADVAR" and bounds_position.args[0] == "PeekValue_P"
+    assert get_position.args[0] == bounds_position.args[0]
+    assert bounds_count.op == "LOADVAR" and bounds_count.args[0] == "TokCount"
+
+    conditional_jumps = [
+        (index, instruction)
+        for index, instruction in enumerate(peek_value_body)
+        if instruction.op == "JUMPF"
+    ]
+    assert len(conditional_jumps) == 1
+    branch_index, branch = conditional_jumps[0]
+    assert branch_index > bounds_write_index
+    branch_condition = peek_definitions[branch.args[1]]
+    assert branch_condition.op == "CMP" and branch_condition.args[0] == "eq"
+    condition_value = peek_definitions[branch_condition.args[1]]
+    condition_one = peek_definitions[branch_condition.args[2]]
+    assert condition_value.op == "LOADVAR" and condition_value.args[0] == "PeekValue_InBounds"
+    assert condition_one.op == "CONST" and condition_one.args[0] == 1
+    false_labels = [
+        (index, instruction)
+        for index, instruction in enumerate(peek_value_body)
+        if instruction.op == "LABEL" and instruction.dest == branch.args[0]
+    ]
+    assert len(false_labels) == 1
+    false_label_index, false_label = false_labels[0]
+    assert false_label.dest == branch.args[0]
+    assert false_label_index + 1 == empty_index
+    assert branch_index < token_get_index < false_label_index
+    assert token_get_index + 3 < false_label_index
+
+    cur_value_body = result.ir.functions["CurValue"].body
+    peek_call_index = next(
+        index for index, instruction in enumerate(cur_value_body)
+        if instruction.op == "CALL" and instruction.args[0] == "PeekValue"
+    )
+    cur_value_store = cur_value_body[peek_call_index + 1]
+    cur_value_load = cur_value_body[peek_call_index + 2]
+    cur_value_return = cur_value_body[peek_call_index + 3]
+    assert cur_value_store.op == "STORE_LIST" and cur_value_store.args[0] == "_"
+    assert cur_value_store.args[1][0] == cur_value_body[peek_call_index].dest
+    assert cur_value_load.op == "LOADVAR" and cur_value_load.args[0] == "_"
+    assert cur_value_return.op == "RETURN" and cur_value_return.args[0] == cur_value_load.dest
+
+    parse_statement_body = result.ir.functions["ParseStatement"].body
+    bad_value_writes = [
+        (index, instruction)
+        for index, instruction in enumerate(parse_statement_body)
+        if instruction.op == "STORE_LIST" and instruction.args[0] == "ParseStatement_BadV"
+    ]
+    assert len(bad_value_writes) == 1
+    bad_value_index, bad_value_write = bad_value_writes[0]
+    bad_value_load = parse_statement_body[bad_value_index - 1]
+    cur_value_store = parse_statement_body[bad_value_index - 2]
+    cur_value_call = parse_statement_body[bad_value_index - 3]
+    assert bad_value_load.op == "LOADVAR" and bad_value_load.args[0] == "_"
+    assert cur_value_store.op == "STORE_LIST" and cur_value_store.args[0] == "_"
+    assert cur_value_store.args[1][0] == cur_value_call.dest
+    assert cur_value_call.op == "CALL" and cur_value_call.args[0] == "CurValue"
+    assert bad_value_write.args[1][0] == bad_value_load.dest
+
+    dynamic_ops = {"MAKE_CLOSURE", "INVOKE", "SPAWN", "AWAIT"}
+    assert not any(
+        instruction.op in dynamic_ops
+        for _, body in bodies
+        for instruction in body
+    )
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_rejects_text_concatenation_without_partial_output(target):
+    tokens = [
+        "BC_CONST_TEXT", "expected ",
+        "BC_CONST_TEXT", "identifier",
+        "BC_BINOP", "+",
+        "BC_STORE_LIST", "_",
+        "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_rejects_shared_text_global_as_text_argument_without_partial_output(target):
+    tokens = [
+        "BC_FUNC_BEGIN", "Sink",
+        "BC_PARAM", "Message", "Text",
+        "BC_LOADVAR", "Message", "BC_RETURN", "BC_FUNC_END",
+        "BC_CONST_TEXT", "shared diagnostic message",
+        "BC_STORE_LIST", "MessageScratch",
+        "BC_CALL_BEGIN", "Sink", "BC_LOADVAR", "MessageScratch", "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
 
 @pytest.mark.parametrize(
     ("argument_sets", "expected_failed"),
