@@ -12,6 +12,8 @@ Evidence for that classification is the VM's own environment description and dec
 
 Consequently, retain the production representation. The precise unresolved migration decision is whether the supported collection-history domain excludes generation exhaustion, or whether a deliberately specified replacement exhaustion policy is acceptable. This note makes neither choice: a source-level behavior change is outside this safe increment. A finite-domain contract must be explicit, not inferred from a 65,536-row buffer: empty resets can advance IDs without paying rows.
 
+The follow-up [history compatibility gate](vm-generation-history-compatibility.md) makes the interim engineering rule explicit: preserve existing backend-observable behavior, including exhaustion/history effects, until a separate contract decision authorizes a change. This does not settle portable language overflow semantics; it rules out silently narrowing histories to enable a counter-free migration.
+
 ## What each consumer borrows
 
 The [new IR regression guards](../../tests/self_host/test_vm_collection_consumer_contract.py) close the call/effect graph of all ten generation-ledger helpers and census direct consumers of the counter, ID column, and owner column. They also protect live scratch across nested calls. A new edge, effect, consumer, or selected write-order change requires a fresh review. These checks are deliberately implementation-sensitive tripwires, not a theorem about arbitrary IR, indirect alias analysis, or native memory.
