@@ -10,6 +10,8 @@ This settles which rule to apply while the language-level exhaustion policy rema
 
 The gate is intentionally restrictive. It does not itself deliver a storage improvement, migration, or independence gain. If preserving this behavior makes a proposed optimization impractical, stop that proposal; do not weaken the contract by implication.
 
+The follow-up [reachability and row-lifetime evidence](vm-generation-reachability-lifetimes.md) distinguishes row-free outer-helper histories from row-funded normal public dispatch, and tests actual in-place overwrite versus retained reset history. Its bounded public-dispatch argument does not waive this broader preservation gate or demonstrate a natural full native cycle.
+
 ## What unchanged helpers actually do
 
 The [new helper witnesses](../../tests/self_host/test_vm_generation_history_contract.py) run the complete unchanged authored VM on hosted execution and Linux x86-64 native execution. Seven scenarios run on both paths, with literal backend-specific expected traces rather than a replacement model's expected transitions.
