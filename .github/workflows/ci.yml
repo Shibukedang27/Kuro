@@ -75,6 +75,7 @@ jobs:
           tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_links_and_runs
           tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_runs_decimal_printing
           tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_runs_decimal_storage
+          tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_runs_73rd_action_call
           tests/self_host/test_native_codegen.py::test_kuro_owned_generator_records_analyzer_execution_boundary
           tests/self_host/test_native_indexed_state_contract.py
           tests/self_host/test_collection_index_semantics.py

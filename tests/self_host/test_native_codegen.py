@@ -196,6 +196,49 @@ def _bytecode_for_token_limit(if_count: int, print_count: int) -> list[str]:
     )
 
 
+def _bytecode_for_function_count(function_count: int) -> list[str]:
+    tokens = [
+        token
+        for index in range(function_count)
+        for token in ("BC_FUNC_BEGIN", f"Function{index}", "BC_FUNC_END")
+    ]
+    return [*tokens, "BC_CONST", "7", "BC_PRINT"]
+
+
+@pytest.mark.parametrize(
+    "function_count,expected_failed",
+    [(32, 0), (33, 0), (73, 0), (128, 0), (129, 1)],
+)
+def test_kuro_native_codegen_bounds_function_table(function_count, expected_failed):
+    bytecode = ", ".join(json.dumps(token) for token in _bytecode_for_function_count(function_count))
+    env = run_codegen(bytecode, target="x86_64-linux")
+
+    assert env["NativeFailed"] == expected_failed
+    if expected_failed:
+        assert env["NativeOut"] == ""
+    else:
+        assert ".globl _start" in env["NativeOut"]
+
+
+def test_kuro_native_codegen_function_metadata_arrays_match_capacity():
+    source = CODEGEN.read_text(encoding="utf-8")
+    capacity_match = re.search(r"^NativeFunctionCapacity = (\d+);$", source, re.MULTILINE)
+    assert capacity_match is not None
+    capacity = int(capacity_match.group(1))
+
+    array_names = (
+        "NativeFunctionBodyStarts",
+        "NativeFunctionBodyEnds",
+        "NativeFunctionParameterCounts",
+        "NativeFunctionReturnCounts",
+        "NativeFunctionReturnKinds",
+    )
+    for name in array_names:
+        declaration = next(line for line in source.splitlines() if line.startswith(f"{name} = "))
+        values = declaration.split("=", 1)[1].rstrip(";").split(",")
+        assert len(values) == capacity, name
+
+
 def test_kuro_native_codegen_emits_length_for_multichar_literal():
     env = run_codegen('"BC_CONST", "hello", "BC_PRINT"')
 
@@ -1828,6 +1871,36 @@ def test_kuro_native_codegen_rejects_unsupported_action_signatures(bytecode):
     assert env["NativeFailed"] == 1
 
 
+def test_kuro_native_codegen_fails_closed_for_untyped_action_parameter():
+    untyped = "Action Identity Value;\nReturn Value;\nDone.\nCall Identity 7;\nPrint @_.\n"
+    untyped_tokens, untyped_env = compile_program_to_codegen(untyped, target="x86_64-linux")
+    assert untyped_tokens[untyped_tokens.index("BC_PARAM") + 2] == "NONE"
+    assert untyped_env["NativeFailed"] == 1
+    assert untyped_env["NativeOut"] == ""
+
+    typed = "Action Identity Value: Integers;\nReturn Value;\nDone.\nCall Identity 7;\nPrint @_.\n"
+    typed_tokens, typed_env = compile_program_to_codegen(typed, target="x86_64-linux")
+    assert typed_tokens[typed_tokens.index("BC_PARAM") + 2] == "Integers"
+    assert typed_env["NativeFailed"] == 0
+    assert ".Lkuro_fn_0:" in typed_env["NativeOut"]
+
+
+@pytest.mark.parametrize(
+    "argument,expected_output",
+    [("\"hello\"", "hello\n"), ("1.25", "1.25\n")],
+)
+def test_kuro_native_codegen_does_not_guess_untyped_text_or_decimal_arguments(argument, expected_output):
+    source = f"Action Identity Value;\nReturn Value;\nDone.\nCall Identity {argument};\nPrint @_.\n"
+    hosted = run_source(source)
+    assert hosted.ok
+    assert hosted.stdout == expected_output
+
+    tokens, env = compile_program_to_codegen(source, target="x86_64-linux")
+    assert tokens[tokens.index("BC_PARAM") + 2] == "NONE"
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
 @pytest.mark.parametrize(
     "bytecode",
     [
@@ -2137,6 +2210,60 @@ def test_kuro_owned_x86_linux_codegen_cross_assembles(tmp_path, x86_linux_codege
         input=generated.stdout, capture_output=True, text=True, check=True,
     )
     assert object_file.read_bytes()[:4] == b"\x7fELF"
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="requires a Linux x86-64 execution host",
+)
+def test_kuro_owned_x86_linux_codegen_runs_73rd_action_call(tmp_path, x86_linux_codegen):
+    action_count = 73
+    source = "".join(
+        f"Action Function{index};\nReturn {index + 1};\nDone.\n"
+        for index in range(action_count)
+    )
+    source += f"Call Function{action_count - 1};\nPrint @_.\n"
+    tokens, env = compile_program_to_codegen(source, target="x86_64-linux")
+    assert tokens.count("BC_FUNC_BEGIN") == action_count
+    assert env["NativeFailed"] == 0
+
+    generated = subprocess.run(
+        [str(x86_linux_codegen)],
+        input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert generated.returncode == 0, generated.stderr
+    assert generated.stderr == ""
+
+    assembly = tmp_path / "function-73.s"
+    executable = tmp_path / "function-73"
+    assembly.write_text(generated.stdout, encoding="utf-8")
+    subprocess.run(
+        ["clang", "-nostdlib", "-Wl,-e,_start", str(assembly), "-o", str(executable)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    result = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert result.stdout == "73\n"
+    assert result.stderr == ""
+
+    for count, expected_status in ((128, 0), (129, 1)):
+        tokens = _bytecode_for_function_count(count)
+        boundary = subprocess.run(
+            [str(x86_linux_codegen)],
+            input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        assert boundary.returncode == expected_status, boundary.stderr
+        assert boundary.stderr == ""
+        assert bool(boundary.stdout) is (count == 128)
 
 
 def test_kuro_owned_x86_linux_codegen_enforces_4096_token_boundary(tmp_path, x86_linux_codegen):
