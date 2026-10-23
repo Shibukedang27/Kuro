@@ -161,7 +161,7 @@ Action CurDiagPos;
     Done.
 Done.
 
-Action RecordDiag Code, Message;
+Action RecordDiag Code: Text, Message;
     Call CurDiagPos;
     RecordDiag_Pos = @_;
     Call ComputeLineCol RecordDiag_Pos;
