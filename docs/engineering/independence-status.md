@@ -1,11 +1,11 @@
 # Kuro independence status and roadmap
 
-**Updated:** 2026-10-23
+**Updated:** 2026-10-24
 **Status:** In progress; Kuro is not yet entirely independent.
 
 This is the running index for the independence work. Each implementation batch is published as a reviewable GitHub pull request with its own change summary, rationale, verification results, and known limits. Keep this page current as follow-up work is pushed.
 
-**Current bootstrap blocker:** the [bounded native-codegen function-table increment](native-codegen-function-capacity.md), directly above draft/open #127, expands the fixed function metadata table from 32 to 128 slots and validates a native call to action 73. The full 9,119-line compiler artifact still fails closed because its first action, `ComputeLineCol`, has a `NONE` parameter rejected by the native preparation stage. The [Python-free compiler-image rebuild audit](python-free-bootstrap-gap.md) remains diagnostic only; Python-seeded construction and Clang/LLVM assembly/linking remain.
+**Current bootstrap blocker:** the [bounded native-codegen function-table increment](native-codegen-function-capacity.md), directly above draft/open #127, expands the fixed function metadata table from 32 to 128 slots and validates a native call to action 73. A stacked [callsite-evidence follow-up](native-codegen-computelinecol-kind-contract.md), directly above draft/open #128, gives `ComputeLineCol.TargetPos` an explicit `Integers` contract after checking every fixed-composition caller and shared-global write; this is not generic `NONE` inference. The exact 9,118-token compiler artifact still fails closed at the first remaining untyped formal, `RecordDiag.Code`, with no assembly. The [Python-free compiler-image rebuild audit](python-free-bootstrap-gap.md) remains diagnostic only; Python-seeded construction and Clang/LLVM assembly/linking remain.
 
 **Current storage prerequisite:** the [publication/COW design model](vm-publication-cow-model.md), directly above PR #111, separates snapshot assignments from late-bound stack names and documents frame/result/capture/native root boundaries. It retains production copies, unchanged ceilings and no reclamation. Adversarial partial-failure and kind-erasure witnesses prevent treating the bounded model as a production lifetime proof; no actual peak reduction or completed toolchain independence is claimed.
 

@@ -110,6 +110,18 @@ def test_kuro_vm_executes_action_call_and_return():
     assert output == [9]
 
 
+def test_kuro_vm_keeps_untyped_action_parameters_polymorphic_across_calls():
+    output, failed = run_kuro_vm(
+        "Action Echo Value;\nReturn Value;\nDone.\n"
+        "Call Echo 7;\nPrint @_.\n"
+        'Call Echo "word";\nPrint @_.\n'
+        "Call Echo 1.25;\nPrint @_."
+    )
+
+    assert failed in (None, 0)
+    assert output == [7, "word", 1.25]
+
+
 def test_kuro_vm_passes_mixed_text_and_integer_action_parameters():
     output, failed = run_kuro_vm(
         "Action EchoPair Count: Integers, Word: Text;\n"

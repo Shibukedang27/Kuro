@@ -1885,6 +1885,130 @@ def test_kuro_native_codegen_fails_closed_for_untyped_action_parameter():
     assert ".Lkuro_fn_0:" in typed_env["NativeOut"]
 
 
+def test_composed_native_compiler_has_a_fixed_integer_compute_line_col_contract():
+    from compiler.pipeline import compile_source
+    from compiler.self_host import native_compiler_source
+
+    source = native_compiler_source()
+    assert source.count("Action ComputeLineCol TargetPos: Integers;") == 1
+    assert source.count("Call ComputeLineCol ") == 2
+
+    result = compile_source(source)
+    assert result.ok, result.diags.render_all()
+    assert result.ir.functions["ComputeLineCol"].parameter_types["TargetPos"] == "Integers"
+    sites = []
+    all_calls = set()
+    for scope, body in [("", result.ir.main), *[(name, fn.body) for name, fn in result.ir.functions.items()]]:
+        for index, instruction in enumerate(body):
+            if instruction.op != "CALL":
+                continue
+            all_calls.add(instruction.args[0])
+            if instruction.args[0] == "ComputeLineCol":
+                sites.append((scope, body, index, instruction))
+
+    assert {scope for scope, _, _, _ in sites} == {"", "RecordDiag"}
+    assert not all_calls.intersection({"MakeClosure", "Invoke", "Spawn", "Await"})
+    assert result.ir.functions["ComputeLineCol"].body
+    assert not any(instruction.op == "CALL" for instruction in result.ir.functions["ComputeLineCol"].body)
+    assert any(
+        instruction.op == "GET" and instruction.args[0] == "TokenStarts"
+        for instruction in result.ir.functions["CurDiagPos"].body
+    )
+    assert any(
+        instruction.op == "LENGTH" and instruction.args[0] == "Source"
+        for instruction in result.ir.functions["CurDiagPos"].body
+    )
+
+    all_bodies = [("", result.ir.main), *[(name, fn.body) for name, fn in result.ir.functions.items()]]
+    # Include declarations and every IR operation that can create, reassign,
+    # restore, or mutate a target. Review this set if the IR grows new writes.
+    write_target_ops = {"DECLTYPE", "STORE_LIST", "APPEND", "ADD", "UPDATE", "SET", "INPUT", "RESTOREVAR"}
+
+    def writes_to(name):
+        return [
+            instruction
+            for _, body in all_bodies
+            for instruction in body
+            if instruction.op in write_target_ops and instruction.args and instruction.args[0] == name
+        ]
+
+    argument_names = set()
+    for _, body, index, instruction in sites:
+        argument = body[index - 1]
+        assert argument.op == "LOADVAR" and argument.dest == instruction.args[1]
+        argument_names.add(argument.args[0])
+    assert argument_names == {"RecordDiag_Pos", "LCOffset"}
+    for name in argument_names:
+        writes = writes_to(name)
+        assert len(writes) == 1 and writes[0].op == "STORE_LIST", name
+
+    token_start_appends = [
+        (index, instruction)
+        for index, instruction in enumerate(result.ir.main)
+        if instruction.op == "APPEND" and instruction.args[0] == "TokenStarts"
+    ]
+    assert token_start_appends
+    token_start_writes = writes_to("TokenStarts")
+    assert len(token_start_writes) == len(token_start_appends) + 1
+    assert sum(instruction.op == "DECLTYPE" for instruction in token_start_writes) == 1
+    assert sum(instruction.op == "APPEND" for instruction in token_start_writes) == len(token_start_appends)
+    for index, instruction in token_start_appends:
+        producer = result.ir.main[index - 1]
+        assert producer.op == "LOADVAR" and producer.dest == instruction.args[1]
+        assert producer.args[0] == "TokStartPos"
+    token_start_writes = writes_to("TokStartPos")
+    assert len(token_start_writes) == 1 and token_start_writes[0].op == "STORE_LIST"
+    token_start_write = next(
+        index for index, instruction in enumerate(result.ir.main)
+        if instruction is token_start_writes[0]
+    )
+    producer = result.ir.main[token_start_write - 1]
+    assert producer.op == "LOADVAR" and producer.dest == token_start_writes[0].args[1][0]
+    assert producer.args[0] == "Pos"
+    assert "Pos = 0;" in source
+
+    pos_writes = writes_to("Pos")
+    initial_pos = [instruction for instruction in pos_writes if instruction.op == "STORE_LIST"]
+    advances = [instruction for instruction in pos_writes if instruction.op == "ADD"]
+    assert len(initial_pos) == 1 and advances and len(pos_writes) == 1 + len(advances)
+    definitions = {instruction.dest: instruction for instruction in result.ir.main if instruction.dest}
+    initial_value = definitions[initial_pos[0].args[1][0]]
+    assert initial_value.op == "CONST" and initial_value.args[0] == 0
+    for advance in advances:
+        increment = definitions[advance.args[1]]
+        assert increment.op == "CONST" and type(increment.args[0]) is int
+
+
+@pytest.mark.parametrize(
+    ("argument_sets", "expected_failed"),
+    [
+        ([("BC_CONST", "7")], 0),
+        ([("BC_CONST_TEXT", "7")], 1),
+        ([("BC_CONST", "1.25")], 1),
+        ([("BC_CONST", "7"), ("BC_CONST_TEXT", "word")], 1),
+        ([("BC_CONST", "7"), ("BC_CONST", "1.25")], 1),
+    ],
+)
+def test_kuro_native_codegen_rejects_noninteger_or_mixed_compute_line_col_calls(
+    argument_sets, expected_failed
+):
+    tokens = [
+        "BC_FUNC_BEGIN", "ComputeLineCol", "BC_PARAM", "TargetPos", "Integers",
+        "BC_LOADVAR", "TargetPos", "BC_RETURN", "BC_FUNC_END",
+    ]
+    for opcode, value in argument_sets:
+        tokens.extend(
+            ["BC_CALL_BEGIN", "ComputeLineCol", opcode, value, "BC_CALL_END", "BC_STORE_LIST", "_"]
+        )
+    tokens.extend(["BC_LOADVAR", "_", "BC_PRINT"])
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target="x86_64-linux")
+
+    assert env["NativeFailed"] == expected_failed
+    if expected_failed:
+        assert env["NativeOut"] == ""
+
+
 @pytest.mark.parametrize(
     "argument,expected_output",
     [("\"hello\"", "hello\n"), ("1.25", "1.25\n")],

@@ -126,7 +126,7 @@ DiagMessages is Text;
 # (category/code and source location) in
 # tests/self_host/test_parser_diagnostics.py.
 
-Action ComputeLineCol TargetPos;
+Action ComputeLineCol TargetPos: Integers;
     ComputeLineCol_I = 0;
     ComputeLineCol_Line = 1;
     ComputeLineCol_Col = 1;
