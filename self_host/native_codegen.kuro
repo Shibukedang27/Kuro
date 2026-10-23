@@ -2759,14 +2759,18 @@ Action EmitStraightIntegerProgram;
                 Get BytecodeOut NativeStraightPos;
                 NativeCallName = @_;
                 Add 1 to NativeStraightPos;
-                Call NativeFindFunction NativeCallName, 0;
-                NativeCallResolvedIndex = @_;
-                If NativeCallResolvedIndex is greater than or equal to 0;
-                    Set NativeCallFunctionIndices NativeCallDepth to NativeCallResolvedIndex;
-                    Set NativeCallBaseDepths NativeCallDepth to NativeStackDepth;
-                    Add 1 to NativeCallDepth;
-                Else;
+                If NativeCallName is equal to "__KuroAdmitRow";
                     NativeFailed = 1;
+                Else;
+                    Call NativeFindFunction NativeCallName, 0;
+                    NativeCallResolvedIndex = @_;
+                    If NativeCallResolvedIndex is greater than or equal to 0;
+                        Set NativeCallFunctionIndices NativeCallDepth to NativeCallResolvedIndex;
+                        Set NativeCallBaseDepths NativeCallDepth to NativeStackDepth;
+                        Add 1 to NativeCallDepth;
+                    Else;
+                        NativeFailed = 1;
+                    Done.
                 Done.
             Else;
                 NativeFailed = 1;

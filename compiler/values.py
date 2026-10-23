@@ -70,6 +70,15 @@ def _artifact_suffix(source: object, offset: object) -> str:
     return source[offset:]
 
 
+def _kuro_admit_row(used: object) -> int:
+    """Validate the private row-admission count and return it unchanged."""
+    if type(used) is not int:
+        raise ValueError("__KuroAdmitRow requires an Integers value")
+    if used < 0:
+        raise ValueError("__KuroAdmitRow requires a nonnegative Integers value")
+    return used
+
+
 def builtin_call(name: str, args: list[object]):
     if name == "MakeChannel" and not args:
         from .concurrency import Channel

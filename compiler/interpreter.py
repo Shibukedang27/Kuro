@@ -28,7 +28,7 @@ import sys
 
 from .diagnostics import Span
 from .ir import IRFunction, IRProgram
-from .values import ClosureValue, _artifact_suffix, builtin_call
+from .values import ClosureValue, _artifact_suffix, _kuro_admit_row, builtin_call
 from .concurrency import Scheduler
 from .values import TaskValue
 
@@ -119,6 +119,13 @@ class Interpreter:
 
     def call(self, name: str, args: list):
         self.call_count += 1
+        if name == "__KuroAdmitRow":
+            if len(args) != 1:
+                raise KuroRuntimeException("E3001", "__KuroAdmitRow requires exactly one argument", None)
+            try:
+                return _kuro_admit_row(args[0])
+            except ValueError as error:
+                raise KuroRuntimeException("E3001", str(error), None) from error
         if name == "Spawn" and len(args) >= 1 and isinstance(args[0], ClosureValue):
             return TaskValue(self.scheduler.spawn(args[0], args[1:]))
         if name == "Await" and len(args) == 1 and isinstance(args[0], TaskValue):

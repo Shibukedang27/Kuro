@@ -45,6 +45,7 @@ INTERNAL_INTRINSICS = {
     # Private bootstrap-only operation; intentionally absent from the public
     # builtin action registry and standard-library surface.
     "__KuroArtifactSuffix": 2,
+    "__KuroAdmitRow": 1,
 }
 
 
