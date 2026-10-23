@@ -68,6 +68,8 @@ The last two rows are [model arithmetic](vm-row-funded-metadata.md), not measure
 
 Append still admits before owner/raw/display writes and increments count last; Set still writes raw then display with no admission; Copy still resets before sequential append and can leave a prefix. Existing [IR publication guards](../../tests/self_host/test_vm_collection_consumer_contract.py) and [production capacity witnesses](../../tests/self_host/test_vm_publication_capacity.py) remain the evidence for those boundaries. No successful-run trace proves multi-column atomicity or equivalence under every system allocation failure.
 
+The resulting production decision is explicit in the [generation-tail slice readiness note](vm-generation-tail-slice-readiness.md): no production migration is safe until actual candidate tail code and its reader/publication proof exist.
+
 ## Next safe path
 
 Keep the production representation and existing exhaustion behavior. A future ID-preserving linked slice must retain historical owner identity and counter arithmetic, preserve late name lookup, eager-copy snapshots, scalar/result/frame captures, negative indexing and exact failure publication, and supply an actual backend tail/metadata budget. A row-layout change must prove its own stable reader/index scope; a Text-moving change needs a separate complete root/relocation protocol. Public-dispatch funding is useful evidence, not a waiver for injected/helper histories or a substitute for either proof.
