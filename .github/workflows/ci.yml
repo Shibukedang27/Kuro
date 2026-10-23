@@ -83,5 +83,8 @@ jobs:
       - name: Build Linux native production images (hosted bootstrap seed)
         run: make native-hosted-bootstrap PYTHON=python NATIVE_TARGET=x86_64-linux
 
+      - name: Audit Python-free compiler-image rebuild boundary
+        run: sh bootstrap/audit-native-bootstrap-gap.sh
+
       - name: Verify production images with Python and toolchains blocked
         run: sh tests/self_host/python_free_native_smoke.sh
