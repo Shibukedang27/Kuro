@@ -1979,6 +1979,89 @@ def test_composed_native_compiler_has_a_fixed_integer_compute_line_col_contract(
         assert increment.op == "CONST" and type(increment.args[0]) is int
 
 
+def test_composed_native_compiler_has_a_fixed_text_record_diag_code_contract():
+    from compiler.pipeline import compile_source
+    from compiler.self_host import native_compiler_source
+
+    source = native_compiler_source()
+    assert source.count("Action RecordDiag Code: Text, Message;") == 1
+    result = compile_source(source)
+    assert result.ok, result.diags.render_all()
+    assert result.ir.functions["RecordDiag"].parameter_types["Code"] == "Text"
+
+    bodies = [("", result.ir.main), *[(name, fn.body) for name, fn in result.ir.functions.items()]]
+    sites = []
+    all_calls = set()
+    for scope, body in bodies:
+        for index, instruction in enumerate(body):
+            if instruction.op != "CALL":
+                continue
+            all_calls.add(instruction.args[0])
+            if instruction.args[0] != "RecordDiag":
+                continue
+            code_producer, message_producer = body[index - 2:index]
+            assert code_producer.op == "CONST"
+            assert code_producer.dest == instruction.args[1]
+            assert type(code_producer.args[0]) is str
+            assert message_producer.dest == instruction.args[2]
+            sites.append((scope, code_producer.args[0]))
+
+    assert len(sites) == 6
+    assert {scope for scope, _ in sites} == {
+        "ExpectKind", "ExpectWord", "ExpectIdent", "ParseAtom",
+        "ParseComparisonOp", "ParseStatement",
+    }
+    assert {code for _, code in sites} == {"E2001", "E2002", "E2003", "E2004"}
+    assert not all_calls.intersection({"MakeClosure", "Invoke", "Spawn", "Await"})
+
+    # Code is read only as RecordDiag's frame-local parameter; callers pass
+    # immediate Text constants, not shared aliases or mutable scalar globals.
+    code_reads = [
+        scope for scope, body in bodies
+        for instruction in body
+        if instruction.op == "LOADVAR" and instruction.args[0] == "Code"
+    ]
+    assert code_reads == ["RecordDiag"]
+    write_target_ops = {"DECLTYPE", "STORE_LIST", "APPEND", "ADD", "UPDATE", "SET", "INPUT", "RESTOREVAR"}
+    assert not any(
+        instruction.op in write_target_ops and instruction.args and instruction.args[0] == "Code"
+        for _, body in bodies
+        for instruction in body
+    )
+
+
+@pytest.mark.parametrize(
+    ("argument_sets", "expected_failed"),
+    [
+        ([("BC_CONST_TEXT", "E2002")], 0),
+        ([("BC_CONST_TEXT", "E2001"), ("BC_CONST_TEXT", "E2002")], 0),
+        ([("BC_CONST", "7")], 1),
+        ([("BC_CONST", "1.25")], 1),
+        ([("BC_CONST_TEXT", "E2002"), ("BC_CONST", "7")], 1),
+        ([("BC_CONST_TEXT", "E2002"), ("BC_CONST", "1.25")], 1),
+    ],
+)
+def test_kuro_native_codegen_enforces_text_only_record_diag_code_calls(argument_sets, expected_failed):
+    tokens = [
+        "BC_FUNC_BEGIN", "RecordDiag",
+        "BC_PARAM", "Code", "Text", "BC_PARAM", "Message", "Text",
+        "BC_LOADVAR", "Code", "BC_RETURN", "BC_FUNC_END",
+    ]
+    for opcode, value in argument_sets:
+        tokens.extend([
+            "BC_CALL_BEGIN", "RecordDiag", opcode, value,
+            "BC_CONST_TEXT", "diagnostic message", "BC_CALL_END",
+            "BC_STORE_LIST", "_",
+        ])
+    tokens.extend(["BC_LOADVAR", "_", "BC_PRINT"])
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target="x86_64-linux")
+
+    assert env["NativeFailed"] == expected_failed
+    if expected_failed:
+        assert env["NativeOut"] == ""
+
+
 @pytest.mark.parametrize(
     ("argument_sets", "expected_failed"),
     [
