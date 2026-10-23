@@ -125,7 +125,8 @@ If Mode is equal to "65536";
     Used = 65536;
 Done.
 If Mode is equal to "65537";
-    Used = 65537;
+    Used = 65536;
+    Add 1 to Used;
 Done.
 If Mode is equal to "-1";
     Used = -1;
@@ -143,7 +144,11 @@ Print @_.
 Print "after".
 '''
     image = tmp_path_factory.mktemp("backend-row-admission") / "gate"
-    build_native(_compile(source).ir, image, target=TARGET)
+    compiled = _compile(source)
+    # Exercise this complete boundary driver against ARM64 even on Linux.
+    # Do not grow the backend's literal subset just to construct 65537.
+    emit_macos_arm64(compiled.ir)
+    build_native(compiled.ir, image, target=TARGET)
     return image
 
 
