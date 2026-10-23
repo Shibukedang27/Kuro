@@ -13,7 +13,7 @@ import sys
 from .interpreter import KuroRuntimeException
 from .ir import IRFunction, IRProgram, Instr
 from .memory import MemoryManager
-from .values import ClosureValue, TaskValue, _artifact_suffix, builtin_call
+from .values import ClosureValue, TaskValue, _artifact_suffix, _kuro_admit_row, builtin_call
 from .concurrency import Scheduler
 
 
@@ -137,6 +137,13 @@ class BytecodeVM:
         self.memory.collect([self.env, self.frames, self.scheduler.tasks])
 
     def _call(self, name, args):
+        if name == "__KuroAdmitRow":
+            if len(args) != 1:
+                raise KuroRuntimeException("E3001", "__KuroAdmitRow requires exactly one argument")
+            try:
+                return _kuro_admit_row(args[0])
+            except ValueError as error:
+                raise KuroRuntimeException("E3001", str(error)) from error
         if name == "Spawn" and len(args) >= 1 and isinstance(args[0], ClosureValue):
             return TaskValue(self.scheduler.spawn(args[0], args[1:]))
         if name == "Await" and len(args) == 1 and isinstance(args[0], TaskValue):

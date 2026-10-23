@@ -14,6 +14,7 @@ VMInput = "";
 # --- END_VM_INPUT_DEFAULT ---
 VMStep_Source is Text;
 VMStep_Offset is Integers;
+VMStep_AdmissionCount is Integers;
 VMNames is Text;
 VMValues is Text;
 VMValueDisplay is Text;
@@ -59,6 +60,7 @@ VMStoreMulti_Base = 0;
 VMFailed = 0;
 VMCallPending = 0;
 VMCallName = "";
+VMCallStackBase = 0;
 VMFunctionBody = 0;
 VMReturnValue = 0;
 VMReturnPending = 0;
@@ -224,6 +226,7 @@ Action VMAppendCollectionItem Name, Value;
     Else;
         Get VMCollectionIds VMAppendCollection_Index;
         VMAppendCollection_Id = @_;
+        Call __KuroAdmitRow VMCollectionEntryCount;
         If VMCollectionEntryCount is less than 2;
             Set VMCollectionOwners VMCollectionEntryCount to VMAppendCollection_Id;
             Set VMCollectionItems VMCollectionEntryCount to Value;
@@ -369,6 +372,13 @@ Action VMSetResult Value;
         VMLastResultDisplay = VMSetResultDisplay;
     Done.
     VMSetResultDisplay = "";
+Done.
+
+Action VMAdmitRow Count: Integers;
+    # Use the declared Integer ABI without widening inference for VMPop.
+    # This is not a recovery of the scalar stack's erased type provenance.
+    Call __KuroAdmitRow Count;
+    Return @_;
 Done.
 
 Action VMPush Value;
@@ -1027,12 +1037,32 @@ Action VMStep;
     If VMStep_Op is equal to "BC_CALL_BEGIN";
         Call VMReadOperand;
         VMCallName = @_;
+        VMCallStackBase = VMTop;
         VMCallPending = 1;
         Return 0;
     Done.
     If VMStep_Op is equal to "BC_CALL_END";
         If VMCallPending is equal to 1;
-            Call VMInvoke VMCallName;
+            If VMCallName is equal to "__KuroAdmitRow";
+                VMAdmitRow_ExpectedTop = VMCallStackBase + 1;
+                If VMTop is equal to VMAdmitRow_ExpectedTop;
+                    Call VMPop;
+                    VMStep_AdmissionCount = @_;
+                    If VMLastPoppedKind is equal to 0 and VMLastPoppedDisplay is equal to "";
+                        Call VMAdmitRow VMStep_AdmissionCount;
+                        VMStep_AdmissionCount = @_;
+                        VMSetResultDisplay = "";
+                        Call VMSetResult VMStep_AdmissionCount;
+                        Call VMPush VMStep_AdmissionCount;
+                    Else;
+                        VMFailed = 1;
+                    Done.
+                Else;
+                    VMFailed = 1;
+                Done.
+            Else;
+                Call VMInvoke VMCallName;
+            Done.
             VMCallPending = 0;
             VMReturnPending = 0;
         Done.

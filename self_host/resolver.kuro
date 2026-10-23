@@ -483,7 +483,7 @@ Action SkipTopLevelStatement;
         SkipTopLevelStatement_ParamsPos = SemPos;
         Call CountParamsAt SkipTopLevelStatement_ParamsPos;
         SkipTopLevelStatement_Arity = @_;
-        If SkipTopLevelStatement_AName is equal to "__KuroArtifactSuffix";
+        If SkipTopLevelStatement_AName is equal to "__KuroArtifactSuffix" or SkipTopLevelStatement_AName is equal to "__KuroAdmitRow";
             Call RecordSemDiag "E4002", SkipTopLevelStatement_ActionDeclPos, "action name " + SkipTopLevelStatement_AName + " is reserved for compiler/runtime use";
         Else;
             Call ActionExists SkipTopLevelStatement_AName;

@@ -173,7 +173,7 @@ class TypeChecker:
             self._check_block(child)
 
     def _check_builtin_call(self, st: CallStmt):
-        if st.name in INTERNAL_INTRINSICS and len(st.args) == 2:
+        if st.name == "__KuroArtifactSuffix" and len(st.args) == 2:
             source_type = self._infer(st.args[0])
             if source_type != "Text":
                 found = source_type or "unknown"
@@ -184,6 +184,16 @@ class TypeChecker:
                     notes=(f"found: {found}", "expected: Text"),
                 )
             self._check_index(st.args[1])
+        elif st.name == "__KuroAdmitRow" and len(st.args) == 1:
+            used_type = self._infer(st.args[0])
+            if used_type != "Integers":
+                found = used_type or "unknown"
+                self.diags.error(
+                    "E3010",
+                    f"internal intrinsic {st.name!r} requires a statically known Integers value, found {found}",
+                    st.args[0].span,
+                    notes=(f"found: {found}", "expected: Integers"),
+                )
         if st.name == "MakeRecord" and st.args and isinstance(st.args[0], Literal):
             # Construction may be dynamic when no declaration is available;
             # validate strictly once the program has declared the type.

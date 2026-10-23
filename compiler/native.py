@@ -139,6 +139,42 @@ def _native_kind_for_type(type_name: str | None) -> str | None:
     return None
 
 
+def _native_integer_values(body, symbol_types, parameter_types=None) -> set[str]:
+    """Return names proven to hold Integers, without name-based guesses."""
+    parameter_types = parameter_types or {}
+    known = {
+        name for name, typ in symbol_types.items()
+        if typ == "Integers"
+    }
+    known.update(name for name, typ in parameter_types.items() if typ == "Integers")
+
+    def may_be_integer(name):
+        typ = parameter_types.get(name, symbol_types.get(name))
+        return typ is None or typ == "Integers"
+
+    changed = True
+    while changed:
+        before = len(known)
+        for item in body:
+            if item.op == "CONST" and type(item.args[0]) is int and may_be_integer(item.dest):
+                known.add(item.dest)
+            elif item.op == "LOADVAR" and item.args[0] in known and may_be_integer(item.dest):
+                known.add(item.dest)
+            elif item.op in {"STORE_LIST", "UPDATE", "RESTOREVAR"}:
+                target, values = item.args[0], item.args[1]
+                source = values[0] if item.op == "STORE_LIST" and len(values) == 1 else values
+                if isinstance(source, str) and source in known and may_be_integer(target):
+                    known.add(target)
+            elif (item.op == "BINOP" and item.args[0] in {"+", "-", "*"}
+                    and item.args[1] in known and item.args[2] in known
+                    and may_be_integer(item.dest)):
+                known.add(item.dest)
+            elif item.op == "CALL" and item.args[0] == "__KuroAdmitRow" and len(item.args) == 2 and item.args[1] in known:
+                known.add(item.dest)
+        changed = len(known) != before
+    return known
+
+
 def _statically_text_values(
     instructions,
     symbol_types: dict[str, str],
@@ -484,6 +520,7 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
     for name, declared_type in ir.symbol_types.items():
         if declared_type == "Text" and global_kinds.get(name) == "unknown":
             global_kinds[name] = "text"
+    main_integer_values = _native_integer_values(instructions, ir.symbol_types)
     function_return_kinds: dict[str, str] = {}
     def inferred_text_name(name: str) -> bool:
         lowered = name.lower()
@@ -504,7 +541,10 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
                 elif item.op == "LOADVAR": inferred[item.dest] = inferred.get(item.args[0], global_kinds.get(item.args[0], collection_kinds.get(item.args[0], "unknown")))
                 elif item.op == "ARTIFACT_SUFFIX": inferred[item.dest] = "text"
                 elif item.op == "CALL":
-                    inferred[item.dest] = function_return_kinds.get(item.args[0], "unknown")
+                    inferred[item.dest] = (
+                        "number" if item.args[0] == "__KuroAdmitRow"
+                        else function_return_kinds.get(item.args[0], "unknown")
+                    )
                     if inferred[item.dest] == "unknown" and inferred_text_name(item.dest):
                         inferred[item.dest] = "text"
                 elif item.op in {"CMP", "AND", "OR", "ISCLASS", "LENGTH"}: inferred[item.dest] = "number"
@@ -767,6 +807,19 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
             ])
         elif op == "CALL":
             name, *arguments = item.args
+            if name == "__KuroAdmitRow":
+                if (len(arguments) != 1 or arguments[0] not in main_integer_values
+                        or kinds.get(arguments[0]) != "number"):
+                    raise NativeBackendError("native __KuroAdmitRow requires exactly one statically known Integers operand")
+                load(arguments[0], "x0")
+                lines.extend([
+                    "    cmp x0, #0", "    b.lt L_kuro_collection_overflow",
+                    f"    cmp x0, #{NATIVE_COLLECTION_CAPACITY >> 12}, lsl #12",
+                    "    b.hs L_kuro_collection_overflow",
+                ])
+                store(item.dest)
+                kinds[item.dest] = "number"
+                continue
             if name == "MakeEnum":
                 if len(arguments) != 2:
                     raise NativeBackendError("native MakeEnum requires a type and variant")
@@ -1202,6 +1255,9 @@ def _emit_dynamic_function(
         function.body, symbol_types or {}, set(static_collection_names or ()),
         function.parameter_types,
     )
+    integer_values = _native_integer_values(
+        function.body, symbol_types or {}, function.parameter_types,
+    )
     kinds: dict[str, str] = {}
     def inferred_text_name(name: str) -> bool:
         lowered = name.lower()
@@ -1492,6 +1548,21 @@ def _emit_dynamic_function(
             store(item.dest); kinds[item.dest] = "number"
         elif op == "CALL":
             name, *arguments = item.args
+            if name == "__KuroAdmitRow":
+                if (len(arguments) != 1 or arguments[0] not in integer_values
+                        or kinds.get(arguments[0]) != "number"):
+                    raise NativeBackendError(
+                        f"native action {function.name!r} __KuroAdmitRow requires exactly one statically known Integers operand"
+                    )
+                load(arguments[0], "x0")
+                lines.extend([
+                    "    cmp x0, #0", "    b.lt L_kuro_collection_overflow",
+                    f"    cmp x0, #{NATIVE_COLLECTION_CAPACITY >> 12}, lsl #12",
+                    "    b.hs L_kuro_collection_overflow",
+                ])
+                store(item.dest)
+                kinds[item.dest] = "number"
+                continue
             if len(arguments) > 8: raise NativeBackendError("native action call has too many arguments")
             for index, argument in enumerate(arguments): load(argument, f"x{index}")
             lines.append(f"    bl _kuro_fn_{name}"); store(item.dest); kinds[item.dest] = function_return_kinds.get(name, "text" if inferred_text_name(item.dest) else "number")
@@ -1544,7 +1615,7 @@ def _emit_dynamic_function(
 
 
 def emit_macos_arm64(ir: IRProgram) -> str:
-    builtin_calls = {"MakeEnum", "EnumIs", "Some", "None", "Ok", "Err", "IsSome", "IsNone", "IsOk", "IsErr", "Unwrap", "UnwrapErr", "MakeRecord", "RecordSet", "RecordGet", "MakeMap", "MapSet", "MapGet", "MapHas", "MakeClosure", "Invoke", "Spawn", "Await"}
+    builtin_calls = {"MakeEnum", "EnumIs", "Some", "None", "Ok", "Err", "IsSome", "IsNone", "IsOk", "IsErr", "Unwrap", "UnwrapErr", "MakeRecord", "RecordSet", "RecordGet", "MakeMap", "MapSet", "MapGet", "MapHas", "MakeClosure", "Invoke", "Spawn", "Await", "__KuroAdmitRow"}
     has_dynamic_action = any(
         item.op == "CALL"
         and (item.args[0] in builtin_calls or (ir.functions.get(item.args[0]) is not None and any(inner.op in {"JUMP", "JUMPF", "CALL", "CMP", "ARTIFACT_SUFFIX"} for inner in ir.functions[item.args[0]].body)))
@@ -1946,7 +2017,9 @@ def emit_x86_64_linux(
                 local_texts.pop(item.dest, None)
             elif item.op == "CALL" and item.dest:
                 call_name, *call_arguments = item.args
-                if call_name == "RecordGet" and len(call_arguments) == 2:
+                if call_name == "__KuroAdmitRow":
+                    local_kinds[item.dest] = "number"
+                elif call_name == "RecordGet" and len(call_arguments) == 2:
                     field = local_texts.get(call_arguments[1])
                     local_kinds[item.dest] = record_field_kinds.get(field, "unknown") if field is not None else "unknown"
                 elif call_name == "RecordSet" and len(call_arguments) == 3:
@@ -2021,6 +2094,7 @@ def emit_x86_64_linux(
     frame = ((len(slots) * 8 + 15) // 16) * 16 or 16
     labels = {instruction.dest: f".Lkuro_{instruction.dest}" for instruction in items if instruction.op == "LABEL"}
     kinds: dict[str, str] = {}
+    main_integer_values = _native_integer_values(items, ir.symbol_types)
     text_lengths: dict[str, int] = {}
     text_length_refs: dict[str, str] = {}
     data: list[tuple[str, bytes]] = []
@@ -3123,7 +3197,20 @@ def emit_x86_64_linux(
             text_length_refs.pop(instruction.dest, None)
         elif op == "CALL":
             call_name, *arguments = instruction.args
-            if call_name == "MakeRecord":
+            if call_name == "__KuroAdmitRow":
+                if (len(arguments) != 1 or arguments[0] not in main_integer_values
+                        or kinds.get(arguments[0]) != "number"):
+                    raise NativeBackendError(
+                        "x86_64-linux __KuroAdmitRow requires exactly one statically known Integers operand"
+                    )
+                load(arguments[0], "%rax")
+                lines.extend([
+                    "    test %rax, %rax", "    js .Lkuro_overflow",
+                    f"    cmp ${NATIVE_COLLECTION_CAPACITY}, %rax", "    jae .Lkuro_overflow",
+                ])
+                store(instruction.dest)
+                kinds[instruction.dest] = "number"
+            elif call_name == "MakeRecord":
                 if len(arguments) != 1 or arguments[0] not in known_text:
                     raise NativeBackendError("x86_64-linux MakeRecord requires a known type name")
                 label = record_dest_labels.get(instruction.dest)
@@ -3574,6 +3661,9 @@ def emit_x86_64_linux(
             declared_kind = _native_kind_for_type(declared_type)
             if declared_kind is not None:
                 fn_kinds[parameter] = declared_kind
+        fn_integer_values = _native_integer_values(
+            function.body, ir.symbol_types, function.parameter_types,
+        )
         # The Kuro VM deliberately stores dynamically typed values in generic
         # names such as ``*_Value`` and ``_``.  For the native lowering pass,
         # collect hard numeric-use constraints before emitting instructions so
@@ -4087,7 +4177,21 @@ def emit_x86_64_linux(
                 fn_kinds[item.dest] = "text"
             elif fn_op == "CALL":
                 name, *arguments = item.args
-                if name in {"MapGet", "MapSet", "MapHas"}:
+                if name == "__KuroAdmitRow":
+                    if (len(arguments) != 1 or arguments[0] not in fn_integer_values
+                            or fn_kinds.get(arguments[0]) != "number"):
+                        raise NativeBackendError(
+                            f"x86_64-linux action {function.name!r} __KuroAdmitRow requires exactly one statically known Integers operand"
+                        )
+                    fn_load(arguments[0], "%rax")
+                    lines.extend([
+                        "    test %rax, %rax", "    js .Lkuro_overflow",
+                        f"    cmp ${NATIVE_COLLECTION_CAPACITY}, %rax", "    jae .Lkuro_overflow",
+                    ])
+                    fn_store(item.dest)
+                    fn_kinds[item.dest] = "number"
+                    continue
+                elif name in {"MapGet", "MapSet", "MapHas"}:
                     expected_count = 3 if name == "MapSet" else 2
                     if len(arguments) != expected_count:
                         expected_arguments = (

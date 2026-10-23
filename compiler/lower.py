@@ -173,7 +173,7 @@ class Lowering:
             return
         if isinstance(st, CallStmt):
             args = tuple(self._lower_expr(a, b) for a in st.args)
-            op = "ARTIFACT_SUFFIX" if st.name in INTERNAL_INTRINSICS else "CALL"
+            op = "ARTIFACT_SUFFIX" if st.name == "__KuroArtifactSuffix" else "CALL"
             call_args = args if op == "ARTIFACT_SUFFIX" else (st.name, *args)
             dest = b.emit_value(op, *call_args, span=st.span)
             b.emit("STORE_LIST", "_", (dest,), span=st.span)

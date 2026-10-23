@@ -712,6 +712,25 @@ Action TCCheckArtifactSuffixArgs ArgIdx;
     Done.
 Done.
 
+Action TCCheckAdmitRowArgs ArgIdx;
+    TCCAR_Pos = SemPos;
+    Call TCResolveExpr;
+    TCCAR_Type = @_;
+    If TCCAR_Type is not equal to "Integers";
+        If TCCAR_Type is equal to "";
+            Call RecordSemDiag "E3010", TCCAR_Pos, "internal intrinsic '__KuroAdmitRow' requires a statically known Integers value, found unknown";
+        Else;
+            Call RecordSemDiag "E3010", TCCAR_Pos, "internal intrinsic '__KuroAdmitRow' requires a statically known Integers value, found " + TCCAR_Type;
+        Done.
+    Done.
+    Call KindAt SemPos;
+    TCCAR_NextKind = @_;
+    If TCCAR_NextKind is equal to "COMMA";
+        Add 1 to SemPos;
+        Call TCCheckAdmitRowArgs ArgIdx + 1;
+    Done.
+Done.
+
 Action TCCheckCallArgs ActionName;
     Call KindAt SemPos;
     TCCCA_K = @_;
@@ -738,9 +757,13 @@ Action TCCheckCallArgs ActionName;
         If ActionName is equal to "__KuroArtifactSuffix";
             Call TCCheckArtifactSuffixArgs 0;
         Else;
-            Call ActionParamsPosFor ActionName;
-            TCCCA_ParamsPos = @_;
-            Call TCCheckArgList 0, TCCCA_ParamsPos, 0;
+            If ActionName is equal to "__KuroAdmitRow";
+                Call TCCheckAdmitRowArgs 0;
+            Else;
+                Call ActionParamsPosFor ActionName;
+                TCCCA_ParamsPos = @_;
+                Call TCCheckArgList 0, TCCCA_ParamsPos, 0;
+            Done.
         Done.
     Done.
 
@@ -1187,6 +1210,16 @@ Action TCCheckStatement;
             Done.
             Call TCCheckCallArgs TCCS_CallName;
         Else;
+        If TCCS_CallName is equal to "__KuroAdmitRow";
+            Call TCCountCallArgs;
+            TCCS_ArgCount = @_;
+            If TCCS_ArgCount is not equal to 1;
+                Call RecordSemDiag "E4004", TCCS_CallPos, "internal intrinsic '__KuroAdmitRow' expects 1 argument(s)";
+                Call TCSkipCallArgsOnly;
+            Else;
+                Call TCCheckCallArgs TCCS_CallName;
+            Done.
+        Else;
             Call ActionExists TCCS_CallName;
             TCCS_CallExists = @_;
             If TCCS_CallExists is equal to 0;
@@ -1202,6 +1235,7 @@ Action TCCheckStatement;
                 Done.
                 Call TCCheckCallArgs TCCS_CallName;
             Done.
+        Done.
         Done.
         Add 1 to SemPos;
         Return 1;
