@@ -1,0 +1,43 @@
+{
+  "measurement": "actual unchanged x86_64-linux native artifact launcher ELF; SHT_NOBITS/PT_LOAD census",
+  "capacity_slots_per_native_collection": 65536,
+  "bytes_per_native_collection_backing": 524288,
+  "candidate_additional_integer_arrays": 4,
+  "actual_emitter_allocations_per_added_integer_array": {
+    "collection_backing_bytes": 524288,
+    "per-element-length-sidecar_bytes": 524288,
+    "logical-collection-length_cell_bytes": 8,
+    "total_bytes": 1048584
+  },
+  "expected_four_array_zero_fill_delta_bytes": 4194336,
+  "images": {
+    "baseline": {
+      "file_size": 104432,
+      "bss": {
+        "type": 8,
+        "size": 48385584
+      },
+      "load_file_bytes": 96492,
+      "load_memory_bytes": 48482076,
+      "load_zero_fill_bytes": 48385584
+    },
+    "candidate": {
+      "file_size": 104432,
+      "bss": {
+        "type": 8,
+        "size": 52579920
+      },
+      "load_file_bytes": 96860,
+      "load_memory_bytes": 52676780,
+      "load_zero_fill_bytes": 52579920
+    }
+  },
+  "deltas_candidate_minus_baseline": {
+    "elf_file_size_bytes": 0,
+    "bss_section_bytes": 4194336,
+    "pt_load_file_backed_bytes": 368,
+    "pt_load_memory_bytes": 4194704,
+    "pt_load_zero_fill_bytes": 4194336
+  },
+  "caveat": "Zero-fill reservation only; not RSS, committed pages, startup-zeroing cost, system allocation failure compatibility, or full-ledger proof."
+}

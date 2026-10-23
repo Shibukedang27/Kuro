@@ -16,6 +16,8 @@ Retain each published row's owner ID and immutable scalar raw/display pair, and 
 
 For `N` retained name slots and `R` published historical rows, the candidate needs four descriptor fields per name and one link per row, independent of the number of empty resets/copies. Relative to existing IDs/owners/value/display storage, the proposed extra fields are three per name and one per row. With 64-bit fields and both existing native capacities at 65,536, a fully preallocated implementation would add 2,097,152 bytes of payload, excluding headers, alignment, seeds and ledger scalars. This arithmetic is a sizing estimate, **not** a measured native image or memory-allocation compatibility result. Additional memory can itself fail; no claim of identical system-resource failures follows from an entry-count bound.
 
+The later [native metadata budget probe](vm-native-metadata-budget.md) measures these four ordinary integer arrays through the unchanged Linux backend: it reserves **4,194,336 extra zero-fill bytes**, including per-element length sidecars and logical-length cells. The payload-only estimate above is not the actual backend reservation budget; neither figure certifies a complete linked ledger or system-allocation-failure compatibility.
+
 Each valid row link fits `-1..65,535`, and each per-name length fits `0..65,536` at the current native row ceiling. Descriptor count is bounded by names already retained in the existing name arrays, not by historical IDs. A future hosted implementation must grow alongside its existing storage rather than inherit native ceilings. Atomicity and ordering of multiple native array writes still require implementation-level proof; Python list append is not that proof.
 
 ## Copy and readers
