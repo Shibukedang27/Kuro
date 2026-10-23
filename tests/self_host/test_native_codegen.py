@@ -155,6 +155,10 @@ MACOS_ARM64_HOST = (
     platform.system() == "Darwin"
     and platform.machine().lower() in {"arm64", "aarch64"}
 )
+LINUX_X86_HOST = (
+    platform.system() == "Linux"
+    and platform.machine().lower() in {"x86_64", "amd64"}
+)
 requires_macos_arm64 = pytest.mark.skipif(
     not MACOS_ARM64_HOST,
     reason="executes the default aarch64-macos native codegen target",
@@ -185,7 +189,7 @@ def compile_program_to_codegen(program: str, target: str = "aarch64-macos"):
 
     compiled = compile_with_kuro_driver(program)
     tokens = [str(token) for token in compiled["CompilerOutput"]]
-    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    bytecode = ", ".join(json.dumps(token, ensure_ascii=False) for token in tokens)
     return tokens, run_codegen(bytecode, target=target)
 
 
@@ -2224,15 +2228,128 @@ def test_composed_native_compiler_has_a_fixed_text_record_diag_code_contract():
     )
 
 
-@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
-def test_kuro_native_codegen_rejects_text_concatenation_without_partial_output(target):
+@pytest.mark.parametrize(
+    ("target", "triple", "buffer_section"),
+    [
+        ("x86_64-linux", "x86_64-unknown-linux-gnu", ".section .bss"),
+        ("x86_64-macos", "x86_64-apple-darwin", ".zerofill __DATA,__bss"),
+        ("aarch64-macos", "arm64-apple-macosx", ".zerofill __DATA,__bss"),
+    ],
+)
+def test_kuro_native_codegen_emits_bounded_literal_text_concat_for_each_target(
+    target, triple, buffer_section, tmp_path
+):
     tokens = [
         "BC_CONST_TEXT", "expected ",
         "BC_CONST_TEXT", "identifier",
-        "BC_BINOP", "+",
-        "BC_STORE_LIST", "_",
-        "BC_LOADVAR", "_", "BC_PRINT",
+        "BC_BINOP", "+", "BC_PRINT",
     ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 0
+    assert "L_kuro_text_concat_0_left:" in env["NativeOut"]
+    assert buffer_section in env["NativeOut"]
+    assembly = tmp_path / f"text-concat-{target}.s"
+    obj = tmp_path / f"text-concat-{target}.o"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(
+        ["clang", f"--target={triple}", "-c", str(assembly), "-o", str(obj)],
+        check=True,
+    )
+
+
+def test_kuro_native_codegen_rejects_embedded_nul_text_concat():
+    bytecode = '"BC_CONST_TEXT", "a\\0b", "BC_CONST_TEXT", "c", "BC_BINOP", "+", "BC_PRINT"'
+    env = run_codegen(bytecode, target="x86_64-linux")
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize(("site_count", "expected_failure"), [(32, False), (33, True)])
+def test_kuro_native_codegen_respects_shared_text_literal_pool_concat_ceiling(
+    site_count, expected_failure
+):
+    tokens = [
+        token
+        for _ in range(site_count)
+        for token in ("BC_CONST_TEXT", "left", "BC_CONST_TEXT", "right", "BC_BINOP", "+", "BC_PRINT")
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target="x86_64-linux")
+
+    assert env["NativeFailed"] == int(expected_failure)
+    if expected_failure:
+        assert env["NativeOut"] == ""
+
+
+@pytest.mark.skipif(not LINUX_X86_HOST, reason="executes the freestanding x86-64 Linux image")
+@pytest.mark.parametrize(
+    ("left", "right", "expected"),
+    [("hello, ", "world", "hello, world\n"), ("café", "🌍", "café🌍\n")],
+)
+def test_kuro_native_codegen_compiles_and_runs_source_text_concatenation(
+    left, right, expected, tmp_path
+):
+    source = f'Print "{left}" + "{right}".\n'
+    tokens, env = compile_program_to_codegen(source, target="x86_64-linux")
+    assert "BC_BINOP" in tokens and "+" in tokens
+    assert env["NativeFailed"] == 0
+
+    assembly = tmp_path / "text-concat-source.s"
+    executable = tmp_path / "text-concat-source"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(
+        ["clang", "-nostdlib", "-Wl,-e,_start", str(assembly), "-o", str(executable)],
+        check=True,
+    )
+    result = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert result.stdout == expected
+
+
+@requires_macos_arm64
+@pytest.mark.parametrize(
+    ("left", "right", "expected"),
+    [("hello, ", "world", "hello, world\n"), ("café", "🌍", "café🌍\n")],
+)
+def test_kuro_native_codegen_runs_aarch64_macos_source_text_concatenation(
+    left, right, expected, tmp_path
+):
+    source = f'Print "{left}" + "{right}".\n'
+    tokens, env = compile_program_to_codegen(source, target="aarch64-macos")
+    assert "BC_BINOP" in tokens and "+" in tokens
+    assert env["NativeFailed"] == 0
+
+    assembly = tmp_path / "text-concat-macos.s"
+    executable = tmp_path / "text-concat-macos"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(["clang", str(assembly), "-o", str(executable)], check=True)
+    result = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert result.stdout == expected
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+@pytest.mark.parametrize(
+    "tokens",
+    [
+        ["BC_CONST_TEXT", "text", "BC_CONST", "1", "BC_BINOP", "+", "BC_PRINT"],
+        ["BC_CONST", "1.5", "BC_CONST_TEXT", "text", "BC_BINOP", "+", "BC_PRINT"],
+        ["BC_CONST_TEXT", "left", "BC_CONST_TEXT", "right", "BC_BINOP", "-", "BC_PRINT"],
+        [
+            "BC_FUNC_BEGIN", "Join", "BC_PARAM", "Left", "Text", "BC_PARAM", "Right", "Text",
+            "BC_LOADVAR", "Left", "BC_LOADVAR", "Right", "BC_BINOP", "+", "BC_RETURN", "BC_FUNC_END",
+            "BC_CONST", "0", "BC_PRINT",
+        ],
+        [
+            "BC_CONST", "1", "BC_IF_BEGIN", "BC_CONST_TEXT", "left", "BC_CONST_TEXT", "right",
+            "BC_BINOP", "+", "BC_PRINT", "BC_IF_END",
+        ],
+    ],
+)
+def test_kuro_native_codegen_keeps_mixed_dynamic_and_control_flow_text_concat_fail_closed(
+    target, tokens
+):
     bytecode = ", ".join(json.dumps(token) for token in tokens)
     env = run_codegen(bytecode, target=target)
 

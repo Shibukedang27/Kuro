@@ -269,6 +269,27 @@ NativeGlobalSearchResult = -1;
 NativeGlobalVariableSlot = -1;
 NativeGlobalVariableOffset = 0;
 NativeTextLiteralDataOut is Text;
+NativeTextConcatBufferDataOut is Text;
+NativeTextConcatBufferLabel is Text;
+NativeTextConcatBufferBytesText is Text;
+NativeTextConcatLeftValue is Text;
+NativeTextConcatRightValue is Text;
+NativeTextConcatLeftOpcode is Text;
+NativeTextConcatRightOpcode is Text;
+NativeTextConcatLeftOpcodePosition = 0;
+NativeTextConcatRightOpcodePosition = 0;
+NativeTextConcatLeftValuePosition = 0;
+NativeTextConcatRightValuePosition = 0;
+NativeTextConcatLeftLength = 0;
+NativeTextConcatRightLength = 0;
+NativeTextConcatResultLength = 0;
+NativeTextConcatBufferBytes = 0;
+NativeTextConcatScanPosition = 0;
+NativeTextConcatScanLength = 0;
+NativeTextConcatScanCharacter is Text;
+NativeTextConcatLeftHasNul = 0;
+NativeTextConcatRightHasNul = 0;
+NativeStraightTextValid = 0;
 NativeTextLiteral is Text;
 NativeTextLiteralEscaped is Text;
 NativeTextLiteralEscapeCharacter is Text;
@@ -300,6 +321,7 @@ NativeTextLiteralCount = 0;
 NativeTextPrintCounter = 0;
 NativeTextPrintLabelText is Text;
 NativeTextPrintSyscall is Text;
+NativePrintKind is Text;
 NativePrintValueIsText = 0;
 NativePrintValueIsDecimal = 0;
 NativePrintKindIndex = 0;
@@ -828,6 +850,39 @@ Action NativeEmitTextPrint StackOffsetText: Text;
         NativeOut = NativeOut + "    ldr x1, [sp, #" + StackOffsetText + "]\n    mov x2, #0\nL_kuro_text_len_" + NativeTextPrintLabelText + ":\n    ldrb w3, [x1, x2]\n    cbz w3, L_kuro_text_write_" + NativeTextPrintLabelText + "\n    add x2, x2, #1\n    b L_kuro_text_len_" + NativeTextPrintLabelText + "\nL_kuro_text_write_" + NativeTextPrintLabelText + ":\n    mov x0, #1\n    mov x16, #4\n    svc #0x80\n    mov w3, #10\n    strb w3, [sp, #2040]\n    add x1, sp, #2040\n    mov x2, #1\n    mov x0, #1\n    mov x16, #4\n    svc #0x80\n";
     Done.
     Add 1 to NativeTextPrintCounter;
+Done.
+
+Action NativeTextLiteralHasNul Value: Text;
+    Length Value;
+    NativeTextConcatScanLength = @_;
+    NativeTextConcatScanPosition = 0;
+    While NativeTextConcatScanPosition is less than NativeTextConcatScanLength;
+        Get Value NativeTextConcatScanPosition;
+        NativeTextConcatScanCharacter = @_;
+        If NativeTextConcatScanCharacter is equal to "\0";
+            Return 1;
+        Done.
+        Add 1 to NativeTextConcatScanPosition;
+    Done.
+    Return 0;
+Done.
+
+Action NativeEmitTextConcat LeftOffsetText: Text, RightOffsetText: Text, BufferBytes: Integers;
+    Call NativeLengthToText NativeTextConcatCount;
+    NativeTextConcatBufferLabel = "L_kuro_text_concat_" + @_;
+    Call NativeLengthToText BufferBytes;
+    NativeTextConcatBufferBytesText = @_;
+    If NativeTarget is equal to "x86_64-linux";
+        NativeTextConcatBufferDataOut = NativeTextConcatBufferDataOut + NativeTextConcatBufferLabel + ":\n    .zero " + NativeTextConcatBufferBytesText + "\n";
+    Else;
+        NativeTextConcatBufferDataOut = NativeTextConcatBufferDataOut + ".zerofill __DATA,__bss," + NativeTextConcatBufferLabel + "," + NativeTextConcatBufferBytesText + ",0\n";
+    Done.
+    If NativeX86 is equal to 1;
+        NativeOut = NativeOut + "    mov " + LeftOffsetText + "(%rsp), %rsi\n    lea " + NativeTextConcatBufferLabel + "(%rip), %rdi\n" + NativeTextConcatBufferLabel + "_left:\n    movb (%rsi), %al\n    testb %al, %al\n    je " + NativeTextConcatBufferLabel + "_right_start\n    movb %al, (%rdi)\n    inc %rsi\n    inc %rdi\n    jmp " + NativeTextConcatBufferLabel + "_left\n" + NativeTextConcatBufferLabel + "_right_start:\n    mov " + RightOffsetText + "(%rsp), %rsi\n" + NativeTextConcatBufferLabel + "_right:\n    movb (%rsi), %al\n    testb %al, %al\n    je " + NativeTextConcatBufferLabel + "_done\n    movb %al, (%rdi)\n    inc %rsi\n    inc %rdi\n    jmp " + NativeTextConcatBufferLabel + "_right\n" + NativeTextConcatBufferLabel + "_done:\n    movb $0, (%rdi)\n    lea " + NativeTextConcatBufferLabel + "(%rip), %rax\n    mov %rax, " + LeftOffsetText + "(%rsp)\n";
+    Else;
+        NativeOut = NativeOut + "    ldr x1, [sp, #" + LeftOffsetText + "]\n    adrp x2, " + NativeTextConcatBufferLabel + "@PAGE\n    add x2, x2, " + NativeTextConcatBufferLabel + "@PAGEOFF\n" + NativeTextConcatBufferLabel + "_left:\n    ldrb w3, [x1]\n    cbz w3, " + NativeTextConcatBufferLabel + "_right_start\n    strb w3, [x2]\n    add x1, x1, #1\n    add x2, x2, #1\n    b " + NativeTextConcatBufferLabel + "_left\n" + NativeTextConcatBufferLabel + "_right_start:\n    ldr x1, [sp, #" + RightOffsetText + "]\n" + NativeTextConcatBufferLabel + "_right:\n    ldrb w3, [x1]\n    cbz w3, " + NativeTextConcatBufferLabel + "_done\n    strb w3, [x2]\n    add x1, x1, #1\n    add x2, x2, #1\n    b " + NativeTextConcatBufferLabel + "_right\n" + NativeTextConcatBufferLabel + "_done:\n    strb wzr, [x2]\n    adrp x0, " + NativeTextConcatBufferLabel + "@PAGE\n    add x0, x0, " + NativeTextConcatBufferLabel + "@PAGEOFF\n    str x0, [sp, #" + LeftOffsetText + "]\n";
+    Done.
+    Add 1 to NativeTextConcatCount;
 Done.
 
 Action NativeFindFunctionLocalSlot Name: Text, Index: Integers;
@@ -1872,9 +1927,48 @@ Action EmitStraightIntegerProgram;
                 NativeRightOffsetText = @_;
                 Call NativeLengthToText NativeLeftOffset;
                 NativeLeftOffsetText = @_;
-                If NativeStraightNumericValid is equal to 0;
-                    NativeFailed = 1;
+                NativeStraightTextValid = 0;
+                If NativeStraightOperator is equal to "+" and NativeStraightLeftKind is equal to "T" and NativeStraightRightKind is equal to "T";
+                    If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to 0 and NativeTextConcatCount is less than 32 and NativeStraightPos is greater than or equal to 6;
+                        NativeTextConcatLeftOpcodePosition = NativeStraightPos - 6;
+                        NativeTextConcatRightOpcodePosition = NativeStraightPos - 4;
+                        Get BytecodeOut NativeTextConcatLeftOpcodePosition;
+                        NativeTextConcatLeftOpcode = @_;
+                        Get BytecodeOut NativeTextConcatRightOpcodePosition;
+                        NativeTextConcatRightOpcode = @_;
+                        If NativeTextConcatLeftOpcode is equal to "BC_CONST_TEXT" and NativeTextConcatRightOpcode is equal to "BC_CONST_TEXT";
+                            NativeTextConcatLeftValuePosition = NativeTextConcatLeftOpcodePosition + 1;
+                            NativeTextConcatRightValuePosition = NativeTextConcatRightOpcodePosition + 1;
+                            Get BytecodeOut NativeTextConcatLeftValuePosition;
+                            NativeTextConcatLeftValue = @_;
+                            Get BytecodeOut NativeTextConcatRightValuePosition;
+                            NativeTextConcatRightValue = @_;
+                            Call NativeTextLiteralHasNul NativeTextConcatLeftValue;
+                            NativeTextConcatLeftHasNul = @_;
+                            Call NativeTextLiteralHasNul NativeTextConcatRightValue;
+                            NativeTextConcatRightHasNul = @_;
+                            If NativeTextConcatLeftHasNul is equal to 0 and NativeTextConcatRightHasNul is equal to 0;
+                                Length NativeTextConcatLeftValue;
+                                NativeTextConcatLeftLength = @_;
+                                Length NativeTextConcatRightValue;
+                                NativeTextConcatRightLength = @_;
+                                NativeTextConcatResultLength = NativeTextConcatLeftLength + NativeTextConcatRightLength;
+                                NativeTextConcatBufferBytes = NativeTextConcatResultLength * 4 + 1;
+                                If NativeTextConcatBufferBytes is less than or equal to 7993;
+                                    NativeStraightTextValid = 1;
+                                Done.
+                            Done.
+                        Done.
+                    Done.
+                Done.
+                If NativeStraightTextValid is equal to 1;
+                    Call NativeEmitTextConcat NativeLeftOffsetText, NativeRightOffsetText, NativeTextConcatBufferBytes;
+                    Set NativeStackKinds NativeStraightLeftKindIndex to "T";
+                    NativeStackDepth = NativeStackDepth - 1;
                 Else;
+                    If NativeStraightNumericValid is equal to 0;
+                        NativeFailed = 1;
+                    Else;
                     If NativeStraightLeftKind is equal to "D" or NativeStraightRightKind is equal to "D";
                         NativeStraightResultKind = "D";
                         NativeStraightFloatInstruction = "";
@@ -1962,6 +2056,7 @@ Action EmitStraightIntegerProgram;
                             Set NativeStackKinds NativeStraightLeftKindIndex to "I";
                             NativeStackDepth = NativeStackDepth - 1;
                         Done.
+                    Done.
                     Done.
                 Done.
             Else;
@@ -2938,14 +3033,20 @@ Action EmitStraightIntegerProgram;
                 NativeStackOffset = NativeStackDepth * 8 - 8;
                 NativePrintKindIndex = NativeStackDepth - 1;
                 Get NativeStackKinds NativePrintKindIndex;
+                NativePrintKind = @_;
                 NativePrintValueIsDecimal = 0;
-                If @_ is equal to "D";
+                If NativePrintKind is equal to "D";
                     NativePrintValueIsDecimal = 1;
                 Done.
                 Call NativeLengthToText NativeStackOffset;
                 NativeStackOffsetText = @_;
-                Call NativeIsTopValueText NativeStraightPos;
-                NativePrintValueIsText = @_;
+                NativePrintValueIsText = 0;
+                If NativePrintKind is equal to "T";
+                    NativePrintValueIsText = 1;
+                Else;
+                    Call NativeIsTopValueText NativeStraightPos;
+                    NativePrintValueIsText = @_;
+                Done.
                 If NativePrintValueIsText is equal to 1;
                     Call NativeEmitTextPrint NativeStackOffsetText;
                 Else;
@@ -3022,6 +3123,13 @@ Action EmitStraightIntegerProgram;
                     Call NativeEmitDecimalFormatter;
                 Else;
                     Call NativeEmitArmDecimalFormatter;
+                Done.
+            Done.
+            If NativeTextConcatBufferDataOut is not equal to "";
+                If NativeTarget is equal to "x86_64-linux";
+                    NativeOut = NativeOut + "\n.section .bss\n" + NativeTextConcatBufferDataOut;
+                Else;
+                    NativeOut = NativeOut + "\n.section __DATA,__bss\n" + NativeTextConcatBufferDataOut;
                 Done.
             Done.
             Print NativeOut.
@@ -3485,6 +3593,8 @@ NativeRepeatCounter = 0;
 NativeWhileCounter = 0;
 NativeTextLiteralCount = 0;
 NativeTextLiteralDataOut = "";
+NativeTextConcatCount = 0;
+NativeTextConcatBufferDataOut = "";
 NativeDecimalLiteralCount = 0;
 NativeDecimalLiteralDataOut = "";
 NativeTextPrintCounter = 0;
