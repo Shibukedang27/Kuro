@@ -96,6 +96,42 @@ CASES = [
         "old\ntail\n0\n0\n",
         id="global-collection-precedes-scalar-frame-parameter",
     ),
+    pytest.param(
+        [
+            "BC_CONST", "41", "BC_STORE_LIST", "VMNextCollectionId",
+            "BC_MULTI_BEGIN", "BC_CONST_TEXT", "left", "BC_CONST_TEXT", "right",
+            "BC_STORE_MULTI", "VMCollectionIds",
+            "BC_LOADVAR", "VMNextCollectionId", "BC_PRINT",
+            "BC_LOADVAR", "VMCollectionIds", "BC_PRINT",
+        ],
+        "41\nleft\nright\n0\n0\n",
+        id="bytecode-names-do-not-alias-private-helper-state",
+    ),
+    pytest.param(
+        ["BC_CALL_BEGIN", "VMResetCollection", "BC_CALL_END"],
+        "1\n1\n",
+        id="bytecode-calls-do-not-invoke-outer-helper-actions",
+    ),
+    pytest.param(
+        [
+            "BC_MULTI_BEGIN", "BC_CONST", "001.50", "BC_CONST_TEXT", "tail",
+            "BC_STORE_MULTI", "A", "BC_CONST", "0", "BC_GET", "A", "1",
+            "BC_MULTI_BEGIN", "BC_CONST_TEXT", "new", "BC_CONST_TEXT", "end",
+            "BC_STORE_MULTI", "A", "BC_PRINT",
+            "BC_LOADVAR", "_", "BC_PRINT", "BC_LOADVAR", "A", "BC_PRINT",
+        ],
+        "001.50\n001.50\nnew\nend\n0\n0\n",
+        id="get-scalar-stack-and-result-outlive-source-reset",
+    ),
+    pytest.param(
+        [
+            "BC_MULTI_BEGIN", "BC_CONST_TEXT", "first", "BC_CONST_TEXT", "last",
+            "BC_STORE_MULTI", "A", "BC_CONST", "2", "BC_GET", "A", "1",
+            "BC_PRINT",
+        ],
+        "1\n1\n",
+        id="failed-get-stops-before-user-print",
+    ),
 ]
 
 
