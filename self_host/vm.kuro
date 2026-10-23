@@ -374,6 +374,13 @@ Action VMSetResult Value;
     VMSetResultDisplay = "";
 Done.
 
+Action VMAdmitRow Count: Integers;
+    # Use the declared Integer ABI without widening inference for VMPop.
+    # This is not a recovery of the scalar stack's erased type provenance.
+    Call __KuroAdmitRow Count;
+    Return @_;
+Done.
+
 Action VMPush Value;
     Length VMStack;
     VMPush_Len = @_;
@@ -1042,7 +1049,7 @@ Action VMStep;
                     Call VMPop;
                     VMStep_AdmissionCount = @_;
                     If VMLastPoppedKind is equal to 0 and VMLastPoppedDisplay is equal to "";
-                        Call __KuroAdmitRow VMStep_AdmissionCount;
+                        Call VMAdmitRow VMStep_AdmissionCount;
                         VMStep_AdmissionCount = @_;
                         VMSetResultDisplay = "";
                         Call VMSetResult VMStep_AdmissionCount;

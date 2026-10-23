@@ -339,3 +339,17 @@ def test_native_authored_vm_rejects_bounded_malformed_private_calls(admission_la
     execution = subprocess.run([str(admission_launcher)], input=artifact, text=True,
                                capture_output=True, timeout=20, check=False)
     assert (execution.returncode, execution.stdout, execution.stderr) == (1, "", "")
+
+
+@pytest.mark.parametrize("image", ["runtime", "bytecode"])
+def test_full_arm64_vm_images_use_typed_admission_bridge_without_widening_inference(image):
+    from compiler.self_host import native_artifact_launcher_source, native_runtime_source
+    source = (native_runtime_source() if image == "runtime"
+              else native_artifact_launcher_source())
+    assembly = emit_macos_arm64(_compile(source).ir)
+    helper = assembly.split("_kuro_fn_VMAdmitRow:", 1)[1].split("    ret", 1)[0]
+    assert "    cmp x0, #0" in helper
+    assert "    b.lt L_kuro_collection_overflow" in helper
+    assert f"    cmp x0, #{NATIVE_COLLECTION_CAPACITY >> 12}, lsl #12" in helper
+    assert "    b.hs L_kuro_collection_overflow" in helper
+    assert "    bl _kuro_fn_VMAdmitRow" in assembly
