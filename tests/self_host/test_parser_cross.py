@@ -83,6 +83,73 @@ def kuro_ast(source: str):
     return ast_out, parse_failed
 
 
+def test_isword_single_return_preserves_all_branch_results_and_scratch_order():
+    from compiler.pipeline import compile_source
+    from compiler.self_host import native_compiler_source
+
+    result = compile_source(native_compiler_source())
+    assert result.ok, result.diags.render_all()
+    body = result.ir.functions["IsWord"].body
+    returns = [index for index, item in enumerate(body) if item.op == "RETURN"]
+    assert returns == [len(body) - 1]
+    assert body[-2].op == "LOADVAR" and body[-2].args == ("IsWord_Result",)
+
+    result_stores = [
+        item for item in body
+        if item.op == "STORE_LIST" and item.args[0] == "IsWord_Result"
+    ]
+    constants = {
+        item.dest: item.args[0] for item in body
+        if item.op == "CONST" and item.dest
+    }
+    assert [constants[item.args[1][0]] for item in result_stores] == [0, 1, 0]
+
+    cur_value_index = next(
+        index for index, item in enumerate(body)
+        if item.op == "CALL" and item.args[0] == "CurValue"
+    )
+    assert body[cur_value_index + 1].op == "STORE_LIST"
+    assert body[cur_value_index + 1].args[0] == "_"
+    assert body[cur_value_index + 2].op == "LOADVAR"
+    assert body[cur_value_index + 2].args == ("_",)
+    assert body[cur_value_index + 3].op == "STORE_LIST"
+    assert body[cur_value_index + 3].args[0] == "IsWord_V"
+    word_comparison_index = next(
+        index for index, item in enumerate(body)
+        if index > cur_value_index and item.op == "CMP" and item.args[0] == "eq"
+    )
+    assert cur_value_index + 3 < word_comparison_index
+
+
+def test_isword_matching_mismatch_and_nonidentifier_paths_keep_parser_vm_parity():
+    from compiler.self_host import native_compiler_source
+    from test_vm_cross import run_kuro_vm_environment
+
+    for source in ("Print 1.", "Name = 1;\nPrint Name."):
+        expected = python_ast(source)
+        actual, parse_failed = kuro_ast(source)
+        assert parse_failed == 0
+        assert actual == expected
+
+        vm = run_kuro_vm_environment(source)
+        assert vm.get("ParseFailed") == 0
+        assert vm.get("VMFailed") == 0
+        assert vm.get("VMOutput") == [1]
+
+    nonidentifier = "5 = 1;"
+    authored = run_source(native_compiler_source(nonidentifier))
+    assert authored.ok, authored.compile.diags.render_all()
+    env = authored.interpreter.env
+    assert env.get("CompilerFailed") == 1
+    assert env.get("ParseFailed") == 1
+    assert env.get("IsWord_K") == "INTEGER"
+    assert env.get("IsWord_V") is None
+    assert env.get("IsWord_Result") == 0
+    actual, parse_failed = kuro_ast(nonidentifier)
+    assert parse_failed == 1
+    assert actual == ["PROGRAM", "END_BLOCK"]
+
+
 # --- differential test corpus (restricted to the covered grammar subset,
 # see self_host/parser.kuro's header comment) ---------------------------
 

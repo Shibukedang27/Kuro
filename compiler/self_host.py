@@ -146,15 +146,20 @@ def native_artifact_launcher_source() -> str:
     return "\n".join((loader, vm, runtime))
 
 
-def build_native_artifact_launcher(output: str | Path, target: str | None = None):
+def build_native_artifact_launcher(
+    output: str | Path, target: str | None = None,
+):
     """Build the Python-free Kuro bytecode artifact launcher."""
-    from .native import build_native
+    from .native import _artifact_launcher_storage_profile, _build_native
     from .pipeline import compile_source
 
     result = compile_source(native_artifact_launcher_source())
     if not result.ok:
         raise SelfHostError(result.diags.render_all())
-    return build_native(result.ir, output, target=target)
+    profile = _artifact_launcher_storage_profile(result.ir)
+    return _build_native(
+        result.ir, output, target=target, launcher_profile=profile
+    )
 
 
 def native_codegen_source(
