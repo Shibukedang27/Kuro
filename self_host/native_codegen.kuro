@@ -259,6 +259,13 @@ NativeGlobalVariableName is Text;
 NativeGlobalVariableKinds is Text;
 NativeGlobalStoredKind is Text;
 NativeGlobalKindPosition = 0;
+NativeScopedTextGlobalSlot = -1;
+NativeScopedTextCallIndex = 0;
+NativeScopedTextCallBaseDepth = 0;
+NativeScopedTextParameterIndex = 0;
+NativeScopedTextCallAllowed = 0;
+NativeScopedTextIsGlobal = 0;
+NativeScopedTextSeenTextStore = 0;
 NativeHasControlFlow = 0;
 NativeControlFlowDepth = 0;
 NativeIfDepth = 0;
@@ -1689,6 +1696,8 @@ Action EmitStraightIntegerProgram;
     NativeStackDepth = 0;
     NativeCallDepth = 0;
     NativeReturned = 0;
+    NativeScopedTextGlobalSlot = -1;
+    NativeScopedTextSeenTextStore = 0;
     If NativeFunctionMode is equal to 1;
         NativeFunctionUnderscoreKind = "I";
         NativeCurrentFunctionLocalStart = NativeFunctionLocalNameCount;
@@ -1764,6 +1773,12 @@ Action EmitStraightIntegerProgram;
         Get BytecodeOut NativeStraightPos;
         NativeStraightOp = @_;
         Add 1 to NativeStraightPos;
+        # A Text proof lasts only through inert literal/load/call-opening tokens.
+        # Actual calls, stores, mutations and all control-flow/unknown operations
+        # clear it; BC_CALL_BEGIN only frames arguments and has not called yet.
+        If NativeStraightOp is not equal to "BC_CONST" and NativeStraightOp is not equal to "BC_CONST_TEXT" and NativeStraightOp is not equal to "BC_LOADVAR" and NativeStraightOp is not equal to "BC_CALL_BEGIN";
+            NativeScopedTextGlobalSlot = -1;
+        Done.
         NativeStraightKnown = 0;
         # Adjacent canonical one proves exact-once; 2..9 prove entered/multitrip.
         # Keep their flags separate: multitrip never enables If snapshots/joins.
@@ -2595,6 +2610,14 @@ Action EmitStraightIntegerProgram;
                             NativeMainUnderscoreKind = NativeStoreValueKind;
                         Done.
                     Done.
+                    If NativeVariableName is not equal to "_" and NativeStoreValueKind is equal to "T";
+                        If NativeFunctionMode is equal to 0 or NativeVariableIsGlobal is equal to 1;
+                            NativeScopedTextSeenTextStore = 1;
+                            If NativeControlFlowDepth is equal to 0;
+                                NativeScopedTextGlobalSlot = NativeVariableSlot;
+                            Done.
+                        Done.
+                    Done.
                     NativeStackDepth = NativeStackDepth - 1;
                 Done.
             Else;
@@ -2674,6 +2697,33 @@ Action EmitStraightIntegerProgram;
                                 Done.
                             Done.
                         Done.
+                    Done.
+                Done.
+                NativeScopedTextIsGlobal = 0;
+                If NativeVariableName is not equal to "_" and NativeVariableSlot is greater than or equal to 0;
+                    If NativeFunctionMode is equal to 0 or NativeVariableIsGlobal is equal to 1;
+                        NativeScopedTextIsGlobal = 1;
+                    Done.
+                Done.
+                If NativeScopedTextSeenTextStore is equal to 1 and NativeScopedTextIsGlobal is equal to 1;
+                    NativeScopedTextCallAllowed = 0;
+                    If NativeScopedTextGlobalSlot is equal to NativeVariableSlot and NativeCallDepth is greater than 0;
+                        NativeScopedTextCallIndex = NativeCallDepth - 1;
+                        Get NativeCallBaseDepths NativeScopedTextCallIndex;
+                        NativeScopedTextCallBaseDepth = @_;
+                        If NativeStackDepth is greater than or equal to NativeScopedTextCallBaseDepth;
+                            NativeScopedTextParameterIndex = NativeStackDepth - NativeScopedTextCallBaseDepth;
+                            Get NativeCallFunctionIndices NativeScopedTextCallIndex;
+                            NativeCallResolvedIndex = @_;
+                            Call NativeFunctionParamTypeAt NativeCallResolvedIndex, NativeScopedTextParameterIndex;
+                            If @_ is equal to "Text";
+                                NativeVariableKind = "T";
+                                NativeScopedTextCallAllowed = 1;
+                            Done.
+                        Done.
+                    Done.
+                    If NativeScopedTextCallAllowed is equal to 0;
+                        NativeFailed = 1;
                     Done.
                 Done.
                 If NativeVariableSlot is less than 0;
