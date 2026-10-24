@@ -161,7 +161,7 @@ Action CurDiagPos;
     Done.
 Done.
 
-Action RecordDiag Code: Text, Message;
+Action RecordDiag Code: Text, Message: Text;
     Call CurDiagPos;
     RecordDiag_Pos = @_;
     Call ComputeLineCol RecordDiag_Pos;
@@ -206,7 +206,7 @@ Action CurValue;
     Return @_;
 Done.
 
-Action IsWord ExpectedWord;
+Action IsWord ExpectedWord: Text;
     Call CurKind;
     IsWord_K = @_;
     If IsWord_K is equal to "IDENT";
@@ -222,7 +222,7 @@ Action IsWord ExpectedWord;
     Done.
 Done.
 
-Action ExpectKind ExpectedKind;
+Action ExpectKind ExpectedKind: Text;
     Call CurKind;
     ExpectKind_K = @_;
     If ExpectKind_K is equal to ExpectedKind;
@@ -235,7 +235,7 @@ Action ExpectKind ExpectedKind;
     Done.
 Done.
 
-Action ExpectWord ExpectedWord;
+Action ExpectWord ExpectedWord: Text;
     Call IsWord ExpectedWord;
     ExpectWord_Ok = @_;
     If ExpectWord_Ok is equal to 1;

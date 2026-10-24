@@ -1889,6 +1889,23 @@ def test_kuro_native_codegen_fails_closed_for_untyped_action_parameter():
     assert ".Lkuro_fn_0:" in typed_env["NativeOut"]
 
 
+def test_kuro_native_codegen_fails_closed_for_typed_text_action_append():
+    source = (
+        "DiagMessages is Text;\n"
+        "Action RecordDiag Message: Text;\n"
+        "Append Message to DiagMessages;\n"
+        "Done.\n"
+        'Call RecordDiag "diagnostic";\n'
+    )
+    tokens, env = compile_program_to_codegen(source, target="x86_64-linux")
+
+    param_index = tokens.index("BC_PARAM")
+    assert tokens[param_index + 2] == "Text"
+    assert "BC_APPEND" in tokens
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
 def test_composed_native_compiler_has_a_fixed_integer_compute_line_col_contract():
     from compiler.pipeline import compile_source
     from compiler.self_host import native_compiler_source
@@ -1983,15 +2000,22 @@ def test_composed_native_compiler_has_a_fixed_integer_compute_line_col_contract(
         assert increment.op == "CONST" and type(increment.args[0]) is int
 
 
-def test_composed_native_compiler_has_a_fixed_text_record_diag_code_contract():
+def test_composed_native_compiler_types_closed_diagnostic_parameters():
     from compiler.pipeline import compile_source
     from compiler.self_host import native_compiler_source
 
     source = native_compiler_source()
-    assert source.count("Action RecordDiag Code: Text, Message;") == 1
+    assert source.count("Action RecordDiag Code: Text, Message: Text;") == 1
+    assert source.count("Action ExpectKind ExpectedKind: Text;") == 1
+    assert source.count("Action ExpectWord ExpectedWord: Text;") == 1
+    assert source.count("Action IsWord ExpectedWord: Text;") == 1
     result = compile_source(source)
     assert result.ok, result.diags.render_all()
     assert result.ir.functions["RecordDiag"].parameter_types["Code"] == "Text"
+    assert result.ir.functions["RecordDiag"].parameter_types["Message"] == "Text"
+    assert result.ir.functions["ExpectKind"].parameter_types["ExpectedKind"] == "Text"
+    assert result.ir.functions["ExpectWord"].parameter_types["ExpectedWord"] == "Text"
+    assert result.ir.functions["IsWord"].parameter_types["ExpectedWord"] == "Text"
 
     bodies = [("", result.ir.main), *[(name, fn.body) for name, fn in result.ir.functions.items()]]
     sites = []
@@ -2033,9 +2057,9 @@ def test_composed_native_compiler_has_a_fixed_text_record_diag_code_contract():
         for instruction in body
     )
 
-    # Message's fixed callers are Text by construction, but the three
-    # scratch-message loads still cross the shared-scalar kind boundary.
-    assert result.ir.functions["RecordDiag"].parameter_types.get("Message") is None
+    # These are closed internal helpers: their complete fixed callsite set is
+    # Text, including the three dynamic messages proved below. The explicit
+    # contracts do not infer a kind for arbitrary untyped Action parameters.
     expected_scratch = {
         "ExpectKind": "ExpectKind_Msg",
         "ExpectWord": "ExpectWord_Msg",
@@ -2085,14 +2109,59 @@ def test_composed_native_compiler_has_a_fixed_text_record_diag_code_contract():
             "ParseStatement": "ParseStatement_BadV",
         }[scope]
 
-    text_forwarding_calls = 0
-    for _, body in bodies:
+    text_forwarding_calls = {"ExpectKind": {}, "ExpectWord": {}, "IsWord": {}}
+    for scope, body in bodies:
         for index, instruction in enumerate(body):
-            if instruction.op == "CALL" and instruction.args[0] in {"ExpectKind", "ExpectWord"}:
+            if instruction.op == "CALL" and instruction.args[0] in text_forwarding_calls:
                 argument = body[index - 1]
-                assert argument.op == "CONST" and type(argument.args[0]) is str
-                text_forwarding_calls += 1
-    assert text_forwarding_calls > 0
+                assert argument.dest == instruction.args[1]
+                if argument.op == "CONST" and type(argument.args[0]) is str:
+                    argument_text = argument.args[0]
+                else:
+                    assert (
+                        instruction.args[0] == "IsWord"
+                        and argument.op == "LOADVAR"
+                        and argument.args[0] == "ExpectedWord"
+                    )
+                    argument_text = "<ExpectedWord>"
+                text_forwarding_calls[instruction.args[0]].setdefault(scope, []).append(argument_text)
+    expected_text_forwarding_calls = {
+        "ExpectKind": {
+            "ParseArgs": ["RPAREN"],
+            "ParseAtom": ["RPAREN"],
+            "ParseParams": ["RPAREN"],
+            "ParseStatement": ["DOT"] * 5 + ["EQUAL"] + ["SEMI"] * 19,
+        },
+        "ExpectWord": {
+            "ParseComparisonOp": ["equal"] * 3 + ["than"] * 2,
+            "ParseStatement": (
+                ["Done"] * 4 + ["Print"] * 2 + ["is", "otherwise", "then"] + ["to"] * 4
+            ),
+        },
+        "IsWord": {
+            "ExpectWord": ["<ExpectedWord>"],
+            "ParseAndConditionTail": ["and"],
+            "ParseComparison": ["is"],
+            "ParseComparisonOp": (
+                ["at", "equal", "equals", "greater", "least", "less", "most", "not"]
+                + ["or"] * 2 + ["to"] * 5
+            ),
+            "ParseConditionTail": ["or"],
+            "ParseStatement": [
+                "Action", "Add", "Append", "Call", "Compare", "Else", "Entered",
+                "Get", "If", "Length", "Print", "Repeat", "Return", "Set", "Take",
+                "Update", "While", "user",
+            ],
+            "ParseTakeNamesTail": ["and"],
+        },
+    }
+    assert {
+        action: {scope: sorted(arguments) for scope, arguments in callers.items()}
+        for action, callers in text_forwarding_calls.items()
+    } == {
+        action: {scope: sorted(arguments) for scope, arguments in callers.items()}
+        for action, callers in expected_text_forwarding_calls.items()
+    }
 
     message_reads = [
         scope for scope, body in bodies
@@ -2106,6 +2175,23 @@ def test_composed_native_compiler_has_a_fixed_text_record_diag_code_contract():
         for _, body in bodies
         for instruction in body
     )
+
+    for parameter, expected_scopes in (
+        ("ExpectedKind", {"ExpectKind"}),
+        ("ExpectedWord", {"ExpectWord", "IsWord"}),
+    ):
+        parameter_reads = [
+            scope for scope, body in bodies
+            for instruction in body
+            if instruction.op == "LOADVAR" and instruction.args[0] == parameter
+        ]
+        assert parameter_reads and set(parameter_reads) == expected_scopes
+        assert not any(
+            instruction.op in write_target_ops
+            and instruction.args and instruction.args[0] == parameter
+            for _, body in bodies
+            for instruction in body
+        )
 
     assert "TokenValues is Text;" in source
     assert result.ir.symbol_types["TokenValues"] == "Text"
