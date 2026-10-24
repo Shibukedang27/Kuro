@@ -3858,6 +3858,10 @@ def test_kuro_native_codegen_does_not_infer_shared_text_across_action_boundary(t
     assert env["NativeOut"] == ""
 
 
+@pytest.mark.skipif(
+    platform.system() != "Linux",
+    reason="x86_64 Linux executable cannot be linked and run on macOS",
+)
 def test_kuro_owned_x86_linux_codegen_preserves_same_action_shared_text_argument(tmp_path, x86_linux_codegen):
     tokens = [
         "BC_FUNC_BEGIN", "Echo", "BC_PARAM", "Message", "Text",
