@@ -3608,3 +3608,159 @@ def test_kuro_owned_generator_records_analyzer_execution_boundary(tmp_path, x86_
     (tmp_path / "generator-boundary-provenance.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8",
     )
+
+
+@pytest.mark.parametrize(
+    ("target", "triple", "buffer_section"),
+    [
+        ("x86_64-linux", "x86_64-unknown-linux-gnu", ".section .bss"),
+        ("x86_64-macos", "x86_64-apple-darwin", ".zerofill __DATA,__bss"),
+        ("aarch64-macos", "arm64-apple-macosx", ".zerofill __DATA,__bss"),
+    ],
+)
+def test_kuro_native_codegen_cross_assembles_left_associative_literal_concat_chain(
+    target, triple, buffer_section, tmp_path
+):
+    tokens = [
+        "BC_CONST_TEXT", "one ", "BC_CONST_TEXT", "two",
+        "BC_BINOP", "+", "BC_CONST_TEXT", " three", "BC_BINOP", "+", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 0
+    assert "L_kuro_text_concat_0_left:" in env["NativeOut"]
+    assert "L_kuro_text_concat_1_left:" in env["NativeOut"]
+    assert buffer_section in env["NativeOut"]
+    assembly = tmp_path / f"text-concat-chain-{target}.s"
+    obj = tmp_path / f"text-concat-chain-{target}.o"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(
+        ["clang", f"--target={triple}", "-c", str(assembly), "-o", str(obj)],
+        check=True,
+    )
+
+
+def test_kuro_native_codegen_tracks_concat_provenance_for_every_stack_slot():
+    source = CODEGEN.read_text(encoding="utf-8")
+    match = re.search(
+        r"^NativeTextConcatStackLengths = (.*?);$", source, re.MULTILINE | re.DOTALL
+    )
+    assert match is not None
+    values = [value.strip() for value in match.group(1).split(",")]
+    assert len(values) == 128
+    assert set(values) == {"0"}
+
+
+@pytest.mark.parametrize("bytecode", [
+    '"BC_CONST_TEXT", "a\\0b", "BC_CONST_TEXT", "c", "BC_BINOP", "+", "BC_PRINT"',
+    '"BC_CONST_TEXT", "a", "BC_CONST_TEXT", "b", "BC_BINOP", "+", "BC_CONST_TEXT", "c\\0d", "BC_BINOP", "+", "BC_PRINT"',
+])
+def test_kuro_native_codegen_rejects_embedded_nul_anywhere_in_literal_concat_chain(bytecode):
+    env = run_codegen(bytecode, target="x86_64-linux")
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+def test_kuro_native_codegen_bounds_cumulative_literal_concat_chain_output():
+    def bytecode(third):
+        tokens = [
+            "BC_CONST_TEXT", "a" * 999,
+            "BC_CONST_TEXT", "b" * 999,
+            "BC_BINOP", "+",
+            "BC_CONST_TEXT", third,
+            "BC_BINOP", "+", "BC_PRINT",
+        ]
+        return ", ".join(json.dumps(token) for token in tokens)
+
+    at_limit = run_codegen(bytecode(""), target="x86_64-linux")
+    over_limit = run_codegen(bytecode("c"), target="x86_64-linux")
+    assert at_limit["NativeFailed"] == 0
+    assert at_limit["NativeOut"].count(".zero 7993") == 2
+    assert over_limit["NativeFailed"] == 1
+    assert over_limit["NativeOut"] == ""
+
+
+@pytest.mark.skipif(not LINUX_X86_HOST, reason="executes the freestanding x86-64 Linux image")
+def test_kuro_native_codegen_compiles_and_runs_multiple_literal_concat_chains(tmp_path):
+    source = (
+        'Print "hello, " + "world" + " 🌍".\n'
+        'Print "other " + "chain".\n'
+    )
+    tokens, env = compile_program_to_codegen(source, target="x86_64-linux")
+    assert "BC_BINOP" in tokens
+    assert env["NativeFailed"] == 0
+    assert "L_kuro_text_concat_2_left:" in env["NativeOut"]
+
+    assembly = tmp_path / "text-concat-chains.s"
+    executable = tmp_path / "text-concat-chains"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(
+        ["clang", "-nostdlib", "-Wl,-e,_start", str(assembly), "-o", str(executable)],
+        check=True,
+    )
+    result = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert result.stdout == "hello, world 🌍\nother chain\n"
+
+
+@requires_macos_arm64
+def test_kuro_native_codegen_runs_aarch64_macos_literal_concat_chain(tmp_path):
+    source = 'Print "hello, " + "world" + " 🌍".\n'
+    tokens, env = compile_program_to_codegen(source, target="aarch64-macos")
+    assert "BC_BINOP" in tokens
+    assert env["NativeFailed"] == 0
+
+    assembly = tmp_path / "text-concat-chain-macos.s"
+    executable = tmp_path / "text-concat-chain-macos"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(["clang", str(assembly), "-o", str(executable)], check=True)
+    result = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert result.stdout == "hello, world 🌍\n"
+
+
+@pytest.mark.parametrize("tokens", [
+    [
+        "BC_CONST_TEXT", "a", "BC_CONST_TEXT", "b", "BC_CONST_TEXT", "c",
+        "BC_BINOP", "+", "BC_BINOP", "+", "BC_PRINT",
+    ],
+])
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_rejects_right_nested_literal_concat_tree(tokens, target):
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'Saved = "dynamic"; Print Saved + "suffix".\n',
+        'Saved = "dynamic"; Print "prefix" + Saved.\n',
+        'Action Join; Return "a" + "b"; Done. Call Join; Print @_.\n',
+    ],
+)
+def test_kuro_native_codegen_keeps_shared_text_and_action_literal_concat_fail_closed(source):
+    _, env = compile_program_to_codegen(source, target="x86_64-linux")
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+def test_kuro_native_codegen_rejects_text_action_result_as_concat_operand():
+    tokens = [
+        "BC_FUNC_BEGIN", "LiteralText",
+        "BC_CONST_TEXT", "action result", "BC_RETURN", "BC_FUNC_END",
+        "BC_CALL_BEGIN", "LiteralText", "BC_CALL_END",
+        "BC_CONST_TEXT", "suffix", "BC_BINOP", "+", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target="x86_64-linux")
+
+    assert env["NativeFunctionCount"] == 1
+    assert env["NativeFunctionReturnKinds"][0] == "T"
+    assert env["NativeTextConcatStackLengths"][0] == 0
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
