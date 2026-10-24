@@ -2365,6 +2365,7 @@ def test_kuro_native_codegen_rejects_shared_text_global_as_text_argument_without
         "BC_LOADVAR", "Message", "BC_RETURN", "BC_FUNC_END",
         "BC_CONST_TEXT", "shared diagnostic message",
         "BC_STORE_LIST", "MessageScratch",
+        "BC_CONST", "1", "BC_STORE_LIST", "OtherScratch",
         "BC_CALL_BEGIN", "Sink", "BC_LOADVAR", "MessageScratch", "BC_CALL_END",
         "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
     ]
@@ -3764,3 +3765,227 @@ def test_kuro_native_codegen_rejects_text_action_result_as_concat_operand():
     assert env["NativeTextConcatStackLengths"][0] == 0
     assert env["NativeFailed"] == 1
     assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_accepts_direct_shared_text_store_as_typed_call_argument(target):
+    tokens = [
+        "BC_FUNC_BEGIN", "Sink",
+        "BC_PARAM", "Message", "Text",
+        "BC_LOADVAR", "Message", "BC_RETURN", "BC_FUNC_END",
+        "BC_CONST_TEXT", "shared diagnostic message",
+        "BC_STORE_LIST", "MessageScratch",
+        "BC_CALL_BEGIN", "Sink", "BC_LOADVAR", "MessageScratch", "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 0
+    assert env["NativeOut"]
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+@pytest.mark.parametrize(
+    "interference",
+    [
+        ["BC_CONST", "1", "BC_STORE_LIST", "OtherScratch"],
+        ["BC_CONST", "1", "BC_STORE_LIST", "MessageScratch"],
+        ["BC_CALL_BEGIN", "Noop", "BC_CALL_END", "BC_STORE_LIST", "_"],
+        [
+            "BC_CONST", "1", "BC_IF_BEGIN",
+            "BC_CONST_TEXT", "branch text", "BC_STORE_LIST", "MessageScratch",
+            "BC_IF_END",
+        ],
+        [
+            "BC_CONST", "1", "BC_REPEAT_BEGIN",
+            "BC_CONST_TEXT", "loop text", "BC_STORE_LIST", "MessageScratch",
+            "BC_REPEAT_END",
+        ],
+    ],
+)
+def test_kuro_native_codegen_rejects_shared_text_after_unsupported_interference(target, interference):
+    tokens = [
+        "BC_FUNC_BEGIN", "Sink",
+        "BC_PARAM", "Message", "Text",
+        "BC_LOADVAR", "Message", "BC_RETURN", "BC_FUNC_END",
+        "BC_FUNC_BEGIN", "Noop", "BC_FUNC_END",
+        "BC_CONST_TEXT", "shared diagnostic message",
+        "BC_STORE_LIST", "MessageScratch",
+        *interference,
+        "BC_CALL_BEGIN", "Sink", "BC_LOADVAR", "MessageScratch", "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_rejects_shared_text_read_outside_typed_call_argument(target):
+    tokens = [
+        "BC_CONST_TEXT", "shared diagnostic message",
+        "BC_STORE_LIST", "MessageScratch",
+        "BC_LOADVAR", "MessageScratch", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_does_not_infer_shared_text_across_action_boundary(target):
+    tokens = [
+        "BC_FUNC_BEGIN", "Sink",
+        "BC_PARAM", "Message", "Text",
+        "BC_LOADVAR", "Message", "BC_RETURN", "BC_FUNC_END",
+        "BC_FUNC_BEGIN", "WriteShared",
+        "BC_CONST_TEXT", "shared diagnostic message",
+        "BC_STORE_LIST", "MessageScratch",
+        "BC_FUNC_END",
+        "BC_CALL_BEGIN", "WriteShared", "BC_CALL_END", "BC_STORE_LIST", "_",
+        "BC_CALL_BEGIN", "Sink", "BC_LOADVAR", "MessageScratch", "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+def test_kuro_owned_x86_linux_codegen_preserves_same_action_shared_text_argument(tmp_path, x86_linux_codegen):
+    tokens = [
+        "BC_FUNC_BEGIN", "Echo", "BC_PARAM", "Message", "Text",
+        "BC_LOADVAR", "Message", "BC_RETURN", "BC_FUNC_END",
+        "BC_FUNC_BEGIN", "Forward", "BC_PARAM", "Source", "Text",
+        "BC_LOADVAR", "Source", "BC_STORE_LIST", "SharedText",
+        "BC_CALL_BEGIN", "Echo", "BC_LOADVAR", "SharedText", "BC_CALL_END",
+        "BC_RETURN", "BC_FUNC_END",
+        "BC_CALL_BEGIN", "Forward", "BC_CONST_TEXT", "text survives the shared slot", "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    generated = subprocess.run(
+        [str(x86_linux_codegen)],
+        input="kuro.bytecode/1\n" + "\n".join(tokens) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    executable = tmp_path / "kuro-shared-text-argument"
+    subprocess.run(
+        ["clang", "-target", "x86_64-unknown-linux-gnu", "-nostdlib", "-Wl,-e,_start", "-x", "assembler", "-", "-o", str(executable)],
+        input=generated.stdout,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+
+    assert result.stdout == "text survives the shared slot\n"
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_resolves_parameter_before_shared_text_slot(target):
+    tokens = [
+        "BC_FUNC_BEGIN", "Sink",
+        "BC_PARAM", "Message", "Text",
+        "BC_LOADVAR", "Message", "BC_RETURN", "BC_FUNC_END",
+        "BC_FUNC_BEGIN", "Shadowed", "BC_PARAM", "MessageScratch", "Integers",
+        "BC_CALL_BEGIN", "Sink", "BC_LOADVAR", "MessageScratch", "BC_CALL_END",
+        "BC_RETURN", "BC_FUNC_END",
+        "BC_CONST_TEXT", "global text",
+        "BC_STORE_LIST", "MessageScratch",
+        "BC_CALL_BEGIN", "Shadowed", "BC_CONST", "7", "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_checks_the_current_text_argument_position(target):
+    tokens = [
+        "BC_FUNC_BEGIN", "PairSink",
+        "BC_PARAM", "Prefix", "Integers",
+        "BC_PARAM", "Message", "Text",
+        "BC_LOADVAR", "Message", "BC_RETURN", "BC_FUNC_END",
+        "BC_CONST_TEXT", "shared second argument",
+        "BC_STORE_LIST", "MessageScratch",
+        "BC_CALL_BEGIN", "PairSink", "BC_CONST", "7",
+        "BC_LOADVAR", "MessageScratch", "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 0
+    assert env["NativeOut"]
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_does_not_pass_proven_shared_text_to_integer_formal(target):
+    tokens = [
+        "BC_FUNC_BEGIN", "IntegerSink",
+        "BC_PARAM", "Value", "Integers",
+        "BC_LOADVAR", "Value", "BC_RETURN", "BC_FUNC_END",
+        "BC_CONST_TEXT", "shared Text is not an Integer",
+        "BC_STORE_LIST", "MessageScratch",
+        "BC_CALL_BEGIN", "IntegerSink", "BC_LOADVAR", "MessageScratch", "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_rejects_shared_text_as_action_return_value(target):
+    tokens = [
+        "BC_FUNC_BEGIN", "ReturnSharedText",
+        "BC_CONST_TEXT", "shared return",
+        "BC_STORE_LIST", "MessageScratch",
+        "BC_LOADVAR", "MessageScratch", "BC_RETURN", "BC_FUNC_END",
+        "BC_CALL_BEGIN", "ReturnSharedText", "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
+def test_kuro_native_codegen_tracks_nested_call_frames_for_shared_text_argument(target):
+    tokens = [
+        "BC_FUNC_BEGIN", "Identity",
+        "BC_PARAM", "Value", "Text",
+        "BC_LOADVAR", "Value", "BC_RETURN", "BC_FUNC_END",
+        "BC_FUNC_BEGIN", "Pair",
+        "BC_PARAM", "First", "Text",
+        "BC_PARAM", "Second", "Text",
+        "BC_LOADVAR", "Second", "BC_RETURN", "BC_FUNC_END",
+        "BC_CONST_TEXT", "shared nested call argument",
+        "BC_STORE_LIST", "MessageScratch",
+        "BC_CALL_BEGIN", "Pair",
+        "BC_LOADVAR", "MessageScratch",
+        "BC_CALL_BEGIN", "Identity", "BC_LOADVAR", "MessageScratch", "BC_CALL_END",
+        "BC_CALL_END",
+        "BC_STORE_LIST", "_", "BC_LOADVAR", "_", "BC_PRINT",
+    ]
+    bytecode = ", ".join(json.dumps(token) for token in tokens)
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 0
+    assert env["NativeOut"]
