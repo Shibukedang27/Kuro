@@ -295,6 +295,14 @@ NativeTextLiteralEscaped is Text;
 NativeTextLiteralEscapeCharacter is Text;
 NativeTextLiteralLabelText is Text;
 NativeTextLiteralOffsetText is Text;
+NativeTextConcatStackLengths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
 NativeStackDepth = 0;
 NativeInferOneStackDepth = 0;
 NativeInferOneStackIndex = 0;
@@ -773,10 +781,14 @@ Action NativeRegisterTextLiteral LiteralValue: Text;
     NativeTextLiteralLength = @_;
     If NativeTextLiteralLength is less than 1000 and NativeTextLiteralCount is less than 64;
         NativeTextLiteralEscaped = "";
+        NativeTextLiteralConcatSafe = 1;
         NativeTextLiteralEscapeIndex = 0;
         While NativeTextLiteralEscapeIndex is less than NativeTextLiteralLength;
             Get LiteralValue NativeTextLiteralEscapeIndex;
             NativeTextLiteralEscapeCharacter = @_;
+            If NativeTextLiteralEscapeCharacter is equal to "\0";
+                NativeTextLiteralConcatSafe = 0;
+            Done.
             If NativeTextLiteralEscapeCharacter is equal to NativeBackslash or NativeTextLiteralEscapeCharacter is equal to NativeQuote;
                 NativeTextLiteralEscaped = NativeTextLiteralEscaped + NativeBackslash + NativeTextLiteralEscapeCharacter;
             Else;
@@ -807,6 +819,11 @@ Action NativeRegisterTextLiteral LiteralValue: Text;
         Else;
             NativeOut = NativeOut + "    adrp x0, L_kuro_text_constant_" + NativeTextLiteralLabelText + "@PAGE\n    add x0, x0, L_kuro_text_constant_" + NativeTextLiteralLabelText + "@PAGEOFF\n    str x0, [sp, #" + NativeTextLiteralOffsetText + "]\n";
         Done.
+        NativeTextConcatResultLength = 0;
+        If NativeTextLiteralConcatSafe is equal to 1;
+            NativeTextConcatResultLength = NativeTextLiteralLength + 1;
+        Done.
+        Set NativeTextConcatStackLengths NativeStackDepth to NativeTextConcatResultLength;
         Set NativeStackKinds NativeStackDepth to "T";
         Add 1 to NativeStackDepth;
         Add 1 to NativeTextLiteralCount;
@@ -1930,28 +1947,17 @@ Action EmitStraightIntegerProgram;
                 NativeStraightTextValid = 0;
                 If NativeStraightOperator is equal to "+" and NativeStraightLeftKind is equal to "T" and NativeStraightRightKind is equal to "T";
                     If NativeFunctionMode is equal to 0 and NativeControlFlowDepth is equal to 0 and NativeTextConcatCount is less than 32 and NativeStraightPos is greater than or equal to 6;
-                        NativeTextConcatLeftOpcodePosition = NativeStraightPos - 6;
                         NativeTextConcatRightOpcodePosition = NativeStraightPos - 4;
-                        Get BytecodeOut NativeTextConcatLeftOpcodePosition;
-                        NativeTextConcatLeftOpcode = @_;
                         Get BytecodeOut NativeTextConcatRightOpcodePosition;
                         NativeTextConcatRightOpcode = @_;
-                        If NativeTextConcatLeftOpcode is equal to "BC_CONST_TEXT" and NativeTextConcatRightOpcode is equal to "BC_CONST_TEXT";
-                            NativeTextConcatLeftValuePosition = NativeTextConcatLeftOpcodePosition + 1;
-                            NativeTextConcatRightValuePosition = NativeTextConcatRightOpcodePosition + 1;
-                            Get BytecodeOut NativeTextConcatLeftValuePosition;
-                            NativeTextConcatLeftValue = @_;
-                            Get BytecodeOut NativeTextConcatRightValuePosition;
-                            NativeTextConcatRightValue = @_;
-                            Call NativeTextLiteralHasNul NativeTextConcatLeftValue;
-                            NativeTextConcatLeftHasNul = @_;
-                            Call NativeTextLiteralHasNul NativeTextConcatRightValue;
-                            NativeTextConcatRightHasNul = @_;
-                            If NativeTextConcatLeftHasNul is equal to 0 and NativeTextConcatRightHasNul is equal to 0;
-                                Length NativeTextConcatLeftValue;
-                                NativeTextConcatLeftLength = @_;
-                                Length NativeTextConcatRightValue;
-                                NativeTextConcatRightLength = @_;
+                        If NativeTextConcatRightOpcode is equal to "BC_CONST_TEXT";
+                            Get NativeTextConcatStackLengths NativeStraightLeftKindIndex;
+                            NativeTextConcatLeftEncodedLength = @_;
+                            Get NativeTextConcatStackLengths NativeStraightRightKindIndex;
+                            NativeTextConcatRightEncodedLength = @_;
+                            If NativeTextConcatLeftEncodedLength is greater than 0 and NativeTextConcatRightEncodedLength is greater than 0;
+                                NativeTextConcatLeftLength = NativeTextConcatLeftEncodedLength - 1;
+                                NativeTextConcatRightLength = NativeTextConcatRightEncodedLength - 1;
                                 NativeTextConcatResultLength = NativeTextConcatLeftLength + NativeTextConcatRightLength;
                                 NativeTextConcatBufferBytes = NativeTextConcatResultLength * 4 + 1;
                                 If NativeTextConcatBufferBytes is less than or equal to 7993;
@@ -1963,6 +1969,7 @@ Action EmitStraightIntegerProgram;
                 Done.
                 If NativeStraightTextValid is equal to 1;
                     Call NativeEmitTextConcat NativeLeftOffsetText, NativeRightOffsetText, NativeTextConcatBufferBytes;
+                    Set NativeTextConcatStackLengths NativeStraightLeftKindIndex to NativeTextConcatResultLength + 1;
                     Set NativeStackKinds NativeStraightLeftKindIndex to "T";
                     NativeStackDepth = NativeStackDepth - 1;
                 Else;
@@ -2694,6 +2701,7 @@ Action EmitStraightIntegerProgram;
                         NativeOut = NativeOut + "    str x0, [sp, #" + NativeStackOffsetText + "]\n";
                     Done.
                     Set NativeStackKinds NativeStackDepth to NativeVariableKind;
+                    Set NativeTextConcatStackLengths NativeStackDepth to 0;
                     Add 1 to NativeStackDepth;
                 Done.
             Else;
@@ -2985,6 +2993,7 @@ Action EmitStraightIntegerProgram;
                         Done.
                     Done.
                     NativeStackDepth = NativeCallBaseDepth + 1;
+                    Set NativeTextConcatStackLengths NativeCallBaseDepth to 0;
                     NativeCallDepth = NativeCallIndex;
                 Else;
                     NativeFailed = 1;
