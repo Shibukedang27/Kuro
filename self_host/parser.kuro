@@ -174,7 +174,7 @@ Done.
 
 # --- token access helpers ---------------------------------------------
 
-Action PeekKind Offset;
+Action PeekKind Offset: Integers;
     PeekKind_P = TokPos + Offset;
     Compare PeekKind_InBounds PeekKind_P less than TokCount;
     If PeekKind_InBounds is equal to 1;
@@ -185,7 +185,7 @@ Action PeekKind Offset;
     Done.
 Done.
 
-Action PeekValue Offset;
+Action PeekValue Offset: Integers;
     PeekValue_P = TokPos + Offset;
     Compare PeekValue_InBounds PeekValue_P less than TokCount;
     If PeekValue_InBounds is equal to 1;
