@@ -26,4 +26,4 @@ On the candidate above PR #134, the native codegen module passed **247 tests, 21
 
 The Python/toolchain-blocked native smoke passed, including stage-1 compilation and exact full compiler-bytecode reproduction. The restricted bootstrap audit passed its guardrails (9,119 artifact lines, 73 function markers, 294 call markers) and confirmed the full artifact still receives the expected normal codegen rejection (status 1, empty stdout/stderr, no partial assembly) at the `RecordDiag.Message: NONE` gate. The newly built tracked `dist/` files were restored after these checks.
 
-These local gates prove only this scoped lowering contract and the existing baseline checks. The new draft PR's exact-head CI receipt must be verified separately; no merge is authorized.
+These local gates prove only this scoped lowering contract and the existing baseline checks. The code is published as [draft PR #135](https://github.com/Shibukedang27/Kuro/pull/135), stacked on PR #134. Verify all eight CI checks against the final head before calling it verified; no merge is authorized.
