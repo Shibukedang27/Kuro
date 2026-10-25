@@ -1,6 +1,6 @@
 # Kuro independence status and roadmap
 
-**Updated:** 2026-10-24
+**Updated:** 2026-10-25
 **Status:** In progress; Kuro is not yet entirely independent.
 
 This is the running index for the independence work. Each implementation batch is published as a reviewable GitHub pull request with its own change summary, rationale, verification results, and known limits. Keep this page current as follow-up work is pushed.
@@ -8,6 +8,8 @@ This is the running index for the independence work. Each implementation batch i
 **Current native-codegen gate:** the exact compiler self-bytecode artifact contains 9,118 tokens (about 88 KB), while the source audit reports 9,119 lines, 73 functions, and 294 calls; 65,536 is the loader capacity, and 4,096 is a separate scan/work bound. PR #135 at exact `d8cfd9b0c8ec7b8eaa525ca538af66e2fa309a6d` is open/draft/unmerged above PR #134 at `f58a87c4d93a23a2f27113260c3dce78479a22e6`, with all eight #135 checks passing. PR #136 at exact `aa0f966c9d073183630646c0ce5d06351528213f` is open/draft/unmerged above #135, and its eight exact-head checks passed. PR #137 is open/draft/unmerged directly above #136; its final documentation-updated eight-check matrix is pending.
 
 On an exact fresh #136 run, preparation first rejected `PeekKind.Offset: NONE` at artifact token 1218. PR #137 adds explicit `Integers` contracts only for `PeekKind.Offset` and `PeekValue.Offset`, with all six fixed call sites and their literal integer arguments pinned; generic `NONE` inference remains unchanged. On the changed full artifact, native codegen still exits 1 with empty assembly, but the actual first preparation failure has advanced to `IsWord` at token 1332: its three `BC_RETURN` paths are outside the backend's specially supported one-, two-, and four-return shapes. See the [exact gate and callsite evidence](native-codegen-peek-offset-contracts.md); this return-path shape, not the previously suspected append/text issue, is the current first gate.
+
+**Fixed launcher-ledger follow-up:** the [native artifact launcher capacity note](fixed-vm-ledger-launcher-capacity.md) records the source-derived 65,600-row profile for the launcher alone, the unchanged 65,536 generic limit, row publication order, and the remaining native-codegen boundary. Independent review and local verification passed: the full suite reports 2,761 passed/23 skipped; focused launcher/parser/Stage-2 tests report 98 passed; closure audits report 74 passed; four fresh Linux images rebuilt; restricted-PATH Stage-2 output is byte-identical for self and a 272-value initializer; the fresh ledger census is 65,573; ARM64 cross-assembly passed. The local candidate is based on exact PR #137 head `9d6887eaba68c3b4ea8485aeed475e5a7081af5e`, but remains unpushed and no follow-up PR exists. The eight exact-head GitHub checks are pending because no GitHub write server is available in this task. No merge is authorized.
 
 Separate known gaps include dynamic Action-local Text concatenation and native `BC_APPEND`/diagnostic collection storage. A 9,216-token stress input exhausted the 1 GiB arena at about 1.05 GiB peak RSS, while the 4,096-token case used about 786 MiB; raising bounds without new evidence is unsafe. Python-seeded image construction and Clang/LLVM assembly/linking remain dependencies, and full native self-hosting is not claimed.
 

@@ -209,17 +209,17 @@ Done.
 Action IsWord ExpectedWord: Text;
     Call CurKind;
     IsWord_K = @_;
+    IsWord_Result = 0;
     If IsWord_K is equal to "IDENT";
         Call CurValue;
         IsWord_V = @_;
         If IsWord_V is equal to ExpectedWord;
-            Return 1;
+            IsWord_Result = 1;
         Else;
-            Return 0;
+            IsWord_Result = 0;
         Done.
-    Else;
-        Return 0;
     Done.
+    Return IsWord_Result;
 Done.
 
 Action ExpectKind ExpectedKind: Text;

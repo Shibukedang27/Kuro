@@ -9,6 +9,8 @@ from __future__ import annotations
 import subprocess
 import platform
 import shutil
+from dataclasses import dataclass, field
+from contextvars import ContextVar
 from pathlib import Path
 
 from .ir import IRProgram
@@ -238,6 +240,128 @@ NATIVE_INPUT_CAPACITY = 1 << 20
 NATIVE_INPUT_READ_LIMIT = NATIVE_INPUT_CAPACITY - 1
 NATIVE_COLLECTION_CAPACITY = 1 << 16
 NATIVE_COLLECTION_BYTES = NATIVE_COLLECTION_CAPACITY * 8
+_ARTIFACT_LAUNCHER_VM_LEDGER_CAPACITY = 65_600
+_ARTIFACT_LAUNCHER_VM_LEDGER_COLLECTIONS = (
+    "VMCollectionOwners", "VMCollectionItems", "VMCollectionItemDisplay",
+)
+
+
+@dataclass(frozen=True)
+class _ArtifactLauncherStorageProfile:
+    """Explicit storage roles for the one native artifact-launcher build."""
+
+    ledger_collections: frozenset[str]
+    admission_call_ids: frozenset[int]
+    source_ir: IRProgram = field(repr=False, compare=False)
+
+
+_ACTIVE_ARTIFACT_LAUNCHER_PROFILE: ContextVar[
+    _ArtifactLauncherStorageProfile | None
+] = ContextVar("active_artifact_launcher_profile", default=None)
+
+
+def _derive_artifact_launcher_storage_profile(
+    ir: IRProgram,
+) -> _ArtifactLauncherStorageProfile:
+    """Validate the VM append protocol and derive its explicit ledger roles."""
+    function = ir.functions.get("VMAppendCollectionItem")
+    if function is None:
+        raise NativeBackendError("native artifact launcher is missing its VM append helper")
+    calls = [
+        (index, item) for index, item in enumerate(function.body)
+        if item.op == "CALL" and item.args and item.args[0] == "__KuroAdmitRow"
+    ]
+    if len(calls) != 1 or len(calls[0][1].args) != 2:
+        raise NativeBackendError("native artifact launcher VM append admission shape changed")
+    call_index, call = calls[0]
+    counter_temp = call.args[1]
+    if call_index == 0:
+        raise NativeBackendError("native artifact launcher admission has no counter definition")
+    counter_load = function.body[call_index - 1]
+    if not (
+        counter_load.op == "LOADVAR"
+        and counter_load.dest == counter_temp
+        and counter_load.args == ("VMCollectionEntryCount",)
+    ):
+        raise NativeBackendError("native artifact launcher admission is not bound to its ledger counter")
+    count_last = [
+        (index, item) for index, item in enumerate(function.body)
+        if item.op == "ADD" and item.args and item.args[0] == "VMCollectionEntryCount"
+    ]
+    if len(count_last) != 1:
+        raise NativeBackendError("native artifact launcher ledger increment shape changed")
+    increment_index = count_last[0][0]
+    appends = [
+        (index, item.args[0]) for index, item in enumerate(function.body)
+        if call_index < index < increment_index and item.op == "APPEND" and item.args
+    ]
+    expected = _ARTIFACT_LAUNCHER_VM_LEDGER_COLLECTIONS
+    if tuple(name for _, name in appends) != expected:
+        raise NativeBackendError("native artifact launcher ledger columns/order changed")
+    if increment_index <= max(index for index, _ in appends):
+        raise NativeBackendError("native artifact launcher must publish the ledger count last")
+    return _ArtifactLauncherStorageProfile(
+        ledger_collections=frozenset(expected),
+        admission_call_ids=frozenset({id(call)}),
+        source_ir=ir,
+    )
+
+
+def _artifact_launcher_storage_profile(ir: IRProgram) -> _ArtifactLauncherStorageProfile:
+    """Activate the profile only for IR equal to the canonical launcher source."""
+    from .pipeline import compile_source
+    from .self_host import native_artifact_launcher_source
+
+    canonical = compile_source(native_artifact_launcher_source())
+    if not canonical.ok or ir != canonical.ir:
+        raise NativeBackendError(
+            "the fixed VM-ledger profile is available only for the canonical native artifact launcher"
+        )
+    return _derive_artifact_launcher_storage_profile(ir)
+
+
+def _validate_launcher_profile(
+    ir: IRProgram, profile: _ArtifactLauncherStorageProfile | None
+) -> None:
+    if profile is not None and profile.source_ir is not ir:
+        raise NativeBackendError(
+            "native artifact-launcher storage profile cannot be transferred to another IR object"
+        )
+
+
+def _collection_capacity(
+    name: str, profile: _ArtifactLauncherStorageProfile | None
+) -> int:
+    if profile is not None and name in profile.ledger_collections:
+        return _ARTIFACT_LAUNCHER_VM_LEDGER_CAPACITY
+    return NATIVE_COLLECTION_CAPACITY
+
+
+def _row_admission_capacity(
+    instruction, profile: _ArtifactLauncherStorageProfile | None
+) -> int:
+    if profile is not None and id(instruction) in profile.admission_call_ids:
+        return _ARTIFACT_LAUNCHER_VM_LEDGER_CAPACITY
+    return NATIVE_COLLECTION_CAPACITY
+
+
+def _arm64_capacity_compare(register: str, capacity: int, scratch: str = "x4") -> list[str]:
+    if capacity <= 4095:
+        return [f"    cmp {register}, #{capacity}"]
+    if capacity % 4096 == 0 and capacity // 4096 <= 4095:
+        return [f"    cmp {register}, #{capacity // 4096}, lsl #12"]
+    chunks = [(capacity >> shift) & 0xFFFF for shift in (0, 16, 32, 48)]
+    first = next((index for index, chunk in enumerate(chunks) if chunk), 0)
+    lines = [f"    movz {scratch}, #{chunks[first]}" + (f", lsl #{first * 16}" if first else "")]
+    lines.extend(
+        f"    movk {scratch}, #{chunk}, lsl #{index * 16}"
+        for index, chunk in enumerate(chunks)
+        if index > first and chunk
+    )
+    lines.append(f"    cmp {register}, {scratch}")
+    return lines
+
+
 NATIVE_TEXT_HEAP_CAPACITY = 1 << 24
 # Native code generators grow assembly through repeated immutable Text joins.
 # Their 4096-token path needs over 512 MiB cumulatively, so scope a larger heap
@@ -404,8 +528,11 @@ def _arm64_integer_collections(ir: IRProgram, collection_names: set[str]) -> set
         proven = refined
 
 
-def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
+def _emit_dynamic_macos_arm64(
+    ir: IRProgram, *, launcher_profile: _ArtifactLauncherStorageProfile | None = None
+) -> str:
     """Lower the straight-line IR/control-flow subset to real arm64 code."""
+    _validate_launcher_profile(ir, launcher_profile)
     instructions = ir.main
     artifact_suffix_needed = any(item.op == "ARTIFACT_SUFFIX" for item in instructions) or any(
         item.op == "ARTIFACT_SUFFIX"
@@ -463,6 +590,10 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
     input_buffer = "_kuro_input_buffer"
     collection_buffers: dict[str, str] = {name: f"_kuro_collection_{index}" for index, name in enumerate(sorted(collection_names))}
     collection_lengths: dict[str, str] = {name: f"_kuro_collection_len_{index}" for index, name in enumerate(sorted(collection_names))}
+    collection_capacities = {
+        name: _collection_capacity(name, launcher_profile)
+        for name in collection_buffers
+    }
     char_buffers: dict[str, str] = {
         item.dest: f"_kuro_char_{index}"
         for index, item in enumerate(instructions)
@@ -665,8 +796,8 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
         elif op == "STORE_LIST":
             name, temps = item.args
             if name in collection_buffers:
-                if len(temps) > NATIVE_COLLECTION_CAPACITY:
-                    raise NativeBackendError(f"native collection exceeds fixed capacity of {NATIVE_COLLECTION_CAPACITY} values")
+                if len(temps) > collection_capacities[name]:
+                    raise NativeBackendError(f"native collection exceeds fixed capacity of {collection_capacities[name]} values")
                 for index, temp in enumerate(temps):
                     load(temp, "x0")
                     lines.extend([
@@ -729,7 +860,7 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
             lines.extend([
                 f"    adrp x2, {collection_buffers[name]}@PAGE",
                 f"    add x2, x2, {collection_buffers[name]}@PAGEOFF",
-                f"    cmp x1, #{NATIVE_COLLECTION_CAPACITY}",
+                *_arm64_capacity_compare("x1", collection_capacities[name]),
                 "    b.ge L_kuro_collection_overflow",
             ])
             load(temp, "x0")
@@ -814,7 +945,9 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
                 load(arguments[0], "x0")
                 lines.extend([
                     "    cmp x0, #0", "    b.lt L_kuro_collection_overflow",
-                    f"    cmp x0, #{NATIVE_COLLECTION_CAPACITY >> 12}, lsl #12",
+                    *_arm64_capacity_compare(
+                        "x0", _row_admission_capacity(item, launcher_profile)
+                    ),
                     "    b.hs L_kuro_collection_overflow",
                 ])
                 store(item.dest)
@@ -1129,10 +1262,11 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
     lines.append(".section __TEXT,__cstring")
     for function in ir.functions.values():
         function_sections.append(_emit_dynamic_function(
-            function, collection_buffers, collection_lengths, global_labels,
+            function, ir, collection_buffers, collection_lengths, global_labels,
             data, collection_kinds, function_return_kinds, char_buffers,
             known_lengths, global_kinds, ir.symbol_types, collection_names,
             untracked_collection_pointers[function.name],
+            launcher_profile=launcher_profile,
         ))
     if function_sections:
         lines.extend([".section __TEXT,__text", *function_sections, ".section __TEXT,__cstring"])
@@ -1220,8 +1354,8 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
             "    bl _exit",
             "    brk #0",
         ])
-        for label in collection_buffers.values():
-            lines.append(f".zerofill __DATA,__bss,{label},{NATIVE_COLLECTION_BYTES},3")
+        for name, label in collection_buffers.items():
+            lines.append(f".zerofill __DATA,__bss,{label},{collection_capacities[name] * 8},3")
         for label in collection_lengths.values():
             lines.append(f".zerofill __DATA,__bss,{label},8,3")
         for label in global_labels.values():
@@ -1236,14 +1370,24 @@ def _emit_dynamic_macos_arm64(ir: IRProgram) -> str:
 
 
 def _emit_dynamic_function(
-    function, collection_buffers=None, collection_lengths=None, global_labels=None,
+    function, ir: IRProgram, collection_buffers=None, collection_lengths=None, global_labels=None,
     data=None, collection_kinds=None, function_return_kinds=None, char_buffers=None,
     known_lengths=None, global_kinds=None, symbol_types=None,
     static_collection_names=None, untracked_collection_pointers=None,
+    launcher_profile=None,
 ) -> str:
     """Emit numeric action bodies, including recursive calls and branches."""
+    _validate_launcher_profile(ir, launcher_profile)
+    if launcher_profile is not None and not any(
+        candidate is function for candidate in ir.functions.values()
+    ):
+        raise NativeBackendError("profiled Action is not part of its bound launcher IR")
     collection_buffers = collection_buffers or {}
     collection_lengths = collection_lengths or {}
+    collection_capacities = {
+        name: _collection_capacity(name, launcher_profile)
+        for name in collection_buffers
+    }
     global_labels = global_labels or {}
     data = data if data is not None else []
     collection_kinds = collection_kinds or {}
@@ -1341,7 +1485,7 @@ def _emit_dynamic_function(
         elif op == "STORE_LIST":
             name, values = item.args
             if name in collection_buffers:
-                if len(values) > NATIVE_COLLECTION_CAPACITY: raise NativeBackendError(f"native collection exceeds fixed capacity of {NATIVE_COLLECTION_CAPACITY} values")
+                if len(values) > collection_capacities.get(name, NATIVE_COLLECTION_CAPACITY): raise NativeBackendError(f"native collection exceeds fixed capacity of {collection_capacities.get(name, NATIVE_COLLECTION_CAPACITY)} values")
                 for index, value in enumerate(values):
                     load(value, "x0")
                     lines.extend([f"    adrp x1, {collection_buffers[name]}@PAGE", f"    add x1, x1, {collection_buffers[name]}@PAGEOFF", f"    str x0, [x1, #{index * 8}]"])
@@ -1440,7 +1584,9 @@ def _emit_dynamic_function(
             lines.extend([
                 f"    adrp x2, {collection_buffers[name]}@PAGE",
                 f"    add x2, x2, {collection_buffers[name]}@PAGEOFF",
-                f"    cmp x1, #{NATIVE_COLLECTION_CAPACITY}",
+                *_arm64_capacity_compare(
+                    "x1", collection_capacities.get(name, NATIVE_COLLECTION_CAPACITY)
+                ),
                 "    b.ge L_kuro_collection_overflow",
             ])
             load(temp, "x0")
@@ -1557,7 +1703,9 @@ def _emit_dynamic_function(
                 load(arguments[0], "x0")
                 lines.extend([
                     "    cmp x0, #0", "    b.lt L_kuro_collection_overflow",
-                    f"    cmp x0, #{NATIVE_COLLECTION_CAPACITY >> 12}, lsl #12",
+                    *_arm64_capacity_compare(
+                        "x0", _row_admission_capacity(item, launcher_profile)
+                    ),
                     "    b.hs L_kuro_collection_overflow",
                 ])
                 store(item.dest)
@@ -1614,7 +1762,10 @@ def _emit_dynamic_function(
     return "\n".join(lines)
 
 
-def emit_macos_arm64(ir: IRProgram) -> str:
+def _emit_macos_arm64(
+    ir: IRProgram, *, launcher_profile: _ArtifactLauncherStorageProfile | None = None
+) -> str:
+    _validate_launcher_profile(ir, launcher_profile)
     builtin_calls = {"MakeEnum", "EnumIs", "Some", "None", "Ok", "Err", "IsSome", "IsNone", "IsOk", "IsErr", "Unwrap", "UnwrapErr", "MakeRecord", "RecordSet", "RecordGet", "MakeMap", "MapSet", "MapGet", "MapHas", "MakeClosure", "Invoke", "Spawn", "Await", "__KuroAdmitRow"}
     has_dynamic_action = any(
         item.op == "CALL"
@@ -1622,7 +1773,7 @@ def emit_macos_arm64(ir: IRProgram) -> str:
         for item in ir.main
     )
     if any(item.op in {"JUMP", "JUMPF", "LOOP_GUARD", "AND", "OR", "APPEND", "ISCLASS", "INPUT", "ARTIFACT_SUFFIX"} for item in ir.main) or has_dynamic_action:
-        return _emit_dynamic_macos_arm64(ir)
+        return _emit_dynamic_macos_arm64(ir, launcher_profile=launcher_profile)
     labels: list[str] = []
     formats: list[tuple[str, str]] = []
     float_constants: list[tuple[str, str]] = []
@@ -1924,8 +2075,13 @@ def _check_x86_result_owner_channel(
             )
 
 
+def emit_macos_arm64(ir: IRProgram) -> str:
+    """Emit generic ARM64 code with the ordinary fixed collection capacity."""
+    return _emit_macos_arm64(ir)
+
+
 def emit_x86_64_linux(
-    ir: IRProgram, *, text_heap_capacity: int | None = None
+    ir: IRProgram, *, text_heap_capacity: int | None = None,
 ) -> str:
     """Emit the portable integer/text/control-flow subset for Linux x86-64.
 
@@ -1934,6 +2090,8 @@ def emit_x86_64_linux(
     integer formatting use Linux syscalls directly. Complex heap values,
     floating point, and unsupported call forms remain explicit capability errors below.
     """
+    launcher_profile = _ACTIVE_ARTIFACT_LAUNCHER_PROFILE.get()
+    _validate_launcher_profile(ir, launcher_profile)
     text_heap_capacity = _resolve_text_heap_capacity(text_heap_capacity)
     items = ir.main
     # Captured closure objects reserve a 16-byte header and up to 30 numeric
@@ -2111,6 +2269,10 @@ def emit_x86_64_linux(
     collection_buffers = {name: f".Lkuro_collection_{index}" for index, name in enumerate(sorted(collection_names))}
     collection_lengths = {name: f".Lkuro_collection_len_{index}" for index, name in enumerate(sorted(collection_names))}
     collection_item_lengths = {name: f".Lkuro_collection_item_len_{index}" for index, name in enumerate(sorted(collection_names))}
+    collection_capacities = {
+        name: _collection_capacity(name, launcher_profile)
+        for name in collection_buffers
+    }
     main_statically_text = _statically_text_values(
         items, ir.symbol_types, collection_names
     )
@@ -2768,8 +2930,8 @@ def emit_x86_64_linux(
                 task_argument_refs.pop(name, None)
                 task_argument_values.pop(name, None)
             if name in collection_buffers:
-                if len(values) > NATIVE_COLLECTION_CAPACITY:
-                    raise NativeBackendError(f"x86_64-linux collection exceeds fixed capacity of {NATIVE_COLLECTION_CAPACITY}")
+                if len(values) > collection_capacities[name]:
+                    raise NativeBackendError(f"x86_64-linux collection exceeds fixed capacity of {collection_capacities[name]}")
                 for index, value in enumerate(values):
                     load(value)
                     lines.append(f"    mov %rax, {collection_buffers[name]}+{index * 8}(%rip)")
@@ -3157,7 +3319,7 @@ def emit_x86_64_linux(
                 raise NativeBackendError("x86_64-linux APPEND requires a native collection")
             lines.extend([
                 f"    mov {collection_lengths[name]}(%rip), %rcx",
-                f"    cmp ${NATIVE_COLLECTION_CAPACITY}, %rcx", "    jae .Lkuro_overflow",
+                f"    cmp ${collection_capacities[name]}, %rcx", "    jae .Lkuro_overflow",
             ])
             load(value, "%rdx")
             lines.extend([
@@ -3206,7 +3368,8 @@ def emit_x86_64_linux(
                 load(arguments[0], "%rax")
                 lines.extend([
                     "    test %rax, %rax", "    js .Lkuro_overflow",
-                    f"    cmp ${NATIVE_COLLECTION_CAPACITY}, %rax", "    jae .Lkuro_overflow",
+                    f"    cmp ${_row_admission_capacity(instruction, launcher_profile)}, %rax",
+                    "    jae .Lkuro_overflow",
                 ])
                 store(instruction.dest)
                 kinds[instruction.dest] = "number"
@@ -3820,7 +3983,7 @@ def emit_x86_64_linux(
             elif fn_op == "STORE_LIST":
                 name, values = item.args
                 if name in collection_buffers:
-                    if len(values) > NATIVE_COLLECTION_CAPACITY:
+                    if len(values) > collection_capacities[name]:
                         raise NativeBackendError("x86_64-linux action collection exceeds fixed capacity")
                     for index, value in enumerate(values):
                         fn_load(value, "%rax")
@@ -4124,7 +4287,8 @@ def emit_x86_64_linux(
                     raise NativeBackendError(f"x86_64-linux action {function.name!r} cannot append to {name!r}")
                 fn_load(value, "%rdx")
                 lines.extend([
-                    f"    mov {collection_lengths[name]}(%rip), %rcx", f"    cmp ${NATIVE_COLLECTION_CAPACITY}, %rcx", "    jae .Lkuro_overflow",
+                    f"    mov {collection_lengths[name]}(%rip), %rcx",
+                    f"    cmp ${collection_capacities[name]}, %rcx", "    jae .Lkuro_overflow",
                     f"    lea {collection_buffers[name]}(%rip), %rax", "    mov %rdx, (%rax,%rcx,8)", "    inc %rcx",
                     f"    mov %rcx, {collection_lengths[name]}(%rip)",
                 ])
@@ -4186,7 +4350,8 @@ def emit_x86_64_linux(
                     fn_load(arguments[0], "%rax")
                     lines.extend([
                         "    test %rax, %rax", "    js .Lkuro_overflow",
-                        f"    cmp ${NATIVE_COLLECTION_CAPACITY}, %rax", "    jae .Lkuro_overflow",
+                        f"    cmp ${_row_admission_capacity(item, launcher_profile)}, %rax",
+                        "    jae .Lkuro_overflow",
                     ])
                     fn_store(item.dest)
                     fn_kinds[item.dest] = "number"
@@ -4565,12 +4730,12 @@ def emit_x86_64_linux(
         "    ret",
     ])
     lines.extend([".section .bss", ".Lkuro_bss_begin:"])
-    for label in collection_buffers.values():
-        lines.extend([f"    .p2align 3", f"{label}: .zero {NATIVE_COLLECTION_BYTES}"])
+    for name, label in collection_buffers.items():
+        lines.extend([f"    .p2align 3", f"{label}: .zero {collection_capacities[name] * 8}"])
     for label in collection_lengths.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero 8"])
-    for label in collection_item_lengths.values():
-        lines.extend([f"    .p2align 3", f"{label}: .zero {NATIVE_COLLECTION_BYTES}"])
+    for name, label in collection_item_lengths.items():
+        lines.extend([f"    .p2align 3", f"{label}: .zero {collection_capacities[name] * 8}"])
     for label in input_buffers.values():
         lines.extend([f"    .p2align 3", f"{label}: .zero {NATIVE_INPUT_CAPACITY}"])
     for label in input_lengths.values():
@@ -4628,8 +4793,22 @@ def emit_x86_64_linux(
     return "\n".join(lines) + "\n"
 
 
-def emit_x86_64_macos(
-    ir: IRProgram, *, text_heap_capacity: int | None = None
+def _emit_x86_64_linux(
+    ir: IRProgram, *, text_heap_capacity: int | None = None,
+    launcher_profile: _ArtifactLauncherStorageProfile | None = None,
+) -> str:
+    """Internal Linux x86-64 entry that validates an optional launcher profile."""
+    _validate_launcher_profile(ir, launcher_profile)
+    token = _ACTIVE_ARTIFACT_LAUNCHER_PROFILE.set(launcher_profile)
+    try:
+        return emit_x86_64_linux(ir, text_heap_capacity=text_heap_capacity)
+    finally:
+        _ACTIVE_ARTIFACT_LAUNCHER_PROFILE.reset(token)
+
+
+def _emit_x86_64_macos(
+    ir: IRProgram, *, text_heap_capacity: int | None = None,
+    launcher_profile: _ArtifactLauncherStorageProfile | None = None,
 ) -> str:
     """Adapt the freestanding x86-64 lowering to Darwin's syscall ABI.
 
@@ -4639,7 +4818,11 @@ def emit_x86_64_macos(
     the emitted AT&T code.  Keeping this as a narrow ABI adapter means the
     language lowering itself stays platform-independent.
     """
-    assembly = emit_x86_64_linux(ir, text_heap_capacity=text_heap_capacity)
+    _validate_launcher_profile(ir, launcher_profile)
+    assembly = _emit_x86_64_linux(
+        ir, text_heap_capacity=text_heap_capacity,
+        launcher_profile=launcher_profile,
+    )
     assembly = assembly.replace(".section .text", ".section __TEXT,__text")
     assembly = assembly.replace(".section .bss", ".section __DATA,__bss")
     assembly = assembly.replace(".section .rodata", ".section __TEXT,__const")
@@ -4663,25 +4846,40 @@ def emit_x86_64_macos(
     return "\n".join(lines) + "\n"
 
 
-def build_native(
+def emit_x86_64_macos(
+    ir: IRProgram, *, text_heap_capacity: int | None = None
+) -> str:
+    """Emit generic macOS x86-64 code with ordinary fixed capacities."""
+    return _emit_x86_64_macos(ir, text_heap_capacity=text_heap_capacity)
+
+
+def _build_native(
     ir: IRProgram,
     output: str | Path,
     target: str | None = None,
     *,
     text_heap_capacity: int | None = None,
+    launcher_profile: _ArtifactLauncherStorageProfile | None = None,
 ) -> Path:
-    """Build a native image for an explicit or host-selected Kuro target."""
+    """Build a native image with an internal, validated storage profile."""
+    _validate_launcher_profile(ir, launcher_profile)
     text_heap_capacity = _resolve_text_heap_capacity(text_heap_capacity)
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
     assembly = destination.with_suffix(".s")
     selected = target or ("aarch64-macos" if __import__("platform").system() == "Darwin" and __import__("platform").machine() == "arm64" else "x86_64-linux")
     if selected == "aarch64-macos":
-        assembly.write_text(emit_macos_arm64(ir), encoding="utf-8")
+        assembly.write_text(
+            _emit_macos_arm64(ir, launcher_profile=launcher_profile),
+            encoding="utf-8",
+        )
         command = ["clang", str(assembly), "-o", str(destination)]
     elif selected == "x86_64-macos":
         assembly.write_text(
-            emit_x86_64_macos(ir, text_heap_capacity=text_heap_capacity),
+            _emit_x86_64_macos(
+                ir, text_heap_capacity=text_heap_capacity,
+                launcher_profile=launcher_profile,
+            ),
             encoding="utf-8",
         )
         command = [
@@ -4690,7 +4888,10 @@ def build_native(
         ]
     elif selected == "x86_64-linux":
         assembly.write_text(
-            emit_x86_64_linux(ir, text_heap_capacity=text_heap_capacity),
+            _emit_x86_64_linux(
+                ir, text_heap_capacity=text_heap_capacity,
+                launcher_profile=launcher_profile,
+            ),
             encoding="utf-8",
         )
         # The Linux image is freestanding: no libc startup or foreign runtime
@@ -4706,3 +4907,16 @@ def build_native(
             raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, detail)
     destination.chmod(0o755)
     return destination
+
+
+def build_native(
+    ir: IRProgram,
+    output: str | Path,
+    target: str | None = None,
+    *,
+    text_heap_capacity: int | None = None,
+) -> Path:
+    """Build a generic native image; all collections stay at 65,536 rows."""
+    return _build_native(
+        ir, output, target=target, text_heap_capacity=text_heap_capacity
+    )

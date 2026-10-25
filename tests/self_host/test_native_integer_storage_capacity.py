@@ -80,6 +80,7 @@ def test_fresh_bytecode_stage_compiler_reproduces_self_and_large_initializer(
     )
     assert (stage1.returncode, stage1.stderr) == (0, "")
     assert stage1.stdout.startswith("kuro.bytecode/1\n")
+    assert len(stage1.stdout.splitlines()) - 1 == 9_124
     (tmp_path / "stage1.kurobc").write_text(stage1.stdout, encoding="utf-8")
     for name, program, expected in [
         ("self", source, stage1.stdout),
