@@ -209,6 +209,37 @@ def _bytecode_for_function_count(function_count: int) -> list[str]:
     return [*tokens, "BC_CONST", "7", "BC_PRINT"]
 
 
+def _bytecode_for_global_arena_census() -> list[str]:
+    """Mirror the audited 191 action / 84 main names and 266 unique slots."""
+    tokens = ["BC_FUNC_BEGIN", "ReadHigh", "BC_PARAM", "Depth", "Integers"]
+    for index in range(191):
+        tokens.extend(["BC_CONST", str(index), "BC_STORE_LIST", f"G{index}"])
+    tokens.extend(
+        [
+            "BC_CONST", "2", "BC_REPEAT_BEGIN", "BC_CONST", "1", "BC_ADD", "G190", "BC_REPEAT_END",
+            "BC_LOADVAR", "Depth", "BC_CONST", "0", "BC_CMP", "eq", "BC_IF_BEGIN",
+            "BC_CONST", "0", "BC_STORE_LIST", "_", "BC_ELSE_BEGIN",
+            "BC_CALL_BEGIN", "ReadHigh", "BC_LOADVAR", "Depth", "BC_CONST", "1", "BC_BINOP", "-",
+            "BC_CALL_END", "BC_STORE_LIST", "_", "BC_IF_END",
+            "BC_LOADVAR", "Main83", "BC_RETURN", "BC_FUNC_END",
+        ]
+    )
+    for index in range(9):
+        tokens.extend(["BC_CONST", str(index), "BC_STORE_LIST", f"G{index}"])
+    for index in range(9, 84):
+        value = "42" if index == 83 else str(index)
+        tokens.extend(["BC_CONST", value, "BC_STORE_LIST", f"Main{index}"])
+    tokens.extend(
+        [
+            "BC_CALL_BEGIN", "ReadHigh", "BC_CONST", "1", "BC_CALL_END", "BC_PRINT",
+            "BC_LOADVAR", "G190", "BC_PRINT",
+            "BC_CONST", "1", "BC_REPEAT_BEGIN", "BC_CONST", "1", "BC_ADD", "Main83", "BC_REPEAT_END",
+            "BC_LOADVAR", "Main83", "BC_PRINT",
+        ]
+    )
+    return tokens
+
+
 @pytest.mark.parametrize(
     "function_count,expected_failed",
     [(32, 0), (33, 0), (73, 0), (128, 0), (129, 1)],
@@ -283,8 +314,7 @@ def test_kuro_native_codegen_enforces_exact_4096_token_boundary():
 
 
 def nested_boundary_bytecode(depth=16, global_count=64):
-    # Keep 63 slots established and one fresh: all 16 x 64 snapshot positions
-    # are exercised without exceeding the separate 4096-token program limit.
+    # Keep global_count-1 slots established and one fresh at the branch join.
     tokens = [
         token for index in range(global_count - 1)
         for token in ("BC_CONST", "1", "BC_STORE_LIST", f"Slot{index}")
@@ -304,10 +334,18 @@ def test_kuro_native_codegen_keeps_if_depth_limit_at_sixteen():
     assert rejected["NativeOut"] == ""
 
 
-def test_kuro_native_codegen_keeps_global_slot_limit_at_sixty_four():
-    accepted = run_codegen(", ".join(json.dumps(token) for token in nested_boundary_bytecode()))
-    rejected = run_codegen(", ".join(json.dumps(token) for token in nested_boundary_bytecode(global_count=65)))
+def test_kuro_native_codegen_tracks_branch_snapshots_at_266_global_slots():
+    accepted_bytecode = ", ".join(
+        json.dumps(token) for token in nested_boundary_bytecode(depth=16, global_count=266)
+    )
+    rejected_bytecode = ", ".join(
+        json.dumps(token) for token in nested_boundary_bytecode(depth=16, global_count=267)
+    )
+    accepted = run_codegen(accepted_bytecode, target="x86_64-linux")
+    rejected = run_codegen(rejected_bytecode, target="x86_64-linux")
     assert accepted["NativeFailed"] == 0
+    assert accepted["NativeGlobalVariableCount"] == 266
+    assert ".zero 2128" in accepted["NativeOut"]
     assert rejected["NativeFailed"] == 1
     assert rejected["NativeOut"] == ""
 
@@ -1090,14 +1128,14 @@ def test_kuro_native_codegen_compiles_one_integer_action_local(target, tmp_path)
     assert env["NativeFailed"] == 0
     if target == "x86_64-linux":
         assert "mov %rdi, 1024(%rsp)\n" in env["NativeOut"]
-        assert "mov %rsp, %r15\n" in env["NativeOut"]
-        assert "mov %rax, 1024(%r15)\n" in env["NativeOut"]
-        assert "mov 1024(%r15), %rax" in env["NativeOut"]
+        assert "leaq .Lkuro_global_slots(%rip), %r15\n" in env["NativeOut"]
+        assert "mov %rax, 0(%r15)\n" in env["NativeOut"]
+        assert "mov 0(%r15), %rax" in env["NativeOut"]
     else:
         assert "str x0, [sp, #1024]\n" in env["NativeOut"]
-        assert "mov x19, sp\n" in env["NativeOut"]
-        assert "str x0, [x19, #1024]\n" in env["NativeOut"]
-        assert "ldr x0, [x19, #1024]" in env["NativeOut"]
+        assert "adrp x19, L_kuro_global_slots@PAGE\n" in env["NativeOut"]
+        assert "str x0, [x19, #0]\n" in env["NativeOut"]
+        assert "ldr x0, [x19, #0]" in env["NativeOut"]
         assembly = tmp_path / "action-local-arm64.s"
         object_file = tmp_path / "action-local-arm64.o"
         assembly.write_text(env["NativeOut"], encoding="utf-8")
@@ -1111,7 +1149,7 @@ def test_kuro_native_codegen_compiles_one_integer_action_local(target, tmp_path)
 
 
 @pytest.mark.parametrize("target", ["x86_64-linux", "aarch64-macos"])
-def test_kuro_native_codegen_compiles_two_integer_action_locals(target, tmp_path):
+def test_kuro_native_codegen_compiles_two_shared_action_variables(target, tmp_path):
     source = (
         "Action Mix A: Integers;\n"
         "Left = A + 1;\n"
@@ -1134,11 +1172,11 @@ def test_kuro_native_codegen_compiles_two_integer_action_locals(target, tmp_path
     ]
     assert env["NativeFailed"] == 0
     if target == "x86_64-linux":
-        for slot in (1024, 1032):
+        for slot in (0, 8):
             assert f"mov %rax, {slot}(%r15)\n" in env["NativeOut"]
             assert f"mov {slot}(%r15), %rax" in env["NativeOut"]
     else:
-        for slot in (1024, 1032):
+        for slot in (0, 8):
             assert f"str x0, [x19, #{slot}]\n" in env["NativeOut"]
             assert f"ldr x0, [x19, #{slot}]" in env["NativeOut"]
         assembly = tmp_path / "two-action-locals-arm64.s"
@@ -1167,11 +1205,11 @@ def test_kuro_native_codegen_shares_nonparameter_action_variables_with_caller(ta
     assert "BC_STORE_LIST" in tokens and "Saved" in tokens
     assert env["NativeFailed"] == 0
     if target == "x86_64-linux":
-        assert "mov %rax, 1024(%r15)\n" in env["NativeOut"]
-        assert "mov 1024(%rsp), %rax" in env["NativeOut"]
+        assert "mov %rax, 0(%r15)\n" in env["NativeOut"]
+        assert "mov 0(%r15), %rax" in env["NativeOut"]
     else:
-        assert "str x0, [x19, #1024]\n" in env["NativeOut"]
-        assert "ldr x0, [sp, #1024]" in env["NativeOut"]
+        assert "str x0, [x19, #0]\n" in env["NativeOut"]
+        assert "ldr x0, [x19, #0]" in env["NativeOut"]
         assembly = tmp_path / "shared-action-global-arm64.s"
         object_file = tmp_path / "shared-action-global-arm64.o"
         assembly.write_text(env["NativeOut"], encoding="utf-8")
@@ -1241,12 +1279,12 @@ def test_kuro_native_codegen_updates_action_parameter_and_local_slots(target, tm
 
     assert env["NativeFailed"] == 0
     if target == "x86_64-linux":
-        assert "add 1024(%r15), %rax\n" in env["NativeOut"]
-        assert "mov %rax, 1024(%r15)\n" in env["NativeOut"]
+        assert "add 0(%r15), %rax\n" in env["NativeOut"]
+        assert "mov %rax, 0(%r15)\n" in env["NativeOut"]
         assert "mov %rax, 1024(%rsp)\n" in env["NativeOut"]
     else:
-        assert "ldr x1, [x19, #1024]\n    add x0, x1, x0\n" in env["NativeOut"]
-        assert "str x0, [x19, #1024]\n" in env["NativeOut"]
+        assert "ldr x1, [x19, #0]\n    add x0, x1, x0\n" in env["NativeOut"]
+        assert "str x0, [x19, #0]\n" in env["NativeOut"]
         assert "str x0, [sp, #1024]\n" in env["NativeOut"]
         assembly = tmp_path / "action-update-add-arm64.s"
         object_file = tmp_path / "action-update-add-arm64.o"
@@ -1273,15 +1311,15 @@ def test_kuro_native_codegen_initializes_action_local_from_update_or_add(opcode,
 
     assert env["NativeFailed"] == 0
     if target == "x86_64-linux":
-        assert "movq $0, 1024(%rsp)\n" in env["NativeOut"]
-        assert "mov %rax, 1024(%r15)\n" in env["NativeOut"]
+        assert "movq $0, 0(%r15)\n" in env["NativeOut"]
+        assert "mov %rax, 0(%r15)\n" in env["NativeOut"]
         if opcode == "BC_ADD":
-            assert "add 1024(%r15), %rax\n" in env["NativeOut"]
+            assert "add 0(%r15), %rax\n" in env["NativeOut"]
     else:
-        assert "str xzr, [sp, #1024]\n" in env["NativeOut"]
-        assert "str x0, [x19, #1024]\n" in env["NativeOut"]
+        assert "str xzr, [x19, #0]\n" in env["NativeOut"]
+        assert "str x0, [x19, #0]\n" in env["NativeOut"]
         if opcode == "BC_ADD":
-            assert "ldr x1, [x19, #1024]\n" in env["NativeOut"]
+            assert "ldr x1, [x19, #0]\n" in env["NativeOut"]
         assembly = tmp_path / f"action-{opcode.lower()}-local-arm64.s"
         object_file = tmp_path / f"action-{opcode.lower()}-local-arm64.o"
         assembly.write_text(env["NativeOut"], encoding="utf-8")
@@ -1543,7 +1581,7 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
     assert_compiled_decimal_program(
         generator, tmp_path, target, nested_boundary_bytecode(), "2.5\n", "nested-boundary",
     )
-    for invalid in (nested_boundary_bytecode(depth=17), nested_boundary_bytecode(global_count=65)):
+    for invalid in (nested_boundary_bytecode(depth=17), nested_boundary_bytecode(global_count=267)):
         rejected = subprocess.run(
             [str(generator)], input="kuro.bytecode/1\n" + "\n".join(invalid) + "\n",
             capture_output=True, text=True, timeout=30,
@@ -1588,7 +1626,7 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
         generator, tmp_path, target, loop_init_boundary_bytecode(), "1.5\n", "repeat-boundary",
     )
     for invalid in (loop_init_boundary_bytecode(depth=17),
-                    loop_init_boundary_bytecode(global_count=65)):
+                    loop_init_boundary_bytecode(global_count=267)):
         rejected = subprocess.run(
             [str(generator)], input="kuro.bytecode/1\n" + "\n".join(invalid) + "\n",
             capture_output=True, text=True, timeout=30,
@@ -1627,7 +1665,7 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
         "repeat-branches-boundary",
     )
     for invalid in (repeat_branch_boundary_bytecode(depth=17),
-                    repeat_branch_boundary_bytecode(global_count=65)):
+                    repeat_branch_boundary_bytecode(global_count=267)):
         rejected = subprocess.run(
             [str(generator)], input="kuro.bytecode/1\n" + "\n".join(invalid) + "\n",
             capture_output=True, text=True, timeout=30,
@@ -1654,7 +1692,7 @@ def assert_compiled_decimal_storage(generator, tmp_path, target):
         generator, tmp_path, target, boundary, "1.5\n", "positive-repeat-boundary",
     )
     for invalid in (loop_init_boundary_bytecode(depth=17),
-                    loop_init_boundary_bytecode(global_count=65)):
+                    loop_init_boundary_bytecode(global_count=267)):
         invalid[1] = "2"
         rejected = subprocess.run(
             [str(generator)], input="kuro.bytecode/1\n" + "\n".join(invalid) + "\n",
@@ -1842,8 +1880,8 @@ def test_kuro_native_codegen_rejects_undeclared_action_local_read():
     assert env["NativeFailed"] == 1
 
 
-@pytest.mark.parametrize("global_count, expected_failed", [(64, 0), (65, 1)])
-def test_kuro_native_codegen_bounds_globals_before_reserved_loop_storage(global_count, expected_failed):
+@pytest.mark.parametrize("global_count, expected_failed", [(64, 0), (65, 0), (266, 0), (267, 1)])
+def test_kuro_native_codegen_bounds_globals_in_the_separate_static_arena(global_count, expected_failed):
     tokens = []
     for index in range(global_count):
         tokens.extend(["BC_CONST", str(index), "BC_STORE_LIST", f"G{index}"])
@@ -1851,11 +1889,104 @@ def test_kuro_native_codegen_bounds_globals_before_reserved_loop_storage(global_
     env = run_codegen(bytecode, target="x86_64-linux")
 
     assert env["NativeFailed"] == expected_failed
-    if global_count == 64:
-        assert "movq $0, 1528(%rsp)\n" in env["NativeOut"]
-        assert "mov %rax, 1528(%rsp)\n" in env["NativeOut"]
+    if expected_failed == 0:
+        last_offset = (global_count - 1) * 8
+        arena_bytes = global_count * 8
+        assert f"movq $0, {last_offset}(%r15)\n" in env["NativeOut"]
+        assert f"mov %rax, {last_offset}(%r15)\n" in env["NativeOut"]
+        assert f".zero {arena_bytes}\n" in env["NativeOut"]
     else:
         assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize(
+    ("target", "triple"),
+    [
+        ("x86_64-linux", "x86_64-unknown-linux-gnu"),
+        ("x86_64-macos", "x86_64-apple-darwin"),
+        ("aarch64-macos", "arm64-apple-macosx"),
+    ],
+)
+def test_kuro_native_codegen_omits_empty_global_arena(target, triple, tmp_path):
+    bytecode = ", ".join(json.dumps(token) for token in ["BC_CONST", "42", "BC_PRINT"])
+    env = run_codegen(bytecode, target=target)
+
+    assert env["NativeFailed"] == 0
+    assert env["NativeGlobalVariableCount"] == 0
+    assert "kuro_global_slots" not in env["NativeOut"]
+    assert ".zero 0" not in env["NativeOut"]
+    assembly = tmp_path / f"empty-global-arena-{target}.s"
+    object_file = tmp_path / f"empty-global-arena-{target}.o"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(
+        ["clang", "-target", triple, "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert object_file.stat().st_size > 0
+
+
+@pytest.mark.parametrize(
+    ("target", "triple", "global_base", "repeat_slot", "arena_data"),
+    [
+        ("x86_64-linux", "x86_64-unknown-linux-gnu", "leaq .Lkuro_global_slots(%rip), %r15", "1536(%rsp)", ".zero 2128"),
+        ("x86_64-macos", "x86_64-apple-darwin", "leaq L_kuro_global_slots(%rip), %r15", "1536(%rsp)", "L_kuro_global_slots,2128,3"),
+        ("aarch64-macos", "arm64-apple-macosx", "adrp x19, L_kuro_global_slots@PAGE", "[sp, #1536]", "L_kuro_global_slots,2128,3"),
+    ],
+)
+def test_kuro_native_codegen_separates_266_globals_from_repeat_frames(
+    target, triple, global_base, repeat_slot, arena_data, tmp_path
+):
+    env = run_codegen(", ".join(json.dumps(token) for token in _bytecode_for_global_arena_census()), target=target)
+
+    assert env["NativeFailed"] == 0
+    assert env["NativeGlobalVariableCount"] == 266
+    assert global_base in env["NativeOut"]
+    assert repeat_slot in env["NativeOut"]
+    assert arena_data in env["NativeOut"]
+    if target == "aarch64-macos":
+        assert "add x19, x19, L_kuro_global_slots@PAGEOFF" in env["NativeOut"]
+        assert "ldr x0, [x19, #2120]" in env["NativeOut"]
+        assert "str xzr, [x19, #2120]" in env["NativeOut"]
+        assert "ldr x1, [x19, #1520]" in env["NativeOut"]
+        assert "str x0, [x19, #1520]" in env["NativeOut"]
+        assert "[sp, #2120]" not in env["NativeOut"]
+    else:
+        assert "mov 2120(%r15), %rax" in env["NativeOut"]
+        assert "movq $0, 2120(%r15)" in env["NativeOut"]
+        assert "add 1520(%r15), %rax" in env["NativeOut"]
+        assert "mov %rax, 1520(%r15)" in env["NativeOut"]
+        assert "2120(%rsp)" not in env["NativeOut"]
+    assert "sub $2048, %rsp" in env["NativeOut"] or "sub sp, sp, #2048" in env["NativeOut"]
+
+    assembly = tmp_path / f"global-arena-{target}.s"
+    object_file = tmp_path / f"global-arena-{target}.o"
+    assembly.write_text(env["NativeOut"], encoding="utf-8")
+    subprocess.run(
+        ["clang", "-target", triple, "-c", "-x", "assembler", str(assembly), "-o", str(object_file)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert object_file.stat().st_size > 0
+
+    if (
+        target == "x86_64-linux"
+        and platform.system() == "Linux"
+        and platform.machine().lower() in {"x86_64", "amd64"}
+    ):
+        executable = tmp_path / "global-arena-linux"
+        subprocess.run(
+            ["clang", "-target", triple, "-nostdlib", "-Wl,-e,_start", "-x", "assembler", str(assembly), "-o", str(executable)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=5, check=False)
+        assert result.returncode == 0
+        assert result.stdout == "42\n192\n43\n"
+        assert result.stderr == ""
 
 
 @pytest.mark.parametrize(

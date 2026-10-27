@@ -134,10 +134,10 @@ def test_repeat_branch_joins_accept_new_shapes_and_reject_unsafe_paths(target):
 
 
 @pytest.mark.parametrize("target", ["x86_64-linux", "x86_64-macos", "aarch64-macos"])
-def test_repeat_branch_joins_keep_sixteen_if_frames_and_sixty_four_slots(target):
+def test_repeat_branch_joins_keep_sixteen_if_frames_and_reject_slot_267(target):
     assert _env(repeat_branch_boundary_bytecode(), target)["NativeFailed"] == 0
     for tokens in (repeat_branch_boundary_bytecode(depth=17),
-                   repeat_branch_boundary_bytecode(global_count=65)):
+                   repeat_branch_boundary_bytecode(global_count=267)):
         env = _env(tokens, target)
         assert env["NativeFailed"] == 1
         assert env["NativeOut"] == ""

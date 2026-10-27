@@ -17,7 +17,7 @@ A first Decimal assignment after a completed, unrelated region is permitted if t
 - Conflicting Decimal/Integer/Text representations are rejected even in unreachable arms. Decimal `Update` still requires a Decimal operand; Decimal `Add` accepts only Integer or Decimal operands.
 - Main-program `_` stores inside regions must preserve the slot's entry kind, including across zero-iteration loops. Its existing mutation lowering remains Integer-only within regions, so non-Integer `_` mutation is rejected rather than generalized.
 - Function-free regions must join at empty operand-stack statement boundaries (one condition/count operand at `If`/`Repeat` entry). Raw bytecode carrying values across these joins is rejected; a general value-stack dataflow analysis is not claimed.
-- Existing bounds remain: 64 shared slots, 4096 bytecode tokens, and the existing per-construct nesting limits. Action result-slot joins, type-changing non-Decimal behavior, multi-value storage, and declared-type lowering are not generalized here.
+- Existing bounds remain: 266 shared scalar slots in a separate BSS arena, 4096 bytecode tokens, and the existing per-construct nesting limits. Action result-slot joins, type-changing non-Decimal behavior, multi-value storage, and declared-type lowering are not generalized here.
 
 Rejection sets `NativeFailed` and clears assembly output; it does not silently fall back to the hosted compiler.
 

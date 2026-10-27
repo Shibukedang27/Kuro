@@ -8,7 +8,7 @@ A previously untouched named slot may first acquire a Decimal representation whe
 
 The generator snapshots the kinds of its preregistered global slots at eligible `If` entry. At `Else`, it saves the first arm's kinds and restores the entry snapshot before emitting the second arm. At `Done`, it compares the arms for slots that were untouched on entry. A new Decimal kind is accepted only when both arms establish Decimal; Decimal/Integer and Decimal/Text mismatches reject regardless of arm order. Newly established, conflicting non-Decimal kinds also reject at this join. This avoids mistaking the last emitted arm for the arm that executes.
 
-The entry and first-arm snapshots use two existing-style global Text collections, indexed like the global-kind collection, not Text-character indexing or arrays of snapshot strings. Only one eligible top-level join is active at a time. There is no new allocator implementation, libc dependency, Python lowering, or generated-program dependency. Snapshot lengths are bounded by the existing 64 shared slots and existing control-flow limits.
+The entry and first-arm snapshots use two existing-style global Text collections, indexed like the global-kind collection, not Text-character indexing or arrays of snapshot strings. Only one eligible top-level join is active at a time. There is no new allocator implementation, libc dependency, Python lowering, or generated-program dependency. Snapshot lengths are bounded by the 266-slot shared-scalar capacity and existing control-flow limits; the scalar values themselves live in a separate BSS arena.
 
 ## Boundaries kept deliberately narrow
 
@@ -18,7 +18,7 @@ The entry and first-arm snapshots use two existing-style global Text collections
 - Legacy one-sided Integer/Text assignment behavior is not converted into a general definite-assignment requirement. Its preexisting zero-initialized storage semantics are not a new guarantee of Text-value safety or general non-Decimal type joins.
 - Existing Decimal/Integer/Text representation-conflict checks remain. Action-shared Decimal storage remains unsupported, including unused Actions.
 - The special `_` result slot is not part of the new join; its existing entry-kind guards remain. Operand stacks still must be empty at statement-region joins. No general operand-stack dataflow or result-slot inference is claimed.
-- The existing 64-slot, 4096-token, and per-construct nesting bounds are unchanged. Declared types, multi-value storage, loop fixed points, and nested definite-assignment joins are not generalized.
+- The existing 266-slot, 4096-token, and per-construct nesting bounds are unchanged. Declared types, multi-value storage, loop fixed points, and nested definite-assignment joins are not generalized.
 
 Failure sets `NativeFailed` and clears assembly output. There is no fallback to the hosted compiler.
 

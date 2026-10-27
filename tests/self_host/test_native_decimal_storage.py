@@ -208,10 +208,14 @@ def test_integer_global_addition_remains_compatible():
     assert "BC_ADD" in tokens
 
 
-@pytest.mark.parametrize("count, expected_failed", [(64, 0), (65, 1)])
+@pytest.mark.parametrize("count, expected_failed", [(64, 0), (65, 0), (266, 0), (267, 1)])
 def test_decimal_global_capacity_is_bounded(count, expected_failed):
-    tokens = []
-    for index in range(count):
-        tokens.extend(("BC_CONST", f"{index}.5", "BC_STORE_LIST", f"D{index}"))
+    tokens = ["BC_CONST", "0.5", "BC_STORE_LIST", "D0"]
+    for index in range(1, count):
+        tokens.extend(("BC_LOADVAR", "D0", "BC_STORE_LIST", f"D{index}"))
     env = _bytecode(*tokens)
     assert env["NativeFailed"] == expected_failed
+    if expected_failed == 0:
+        assert env["NativeGlobalVariableCount"] == count
+    else:
+        assert env["NativeOut"] == ""

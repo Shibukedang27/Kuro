@@ -254,6 +254,9 @@ NativeFunctionLocalNameCount = 0;
 NativeCurrentFunctionLocalStart = 0;
 NativeCurrentFunctionLocalCount = 0;
 NativeGlobalVariableNames is Text;
+# Shared globals are capped at 266 8-byte BSS slots, separate from each 2048-byte
+# call frame: operands [0,1024), parameters/locals [1024,1536), Repeat counters
+# [1536,1664), and text-print scratch at byte 2040.
 NativeGlobalVariableCount = 0;
 NativeGlobalVariableName is Text;
 NativeGlobalVariableKinds is Text;
@@ -413,7 +416,7 @@ Action NativeRegisterGlobalVariable Name: Text;
     Call NativeFindGlobalVariable Name, 0;
     NativeGlobalVariableSlot = @_;
     If NativeGlobalVariableSlot is less than 0;
-        If NativeGlobalVariableCount is less than 64;
+        If NativeGlobalVariableCount is less than 266;
             NativeGlobalVariableSlot = NativeGlobalVariableCount;
             Append Name to NativeGlobalVariableNames;
             Append "?" to NativeGlobalVariableKinds;
@@ -1683,6 +1686,34 @@ Action NativePrepareProgram;
     Done.
 Done.
 
+Action NativeAppendGlobalArenaBase;
+    If NativeGlobalVariableCount is greater than 0;
+        If NativeTarget is equal to "x86_64-linux";
+            NativeOut = NativeOut + "    leaq .Lkuro_global_slots(%rip), %r15\n";
+        Else;
+            If NativeTarget is equal to "x86_64-macos";
+                NativeOut = NativeOut + "    leaq L_kuro_global_slots(%rip), %r15\n";
+            Else;
+                NativeOut = NativeOut + "    adrp x19, L_kuro_global_slots@PAGE\n";
+                NativeOut = NativeOut + "    add x19, x19, L_kuro_global_slots@PAGEOFF\n";
+            Done.
+        Done.
+    Done.
+Done.
+
+Action NativeAppendGlobalArenaStorage;
+    If NativeGlobalVariableCount is greater than 0;
+        NativeGlobalVariableOffset = NativeGlobalVariableCount * 8;
+        Call NativeLengthToText NativeGlobalVariableOffset;
+        NativeGlobalVariableOffsetText = @_;
+        If NativeTarget is equal to "x86_64-linux";
+            NativeOut = NativeOut + "\n.section .bss\n.p2align 3\n.Lkuro_global_slots:\n    .zero " + NativeGlobalVariableOffsetText + "\n";
+        Else;
+            NativeOut = NativeOut + "\n.section __DATA,__bss\n.zerofill __DATA,__bss,L_kuro_global_slots," + NativeGlobalVariableOffsetText + ",3\n";
+        Done.
+    Done.
+Done.
+
 Action EmitStraightIntegerProgram;
     Length BytecodeOut;
     NativeStraightLength = @_;
@@ -1717,14 +1748,15 @@ Action EmitStraightIntegerProgram;
     NativeRegionKinds = "";
     NativeRegionCount = 0;
     NativeX86 = 0;
-    NativeOut = ".section __TEXT,__text\n.globl _main\n_main:\n    sub sp, sp, #2048\n    mov x19, sp\n";
+    NativeOut = ".section __TEXT,__text\n.globl _main\n_main:\n    sub sp, sp, #2048\n";
     If NativeTarget is equal to "x86_64-macos" or NativeTarget is equal to "x86_64-linux";
         NativeX86 = 1;
-        NativeOut = ".section .text\n.globl _start\n_start:\n    sub $2048, %rsp\n    mov %rsp, %r15\n";
+        NativeOut = ".section .text\n.globl _start\n_start:\n    sub $2048, %rsp\n";
         If NativeTarget is equal to "x86_64-macos";
-            NativeOut = ".section __TEXT,__text\n.globl _start\n_start:\n    sub $2048, %rsp\n    mov %rsp, %r15\n";
+            NativeOut = ".section __TEXT,__text\n.globl _start\n_start:\n    sub $2048, %rsp\n";
         Done.
     Done.
+    Call NativeAppendGlobalArenaBase;
     NativeGeneralArgumentRegisterLimit = 8;
     NativeDecimalArgumentRegisterLimit = 8;
     If NativeX86 is equal to 1;
@@ -1733,13 +1765,13 @@ Action EmitStraightIntegerProgram;
     If NativeFunctionMode is equal to 0;
         NativeGlobalInitIndex = 0;
         While NativeGlobalInitIndex is less than NativeGlobalVariableCount;
-            NativeGlobalVariableOffset = 1024 + NativeGlobalInitIndex * 8;
+            NativeGlobalVariableOffset = NativeGlobalInitIndex * 8;
             Call NativeLengthToText NativeGlobalVariableOffset;
             NativeGlobalVariableOffsetText = @_;
             If NativeX86 is equal to 1;
-                NativeOut = NativeOut + "    movq $0, " + NativeGlobalVariableOffsetText + "(%rsp)\n";
+                NativeOut = NativeOut + "    movq $0, " + NativeGlobalVariableOffsetText + "(%r15)\n";
             Else;
-                NativeOut = NativeOut + "    str xzr, [sp, #" + NativeGlobalVariableOffsetText + "]\n";
+                NativeOut = NativeOut + "    str xzr, [x19, #" + NativeGlobalVariableOffsetText + "]\n";
             Done.
             Add 1 to NativeGlobalInitIndex;
         Done.
@@ -2583,21 +2615,24 @@ Action EmitStraightIntegerProgram;
                 Done.
                 If NativeFailed is equal to 0;
                     NativeStackOffset = NativeStackDepth * 8 - 8;
-                    NativeVariableOffset = 1024 + NativeVariableSlot * 8;
+                    NativeVariableOffset = NativeVariableSlot * 8;
+                    If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 0;
+                        NativeVariableOffset = 1024 + NativeVariableSlot * 8;
+                    Done.
                     Call NativeLengthToText NativeStackOffset;
                     NativeStackOffsetText = @_;
                     Call NativeLengthToText NativeVariableOffset;
                     NativeVariableOffsetText = @_;
                     If NativeX86 is equal to 1;
                         NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n";
-                        If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                        If NativeFunctionMode is equal to 0 or NativeVariableIsGlobal is equal to 1;
                             NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%r15)\n";
                         Else;
                             NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
                         Done.
                     Else;
                         NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n";
-                        If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                        If NativeFunctionMode is equal to 0 or NativeVariableIsGlobal is equal to 1;
                             NativeOut = NativeOut + "    str x0, [x19, #" + NativeVariableOffsetText + "]\n";
                         Else;
                             NativeOut = NativeOut + "    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
@@ -2729,21 +2764,24 @@ Action EmitStraightIntegerProgram;
                 If NativeVariableSlot is less than 0;
                     NativeFailed = 1;
                 Else;
-                    NativeVariableOffset = 1024 + NativeVariableSlot * 8;
+                    NativeVariableOffset = NativeVariableSlot * 8;
+                    If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 0;
+                        NativeVariableOffset = 1024 + NativeVariableSlot * 8;
+                    Done.
                     NativeStackOffset = NativeStackDepth * 8;
                     Call NativeLengthToText NativeVariableOffset;
                     NativeVariableOffsetText = @_;
                     Call NativeLengthToText NativeStackOffset;
                     NativeStackOffsetText = @_;
                     If NativeX86 is equal to 1;
-                        If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                        If NativeFunctionMode is equal to 0 or NativeVariableIsGlobal is equal to 1;
                             NativeOut = NativeOut + "    mov " + NativeVariableOffsetText + "(%r15), %rax\n";
                         Else;
                             NativeOut = NativeOut + "    mov " + NativeVariableOffsetText + "(%rsp), %rax\n";
                         Done.
                         NativeOut = NativeOut + "    mov %rax, " + NativeStackOffsetText + "(%rsp)\n";
                     Else;
-                        If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                        If NativeFunctionMode is equal to 0 or NativeVariableIsGlobal is equal to 1;
                             NativeOut = NativeOut + "    ldr x0, [x19, #" + NativeVariableOffsetText + "]\n";
                         Else;
                             NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeVariableOffsetText + "]\n";
@@ -2848,7 +2886,10 @@ Action EmitStraightIntegerProgram;
                 Done.
                 If NativeFailed is equal to 0;
                     NativeStackOffset = NativeStackDepth * 8 - 8;
-                    NativeVariableOffset = 1024 + NativeVariableSlot * 8;
+                    NativeVariableOffset = NativeVariableSlot * 8;
+                    If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 0;
+                        NativeVariableOffset = 1024 + NativeVariableSlot * 8;
+                    Done.
                     Call NativeLengthToText NativeStackOffset;
                     NativeStackOffsetText = @_;
                     Call NativeLengthToText NativeVariableOffset;
@@ -2856,7 +2897,7 @@ Action EmitStraightIntegerProgram;
                     If NativeX86 is equal to 1;
                         If NativeMutationTargetKind is equal to "D" and NativeStraightOp is equal to "BC_ADD";
                             Call NativeEmitNumericFloatOperand NativeStackOffsetText, NativeMutationValueKind, "%xmm0", "%rax";
-                            If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                            If NativeFunctionMode is equal to 0 or NativeVariableIsGlobal is equal to 1;
                                 NativeOut = NativeOut + "    addsd " + NativeVariableOffsetText + "(%r15), %xmm0\n    movsd %xmm0, " + NativeVariableOffsetText + "(%r15)\n";
                             Else;
                                 NativeOut = NativeOut + "    addsd " + NativeVariableOffsetText + "(%rsp), %xmm0\n    movsd %xmm0, " + NativeVariableOffsetText + "(%rsp)\n";
@@ -2864,13 +2905,13 @@ Action EmitStraightIntegerProgram;
                         Else;
                             NativeOut = NativeOut + "    mov " + NativeStackOffsetText + "(%rsp), %rax\n";
                             If NativeStraightOp is equal to "BC_ADD" and NativeVariableWasNew is equal to 0;
-                                If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                                If NativeFunctionMode is equal to 0 or NativeVariableIsGlobal is equal to 1;
                                     NativeOut = NativeOut + "    add " + NativeVariableOffsetText + "(%r15), %rax\n";
                                 Else;
                                     NativeOut = NativeOut + "    add " + NativeVariableOffsetText + "(%rsp), %rax\n";
                                 Done.
                             Done.
-                            If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                            If NativeFunctionMode is equal to 0 or NativeVariableIsGlobal is equal to 1;
                                 NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%r15)\n";
                             Else;
                                 NativeOut = NativeOut + "    mov %rax, " + NativeVariableOffsetText + "(%rsp)\n";
@@ -2879,7 +2920,7 @@ Action EmitStraightIntegerProgram;
                     Else;
                         If NativeMutationTargetKind is equal to "D" and NativeStraightOp is equal to "BC_ADD";
                             Call NativeEmitNumericFloatOperand NativeStackOffsetText, NativeMutationValueKind, "d0", "x0";
-                            If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                            If NativeFunctionMode is equal to 0 or NativeVariableIsGlobal is equal to 1;
                                 NativeOut = NativeOut + "    ldr d1, [x19, #" + NativeVariableOffsetText + "]\n    fadd d0, d1, d0\n    str d0, [x19, #" + NativeVariableOffsetText + "]\n";
                             Else;
                                 NativeOut = NativeOut + "    ldr d1, [sp, #" + NativeVariableOffsetText + "]\n    fadd d0, d1, d0\n    str d0, [sp, #" + NativeVariableOffsetText + "]\n";
@@ -2887,13 +2928,13 @@ Action EmitStraightIntegerProgram;
                         Else;
                             NativeOut = NativeOut + "    ldr x0, [sp, #" + NativeStackOffsetText + "]\n";
                             If NativeStraightOp is equal to "BC_ADD" and NativeVariableWasNew is equal to 0;
-                                If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                                If NativeFunctionMode is equal to 0 or NativeVariableIsGlobal is equal to 1;
                                     NativeOut = NativeOut + "    ldr x1, [x19, #" + NativeVariableOffsetText + "]\n    add x0, x1, x0\n";
                                 Else;
                                     NativeOut = NativeOut + "    ldr x1, [sp, #" + NativeVariableOffsetText + "]\n    add x0, x1, x0\n";
                                 Done.
                             Done.
-                            If NativeFunctionMode is equal to 1 and NativeVariableIsGlobal is equal to 1;
+                            If NativeFunctionMode is equal to 0 or NativeVariableIsGlobal is equal to 1;
                                 NativeOut = NativeOut + "    str x0, [x19, #" + NativeVariableOffsetText + "]\n";
                             Else;
                                 NativeOut = NativeOut + "    str x0, [sp, #" + NativeVariableOffsetText + "]\n";
@@ -3184,6 +3225,7 @@ Action EmitStraightIntegerProgram;
                     Call NativeEmitArmDecimalFormatter;
                 Done.
             Done.
+            Call NativeAppendGlobalArenaStorage;
             If NativeTextConcatBufferDataOut is not equal to "";
                 If NativeTarget is equal to "x86_64-linux";
                     NativeOut = NativeOut + "\n.section .bss\n" + NativeTextConcatBufferDataOut;

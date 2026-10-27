@@ -4,7 +4,7 @@
 
 ## What changed and why
 
-The generator already moves scalar slots as 64-bit words, but named non-parameter loads were always tagged as Integer and Decimal stores were rejected. A bounded kind table now accompanies the existing 64 shared slots. `BC_STORE_LIST` can establish a named Decimal slot; subsequent loads preserve its Decimal kind, and same-kind assignment preserves binary64 bits without conversion. Existing arithmetic, comparisons, argument-independent printing, and the freestanding formatters can consume those loads.
+The generator already moves scalar slots as 64-bit words, but named non-parameter loads were always tagged as Integer and Decimal stores were rejected. A bounded kind table accompanies the 266 shared slots, now stored in a separate zero-initialized BSS arena rather than inside the 2 KiB call frame. `BC_STORE_LIST` can establish a named Decimal slot; subsequent loads preserve its Decimal kind, and same-kind assignment preserves binary64 bits without conversion. Existing arithmetic, comparisons, argument-independent printing, and the freestanding formatters can consume those loads.
 
 `BC_ADD` reuses the existing floating-point mutation lowering for established Decimal slots, accepting Decimal or Integer operands and converting Integer operands to binary64. `BC_UPDATE` requires a Decimal replacement. Initialization through Decimal `BC_ADD`/`BC_UPDATE` alone is still unsupported: establish the slot with `BC_STORE_LIST` first.
 

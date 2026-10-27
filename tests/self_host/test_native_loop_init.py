@@ -200,11 +200,11 @@ def test_native_codegen_rejects_unsupported_repeat_initialization_shapes(target)
 
 
 @pytest.mark.parametrize("target", ["x86_64-linux", "x86_64-macos", "aarch64-macos"])
-def test_exact_once_repeat_keeps_sixteen_loop_and_sixty_four_slot_bounds(target):
+def test_exact_once_repeat_keeps_sixteen_loop_frames_and_rejects_slot_267(target):
     accepted = _bytecode_env(loop_init_boundary_bytecode(), target)
     assert accepted["NativeFailed"] == 0
     for tokens in (loop_init_boundary_bytecode(depth=17),
-                   loop_init_boundary_bytecode(global_count=65)):
+                   loop_init_boundary_bytecode(global_count=267)):
         rejected = _bytecode_env(tokens, target)
         assert rejected["NativeFailed"] == 1
         assert rejected["NativeOut"] == ""

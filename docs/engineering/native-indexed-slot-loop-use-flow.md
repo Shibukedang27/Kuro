@@ -4,7 +4,7 @@ This test-only increment stacks on [PR #86](https://github.com/Shibukedang27/Kur
 
 ## Larger state, unchanged write language
 
-Exact identifiers still follow `[A-Za-z_][A-Za-z0-9_]{0,31}`, excluding the reserved `BC_` namespace. Both reads and literal stores participate in dry-pass discovery. Repeated names reuse the same index; a seventeenth distinct name rejects, including in an unreachable arm or zero-trip body. The complete identity mapping is frozen before evidence emission. This capacity is separate from the production generator's 64-global-slot limit.
+Exact identifiers still follow `[A-Za-z_][A-Za-z0-9_]{0,31}`, excluding the reserved `BC_` namespace. Both reads and literal stores participate in dry-pass discovery. Repeated names reuse the same index; a seventeenth distinct name rejects, including in an unreachable arm or zero-trip body. The complete identity mapping is frozen before evidence emission. This capacity is separate from the production generator's bounded 266-slot global scalar arena.
 
 The accepted input language remains optional literal stores followed by one literal-count Repeat (0–9), containing literal stores, immediate LOADVAR/PRINT observations and literal-condition If/Else statements. Both arms are conservatively visited. The 128-token and 16-nested-If bounds remain. Copies, general expressions, nested/additional loops, computed counts and all other operations remain rejected; no production permission is inferred from this analyzer.
 
@@ -60,7 +60,8 @@ The subsequent [actual-generator boundary regression](native-analyzer-generator-
   tests/self_host/test_native_branch_joins.py \
   tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_runs_decimal_storage \
   tests/self_host/test_native_codegen.py::test_kuro_native_codegen_keeps_if_depth_limit_at_sixteen \
-  tests/self_host/test_native_codegen.py::test_kuro_native_codegen_keeps_global_slot_limit_at_sixty_four \
+  tests/self_host/test_native_codegen.py::test_kuro_native_codegen_tracks_branch_snapshots_at_266_global_slots \
+  tests/self_host/test_native_codegen.py::test_kuro_native_codegen_bounds_globals_in_the_separate_static_arena \
   tests/self_host/test_native_codegen.py::test_kuro_native_codegen_enforces_exact_4096_token_boundary \
   tests/self_host/test_native_codegen.py::test_native_codegen_source_emits_with_macos_arm64_backend \
   --durations=10
