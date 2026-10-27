@@ -954,6 +954,7 @@ def test_kuro_native_codegen_executes_all_parse_comparison_op_return_and_fallthr
     assert result.stderr == ""
 
 
+@pytest.mark.skipif(not LINUX_X86_HOST, reason="requires a Linux x86-64 execution host")
 @pytest.mark.parametrize(
     ("mutation", "expected_output"),
     [
