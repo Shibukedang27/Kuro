@@ -29,6 +29,7 @@ The current target support and release-evidence requirements are summarized in
 [`docs/release-matrix.md`](docs/release-matrix.md).
 [`docs/engineering/independence-status.md`](docs/engineering/independence-status.md)
 tracks the active independence work, verification results, and remaining roadmap.
+The bounded native-codegen return profiles and their fail-closed limits are summarized in [`docs/engineering/native-eight-return-guard-ladder.md`](docs/engineering/native-eight-return-guard-ladder.md).
 
 - `bootstrap/python/` — the original 425-line reference interpreter this
   project started from, frozen and unmodified as the compatibility oracle.
