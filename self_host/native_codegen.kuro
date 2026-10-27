@@ -1550,6 +1550,14 @@ Action NativePrepareProgram;
                                             NativePrepareAllPathsReturn = 1;
                                         Done.
                                     Done.
+                                    # Save serial evidence for the exact shallow early-return ladder in unused array cells.
+                                    If NativePrepareIfDepth is equal to 0 and NativePrepareIfCount is greater than 0 and NativePrepareIfCount is less than 8;
+                                        NativePrepareFrameComplete = 0;
+                                        If NativePrepareFrameHasElse is equal to 1 and NativePrepareFrameThenReturns is equal to 1 and NativePrepareFrameElseReturns is equal to 0;
+                                            NativePrepareFrameComplete = 1;
+                                        Done.
+                                        Set NativePrepareIfThenReturns NativePrepareIfCount to NativePrepareFrameComplete;
+                                    Done.
                                 Else;
                                     NativeFailed = 1;
                                 Done.
@@ -1649,7 +1657,77 @@ Action NativePrepareProgram;
                                 NativeFailed = 1;
                             Done.
                         Else;
-                            NativeFailed = 1;
+                            If NativePrepareReturnCount is equal to 8;
+                                If NativePrepareIfCount is not equal to 7;
+                                    NativeFailed = 1;
+                                Done.
+                                If NativePrepareElseCount is not equal to 7;
+                                    NativeFailed = 1;
+                                Done.
+                                If NativePrepareIfEndCount is not equal to 7;
+                                    NativeFailed = 1;
+                                Done.
+                                If NativePrepareMaxIfDepth is not equal to 1;
+                                    NativeFailed = 1;
+                                Done.
+                                If NativePrepareThenReturnCount is not equal to 8;
+                                    NativeFailed = 1;
+                                Done.
+                                If NativePrepareElseReturnCount is not equal to 0;
+                                    NativeFailed = 1;
+                                Done.
+                                If NativePrepareLastBodyReturn is equal to 0;
+                                    NativeFailed = 1;
+                                Done.
+                                If NativePrepareAllPathsReturn is equal to 0;
+                                    NativeFailed = 1;
+                                Done.
+                                NativePrepareFrameElseReturns = 0;
+                                NativePrepareFrameIndex = 1;
+                                While NativePrepareFrameIndex is less than 8 and NativeFailed is equal to 0;
+                                    Get NativePrepareIfThenReturns NativePrepareFrameIndex;
+                                    If @_ is equal to 1;
+                                        Add 1 to NativePrepareFrameElseReturns;
+                                    Done.
+                                    Add 1 to NativePrepareFrameIndex;
+                                Done.
+                                If NativePrepareFrameElseReturns is not equal to 7;
+                                    NativeFailed = 1;
+                                Done.
+                                If NativeFailed is equal to 0;
+                                    NativePrepareBodyPos = NativePrepareBodyStart;
+                                    While NativePrepareBodyPos is less than NativePrepareBodyEnd and NativeFailed is equal to 0;
+                                        Get BytecodeOut NativePrepareBodyPos;
+                                        NativePrepareBodyOp = @_;
+                                        If NativePrepareBodyOp is equal to "BC_REPEAT_BEGIN" or NativePrepareBodyOp is equal to "BC_REPEAT_END" or NativePrepareBodyOp is equal to "BC_WHILE_BEGIN" or NativePrepareBodyOp is equal to "BC_WHILE_TEST" or NativePrepareBodyOp is equal to "BC_WHILE_END";
+                                            NativeFailed = 1;
+                                        Else;
+                                            If NativePrepareBodyOp is equal to "BC_ELSE_BEGIN";
+                                                NativePrepareGlobalNamePos = NativePrepareBodyPos + 1;
+                                                If NativePrepareGlobalNamePos is less than NativePrepareBodyEnd;
+                                                    Get BytecodeOut NativePrepareGlobalNamePos;
+                                                    If @_ is not equal to "BC_IF_END";
+                                                        NativeFailed = 1;
+                                                    Done.
+                                                Else;
+                                                    NativeFailed = 1;
+                                                Done.
+                                            Done.
+                                            If NativeFailed is equal to 0;
+                                                Call NativeOpcodeArity NativePrepareBodyOp;
+                                                NativePrepareOperandCount = @_;
+                                                If NativeOpcodeKnown is equal to 0;
+                                                    NativeFailed = 1;
+                                                Else;
+                                                    NativePrepareBodyPos = NativePrepareBodyPos + NativePrepareOperandCount + 1;
+                                                Done.
+                                            Done.
+                                        Done.
+                                    Done.
+                                Done.
+                            Else;
+                                NativeFailed = 1;
+                            Done.
                         Done.
                     Done.
                 Done.

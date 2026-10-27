@@ -72,6 +72,59 @@ def recursive_numeric_action_program():
     )
 
 
+def eight_return_guard_ladder_program(
+    *,
+    recursive=False,
+    loop_kind=None,
+    nonempty_else=False,
+    duplicate_and_missing=False,
+    missing_fallback=False,
+    trailing_statement=False,
+):
+    source = "Action Ladder Value: Integers;\n"
+    for index in range(7):
+        source += f"If Value is equal to {index};\n"
+        if loop_kind == "repeat" and index == 5:
+            source += "Repeat 1;\nAdd 1 to Value;\nDone.\n"
+        elif loop_kind == "while" and index == 5:
+            source += "While Value is less than 0;\nAdd 1 to Value;\nDone.\n"
+        if duplicate_and_missing and index == 0:
+            source += "Return 10;\nReturn 11;\n"
+        elif duplicate_and_missing and index == 1:
+            pass
+        elif recursive and index == 5:
+            source += "Value = Value + 1;\nCall Ladder Value;\nReturn 1 + @_;\n"
+        else:
+            source += f"Return {10 + index};\n"
+        if nonempty_else and index == 0:
+            source += "Else;\nPrint Value.\n"
+        source += "Done.\n"
+    if not missing_fallback:
+        source += "Return 0;\n"
+    if trailing_statement:
+        source += "Print Value.\n"
+    source += "Done.\n"
+    source += "".join(f"Call Ladder {value};\nPrint @_.\n" for value in range(8))
+    return source
+
+
+def eight_return_nested_tree_program():
+    leaves = iter(range(11, 19))
+
+    def branch(depth):
+        if depth == 0:
+            return f"Return {next(leaves)};\n"
+        return (
+            "If Value is less than 0;\n"
+            + branch(depth - 1)
+            + "Else;\n"
+            + branch(depth - 1)
+            + "Done.\n"
+        )
+
+    return "Action Nested Value: Integers;\n" + branch(3) + "Done.\nCall Nested 0;\nPrint @_.\n"
+
+
 def four_parameter_action_program():
     return (
         "Action IntegerQuad First: Integers, Second: Integers, Third: Integers, Fourth: Integers;\n"
@@ -499,6 +552,190 @@ def test_kuro_native_codegen_supports_nested_conditional_integer_action_returns(
     assert tokens.count("BC_RETURN") == 4
     assert env["NativeFailed"] == 0
     assert env["NativeOut"].count("ret\n") >= 4
+
+
+@pytest.mark.parametrize(
+    ("target", "triple"),
+    [
+        ("x86_64-linux", "x86_64-unknown-linux-gnu"),
+        ("x86_64-macos", "x86_64-apple-macos"),
+        ("aarch64-macos", "arm64-apple-macos11"),
+    ],
+    ids=["linux-x86-64", "macos-x86-64", "macos-arm64"],
+)
+def test_kuro_native_codegen_supports_exact_eight_return_guard_ladder(target, triple, tmp_path):
+    tokens, env = compile_program_to_codegen(
+        eight_return_guard_ladder_program(recursive=True),
+        target=target,
+    )
+
+    assert tokens.count("BC_RETURN") == 8
+    assert tokens.count("BC_IF_BEGIN") == 7
+    else_positions = [index for index, token in enumerate(tokens) if token == "BC_ELSE_BEGIN"]
+    assert len(else_positions) == 7
+    assert tokens.count("BC_IF_END") == 7
+    assert all(tokens[index + 1] == "BC_IF_END" for index in else_positions)
+    assert env["NativeFailed"] == 0
+    assert env["NativeOut"].count("ret\n") >= 8
+
+    object_file = tmp_path / f"eight-return-{target}.o"
+    subprocess.run(
+        ["clang", "-target", triple, "-c", "-x", "assembler", "-", "-o", str(object_file)],
+        input=env["NativeOut"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert object_file.stat().st_size > 0
+
+
+@pytest.mark.skipif(not LINUX_X86_HOST, reason="requires a Linux x86-64 execution host")
+def test_kuro_native_codegen_executes_all_eight_return_ladder_paths(tmp_path):
+    tokens, env = compile_program_to_codegen(
+        eight_return_guard_ladder_program(recursive=True),
+        target="x86_64-linux",
+    )
+    assert tokens.count("BC_RETURN") == 8
+    assert env["NativeFailed"] == 0
+
+    executable = tmp_path / "eight-return-ladder"
+    subprocess.run(
+        [
+            "clang",
+            "-target",
+            "x86_64-unknown-linux-gnu",
+            "-nostdlib",
+            "-Wl,-e,_start",
+            "-x",
+            "assembler",
+            "-",
+            "-o",
+            str(executable),
+        ],
+        input=env["NativeOut"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert result.stdout == "10\n11\n12\n13\n14\n17\n16\n0\n"
+    assert result.stderr == ""
+
+
+def test_kuro_native_codegen_rejects_eight_return_ladder_with_missing_arm_return():
+    tokens, env = compile_program_to_codegen(
+        eight_return_guard_ladder_program(duplicate_and_missing=True),
+        target="x86_64-linux",
+    )
+
+    assert tokens.count("BC_RETURN") == 8
+    assert tokens.count("BC_IF_BEGIN") == 7
+    assert tokens.count("BC_ELSE_BEGIN") == 7
+    assert tokens.count("BC_IF_END") == 7
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+def test_kuro_native_codegen_rejects_nonempty_fallthrough_arm_in_eight_return_ladder():
+    tokens, env = compile_program_to_codegen(
+        eight_return_guard_ladder_program(nonempty_else=True),
+        target="x86_64-linux",
+    )
+
+    assert tokens.count("BC_RETURN") == 8
+    assert tokens.count("BC_IF_BEGIN") == 7
+    assert tokens.count("BC_ELSE_BEGIN") == 7
+    assert tokens.count("BC_IF_END") == 7
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize("loop_kind", ["repeat", "while"])
+def test_kuro_native_codegen_rejects_loops_in_eight_return_ladder(loop_kind):
+    tokens, env = compile_program_to_codegen(
+        eight_return_guard_ladder_program(loop_kind=loop_kind),
+        target="x86_64-linux",
+    )
+
+    assert tokens.count("BC_RETURN") == 8
+    assert tokens.count("BC_IF_BEGIN") == 7
+    if loop_kind == "repeat":
+        assert tokens.count("BC_REPEAT_BEGIN") == 1
+        assert tokens.count("BC_REPEAT_END") == 1
+    else:
+        assert tokens.count("BC_WHILE_BEGIN") == 1
+        assert tokens.count("BC_WHILE_TEST") == 1
+        assert tokens.count("BC_WHILE_END") == 1
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+def test_kuro_native_codegen_rejects_nested_eight_return_tree():
+    tokens, env = compile_program_to_codegen(
+        eight_return_nested_tree_program(),
+        target="x86_64-linux",
+    )
+
+    assert tokens.count("BC_RETURN") == 8
+    assert tokens.count("BC_IF_BEGIN") == 7
+    assert tokens.count("BC_IF_END") == 7
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+def test_kuro_native_codegen_rejects_nonterminal_eight_return_ladder_fallback():
+    tokens, env = compile_program_to_codegen(
+        eight_return_guard_ladder_program(trailing_statement=True),
+        target="x86_64-linux",
+    )
+
+    assert tokens.count("BC_RETURN") == 8
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+def test_kuro_native_codegen_rejects_eight_returns_without_terminal_top_level_fallback():
+    source = "Action NoFallback Value: Integers;\nReturn 99;\n"
+    source += "".join(
+        f"If Value is equal to {index};\nReturn {10 + index};\nDone.\n"
+        for index in range(7)
+    )
+    source += "Done.\nCall NoFallback 0;\nPrint @_.\n"
+    tokens, env = compile_program_to_codegen(source, target="x86_64-linux")
+
+    assert tokens.count("BC_RETURN") == 8
+    assert tokens.count("BC_IF_BEGIN") == 7
+    assert tokens.count("BC_ELSE_BEGIN") == 7
+    assert tokens.count("BC_IF_END") == 7
+    assert env["NativePrepareReturnCount"] == 8
+    assert env["NativePrepareLastBodyReturn"] == 0
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+def test_kuro_native_codegen_rejects_eight_return_ladder_without_fallback():
+    tokens, env = compile_program_to_codegen(
+        eight_return_guard_ladder_program(missing_fallback=True),
+        target="x86_64-linux",
+    )
+
+    assert tokens.count("BC_RETURN") == 7
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+def test_kuro_native_codegen_rejects_eight_straight_line_returns():
+    source = (
+        "Action Straight;\n"
+        + "".join(f"Return {value};\n" for value in range(8))
+        + "Done.\nCall Straight;\nPrint @_.\n"
+    )
+    tokens, env = compile_program_to_codegen(source, target="x86_64-linux")
+
+    assert tokens.count("BC_RETURN") == 8
+    assert tokens.count("BC_IF_BEGIN") == 0
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
 
 
 @pytest.mark.parametrize(
