@@ -58,7 +58,8 @@ The next bounded extension should establish a reviewed Kuro-owned symbol table a
   tests/self_host/test_native_branch_joins.py \
   tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_runs_decimal_storage \
   tests/self_host/test_native_codegen.py::test_kuro_native_codegen_keeps_if_depth_limit_at_sixteen \
-  tests/self_host/test_native_codegen.py::test_kuro_native_codegen_keeps_global_slot_limit_at_sixty_four \
+  tests/self_host/test_native_codegen.py::test_kuro_native_codegen_tracks_branch_snapshots_at_266_global_slots \
+  tests/self_host/test_native_codegen.py::test_kuro_native_codegen_bounds_globals_in_the_separate_static_arena \
   tests/self_host/test_native_codegen.py::test_kuro_native_codegen_enforces_exact_4096_token_boundary \
   tests/self_host/test_native_codegen.py::test_native_codegen_source_emits_with_macos_arm64_backend \
   --durations=10

@@ -6,7 +6,7 @@ This test-only increment stacks directly on [PR #85](https://github.com/Shibuked
 
 ## A small symbol table, not a larger write language
 
-Names follow `[A-Za-z_][A-Za-z0-9_]{0,31}` with the entire `BC_` namespace reserved. Equality is exact and case-sensitive: `alpha` and `Alpha` are different slots. No normalization, hashing, truncation or spelling-based kind inference is used for input names. A valid name first seen by either a store or a read receives the next free physical index. Repeated exact names reuse their index. The fifth distinct name rejects, including in an Else arm or a zero-trip body. The capacity is **four**, not the production compiler's separate 64-global-slot bound.
+Names follow `[A-Za-z_][A-Za-z0-9_]{0,31}` with the entire `BC_` namespace reserved. Equality is exact and case-sensitive: `alpha` and `Alpha` are different slots. No normalization, hashing, truncation or spelling-based kind inference is used for input names. A valid name first seen by either a store or a read receives the next free physical index. Repeated exact names reuse their index. The fifth distinct name rejects, including in an Else arm or a zero-trip body. The capacity is **four**, not the production compiler's separate bounded 266-slot global scalar arena.
 
 Discovery occurs only while structurally validating the entire prefix/body. Registration is global to that validation and is never undone by branch restoration. Before evidence emission, the mapping is complete; resolution is lookup-only when `FlowEmit` is set. Invalid input emits only `REJECT`, never partial USE evidence or a successful decision.
 
@@ -59,7 +59,7 @@ The next bounded step is a reviewed indexed state/snapshot representation that s
   tests/self_host/test_native_branch_joins.py \
   tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_runs_decimal_storage \
   tests/self_host/test_native_codegen.py::test_kuro_native_codegen_keeps_if_depth_limit_at_sixteen \
-  tests/self_host/test_native_codegen.py::test_kuro_native_codegen_keeps_global_slot_limit_at_sixty_four \
+  tests/self_host/test_native_codegen.py::test_kuro_native_codegen_bounds_globals_in_the_separate_static_arena \
   tests/self_host/test_native_codegen.py::test_kuro_native_codegen_enforces_exact_4096_token_boundary \
   tests/self_host/test_native_codegen.py::test_native_codegen_source_emits_with_macos_arm64_backend \
   --durations=10

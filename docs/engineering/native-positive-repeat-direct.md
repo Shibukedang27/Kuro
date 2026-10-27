@@ -31,7 +31,7 @@ The production proof is Kuro-owned in [native_codegen.kuro](../../self_host/nati
 
 **Normal exits.** The positive loop has no zero-trip path. Every normal completion crosses the direct initializer, and the invariant preserves Decimal through the last backedge/test and into post-loop reads. Source has no break/continue; unsupported raw abrupt opcodes and top-level Return remain rejected. Any future abrupt-exit feature must revisit this argument. Nontermination in a nested region does not create a normal exit.
 
-The active flag survives nested regions only so that a later direct outer-body store can be considered. Depth checks prevent nested initialization from inheriting it. Closing the outer Repeat clears it; each sibling top-level Repeat recomputes it. Existing region nesting, empty statement-boundary stacks, 16-frame limits, 64 global slots and the 4096-token limit remain enforced.
+The active flag survives nested regions only so that a later direct outer-body store can be considered. Depth checks prevent nested initialization from inheriting it. Closing the outer Repeat clears it; each sibling top-level Repeat recomputes it. Existing region nesting, empty statement-boundary stacks, 16-frame limits, 4096-token limit and the 266-slot shared-global ceiling remain enforced; global values now live in a separate static arena.
 
 ## Deliberate exclusions
 
@@ -62,7 +62,8 @@ Do not combine branch joins with multitrip permission. First design explicit per
   tests/self_host/test_native_branch_joins.py \
   tests/self_host/test_native_codegen.py::test_kuro_owned_x86_linux_codegen_runs_decimal_storage \
   tests/self_host/test_native_codegen.py::test_kuro_native_codegen_keeps_if_depth_limit_at_sixteen \
-  tests/self_host/test_native_codegen.py::test_kuro_native_codegen_keeps_global_slot_limit_at_sixty_four \
+  tests/self_host/test_native_codegen.py::test_kuro_native_codegen_tracks_branch_snapshots_at_266_global_slots \
+  tests/self_host/test_native_codegen.py::test_kuro_native_codegen_bounds_globals_in_the_separate_static_arena \
   tests/self_host/test_native_codegen.py::test_kuro_native_codegen_enforces_exact_4096_token_boundary \
   tests/self_host/test_native_codegen.py::test_native_codegen_source_emits_with_macos_arm64_backend \
   --durations=10

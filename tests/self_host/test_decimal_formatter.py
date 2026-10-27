@@ -112,6 +112,11 @@ def _elfize_macho_assembly(assembly: str) -> str:
         stripped = line.strip()
         if stripped.startswith((".subsections_via_symbols", ".build_version", ".file", ".loh")):
             continue
+        zero_fill = re.match(r"^\s*\.zerofill\s+__DATA,__bss,([^,]+),(\d+),(\d+)\s*$", line)
+        if zero_fill:
+            symbol, size, alignment = zero_fill.groups()
+            lines.extend((".bss", f".p2align {alignment}", f"{symbol}:", f".zero {size}"))
+            continue
         section = re.match(r"^\s*\.section\s+([^,]+),([^,]+)(?:,.*)?$", line)
         if section:
             segment, name = section.group(1).strip(), section.group(2).strip()
@@ -137,6 +142,14 @@ def _elfize_macho_assembly(assembly: str) -> str:
         assert "@PAGE" not in line, line
         lines.append(line)
     return "\n".join(lines) + "\n"
+
+
+def test_elfize_macho_translates_bss_zerofill_with_size_and_alignment() -> None:
+    assembly = ".section __DATA,__bss\n.zerofill __DATA,__bss,L_kuro_global_slots,24,3\n"
+
+    assert _elfize_macho_assembly(assembly) == (
+        ".bss\n.bss\n.p2align 3\nL_kuro_global_slots:\n.zero 24\n"
+    )
 
 
 def test_c_formatter_matches_python_repr_and_roundtrips(tmp_path: Path) -> None:
