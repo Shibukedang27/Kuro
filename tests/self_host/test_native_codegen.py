@@ -125,6 +125,121 @@ def eight_return_nested_tree_program():
     return "Action Nested Value: Integers;\n" + branch(3) + "Done.\nCall Nested 0;\nPrint @_.\n"
 
 
+def parse_comparison_op_program(
+    *,
+    action_name="ParseComparisonOp",
+    extra_parameter=False,
+    first_root_value=1,
+    nonempty_root_else=False,
+    nonempty_nested_else=False,
+    different_inner_shape=False,
+    wrong_return_kind=False,
+    wrong_return_text=False,
+    wrong_arm_distribution=False,
+    between_first_and_second=False,
+    extra_returning_arm_statement=False,
+    loop_kind=None,
+    missing_fallback=False,
+    wrong_fallback=False,
+    extra_return=False,
+    trailing_after_fallback=False,
+    print_scratch=False,
+):
+    source = "Root = 0;\nDetail = 0;\nSuffix = 0;\nScratch = 0;\n"
+    if extra_parameter:
+        source += f"Action {action_name} Extra: Integers;\n"
+    else:
+        source += f"Action {action_name};\n"
+    source += f"If Root is equal to {first_root_value};\nIf Detail is equal to 1;\nIf Suffix is equal to 1;\n"
+    if loop_kind == "repeat":
+        source += "Repeat 1;\nAdd 1 to Scratch;\nDone.\n"
+    elif loop_kind == "while":
+        source += "While Scratch is equal to 0;\nAdd 1 to Scratch;\nDone.\n"
+    elif loop_kind is not None:
+        raise ValueError(f"unknown loop kind: {loop_kind}")
+    source += "Add 1 to Scratch;\n"
+    if wrong_arm_distribution:
+        source += "Return \"ge\";\n"
+    source += "Done.\nReturn \"ge\";\nElse;\n"
+    if nonempty_nested_else:
+        source += "Scratch = Scratch + 1;\n"
+    if wrong_return_kind:
+        source += "Return 22;\n"
+    elif wrong_return_text:
+        source += "Return \"wrong\";\n"
+    else:
+        source += "Return \"gt\";\n"
+    source += "Done.\n"
+    if nonempty_root_else:
+        source += "Else;\nScratch = Scratch + 1;\n"
+    source += "Done.\n"
+    if between_first_and_second:
+        source += "Scratch = Scratch + 1;\n"
+    source += (
+        "If Root is equal to 2;\nIf Detail is equal to 1;\n"
+        "If Suffix is equal to 2;\nAdd 1 to Scratch;\nDone.\n"
+        "Return \"le\";\nElse;\n"
+    )
+    if not wrong_arm_distribution:
+        source += "Return \"lt\";\n"
+    source += "Done.\nDone.\n"
+    source += "If Root is equal to 3;\nIf Suffix is equal to 3;\nAdd 1 to Scratch;\nDone.\n"
+    if extra_returning_arm_statement:
+        source += "Scratch = Scratch + 1;\n"
+    source += (
+        "Return \"eq\";\nDone.\n"
+        "If Root is equal to 4;\nIf Suffix is equal to 4;\nAdd 1 to Scratch;\nDone.\n"
+        "Return \"eq\";\nDone.\n"
+        "If Root is equal to 5;\nIf Suffix is equal to 5;\nAdd 1 to Scratch;\nDone.\n"
+        "Return \"ne\";\nDone.\n"
+        "If Root is equal to 6;\nIf Detail is equal to 1;\nReturn \"ge\";\nDone.\n"
+    )
+    if different_inner_shape:
+        source += "Return \"le\";\n"
+    else:
+        source += "If Detail is equal to 2;\nReturn \"le\";\nDone.\n"
+    source += "Done.\n"
+    if extra_return:
+        source += "If Root is equal to 7;\nReturn \"extra\";\nDone.\n"
+    if not missing_fallback:
+        source += 'Return "fallback";\n' if wrong_fallback else 'Return "";\n'
+    if trailing_after_fallback:
+        source += "Scratch = Scratch + 1;\n"
+    source += "Done.\n"
+    for root, detail, suffix in [
+        (1, 1, 0), (1, 0, 0), (2, 1, 1), (2, 0, 0),
+        (3, 0, 0), (3, 0, 1), (4, 0, 0), (5, 0, 0),
+        (6, 1, 0), (6, 2, 0), (6, 3, 0), (0, 0, 0),
+    ]:
+        call_source = (
+            f"Call {action_name} 0;\nPrint @_.\n"
+            if extra_parameter
+            else f"Call {action_name};\nPrint @_.\n"
+        )
+        source += f"Root = {root};\nDetail = {detail};\nSuffix = {suffix};\n" + call_source
+    if print_scratch:
+        source += "Print Scratch.\n"
+    return source
+
+
+def actual_parse_comparison_op_source_program():
+    parser_source = (ROOT / "self_host" / "parser.kuro").read_text(encoding="utf-8")
+    start = parser_source.index("Action ParseComparisonOp;\n")
+    end = parser_source.index("\nAction ParseComparison;", start)
+    comparison_action = parser_source[start:end]
+    return (
+        "TokPos = 0;\n"
+        "Action IsWord ExpectedWord: Text;\nReturn 0;\nDone.\n"
+        "Action ExpectWord ExpectedWord: Text;\nReturn 0;\nDone.\n"
+        "Action RecordDiag Code: Text, Message: Text;\nReturn 0;\nDone.\n"
+        + comparison_action
+        + "\nCall ParseComparisonOp;\nPrint @_.\n"
+    )
+
+
+PARSE_COMPARISON_OP_EXPECTED_OUTPUT = "ge\ngt\nle\nlt\neq\neq\neq\nne\nge\nle\n\n\n"
+
+
 def four_parameter_action_program():
     return (
         "Action IntegerQuad First: Integers, Second: Integers, Third: Integers, Fourth: Integers;\n"
@@ -736,6 +851,214 @@ def test_kuro_native_codegen_rejects_eight_straight_line_returns():
     assert tokens.count("BC_IF_BEGIN") == 0
     assert env["NativeFailed"] == 1
     assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize(
+    ("target", "triple"),
+    [
+        ("x86_64-linux", "x86_64-unknown-linux-gnu"),
+        ("x86_64-macos", "x86_64-apple-macos"),
+        ("aarch64-macos", "arm64-apple-macos11"),
+    ],
+    ids=["linux-x86-64", "macos-x86-64", "macos-arm64"],
+)
+def test_kuro_native_codegen_accepts_exact_parse_comparison_op_shape_and_assembles(target, triple, tmp_path):
+    tokens, env = compile_program_to_codegen(parse_comparison_op_program(), target=target)
+
+    assert tokens.count("BC_RETURN") == 10
+    assert tokens.count("BC_IF_BEGIN") == 15
+    assert tokens.count("BC_ELSE_BEGIN") == 15
+    assert tokens.count("BC_IF_END") == 15
+    assert env["NativeFailed"] == 0
+    assert env["NativeFunctionReturnKinds"][0] == "T"
+    assert env["NativeOut"].count("ret\n") >= 10
+
+    object_file = tmp_path / f"parse-comparison-{target}.o"
+    subprocess.run(
+        ["clang", "-target", triple, "-c", "-x", "assembler", "-", "-o", str(object_file)],
+        input=env["NativeOut"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert object_file.stat().st_size > 0
+
+
+@pytest.mark.parametrize(
+    ("target", "triple"),
+    [
+        ("x86_64-linux", "x86_64-unknown-linux-gnu"),
+        ("x86_64-macos", "x86_64-apple-macos"),
+        ("aarch64-macos", "arm64-apple-macos11"),
+    ],
+    ids=["linux-x86-64", "macos-x86-64", "macos-arm64"],
+)
+def test_kuro_native_codegen_accepts_actual_parser_parse_comparison_op_source(target, triple, tmp_path):
+    tokens, env = compile_program_to_codegen(actual_parse_comparison_op_source_program(), target=target)
+
+    function_start = next(
+        index
+        for index in range(len(tokens) - 1)
+        if tokens[index] == "BC_FUNC_BEGIN" and tokens[index + 1] == "ParseComparisonOp"
+    )
+    function_end = tokens.index("BC_FUNC_END", function_start)
+    action_tokens = tokens[function_start:function_end + 1]
+    assert action_tokens.count("BC_RETURN") == 10
+    assert action_tokens.count("BC_IF_BEGIN") == 15
+    assert action_tokens.count("BC_ELSE_BEGIN") == 15
+    assert action_tokens.count("BC_IF_END") == 15
+    assert env["NativeFailed"] == 0
+    function_index = env["NativeFunctionNames"].index("ParseComparisonOp")
+    assert env["NativeFunctionReturnKinds"][function_index] == "T"
+    assert env["NativeOut"].count("ret\n") >= 13
+
+    object_file = tmp_path / f"actual-parse-comparison-{target}.o"
+    subprocess.run(
+        ["clang", "-target", triple, "-c", "-x", "assembler", "-", "-o", str(object_file)],
+        input=env["NativeOut"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert object_file.stat().st_size > 0
+
+
+@pytest.mark.skipif(not LINUX_X86_HOST, reason="requires a Linux x86-64 execution host")
+def test_kuro_native_codegen_executes_all_parse_comparison_op_return_and_fallthrough_paths(tmp_path):
+    tokens, env = compile_program_to_codegen(parse_comparison_op_program(), target="x86_64-linux")
+    assert tokens.count("BC_RETURN") == 10
+    assert env["NativeFailed"] == 0
+    assert env["NativeFunctionReturnKinds"][0] == "T"
+
+    executable = tmp_path / "parse-comparison-op"
+    subprocess.run(
+        [
+            "clang",
+            "-target",
+            "x86_64-unknown-linux-gnu",
+            "-nostdlib",
+            "-Wl,-e,_start",
+            "-x",
+            "assembler",
+            "-",
+            "-o",
+            str(executable),
+        ],
+        input=env["NativeOut"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert result.stdout == PARSE_COMPARISON_OP_EXPECTED_OUTPUT
+    assert result.stderr == ""
+
+
+@pytest.mark.skipif(not LINUX_X86_HOST, reason="requires a Linux x86-64 execution host")
+@pytest.mark.parametrize(
+    ("mutation", "expected_output"),
+    [
+        pytest.param(
+            {"first_root_value": 99},
+            "\n\nle\nlt\neq\neq\neq\nne\nge\nle\n\n\n",
+            id="guard-predicate-is-compiled-generically",
+        ),
+        pytest.param(
+            {"between_first_and_second": True, "print_scratch": True},
+            PARSE_COMPARISON_OP_EXPECTED_OUTPUT + "10\n",
+            id="supported-statement-between-guard-roots",
+        ),
+        pytest.param(
+            {"extra_returning_arm_statement": True, "print_scratch": True},
+            PARSE_COMPARISON_OP_EXPECTED_OUTPUT + "2\n",
+            id="supported-side-effect-in-returning-arm",
+        ),
+    ],
+)
+def test_kuro_native_codegen_executes_supported_parse_comparison_structural_variants(mutation, expected_output, tmp_path):
+    tokens, env = compile_program_to_codegen(parse_comparison_op_program(**mutation), target="x86_64-linux")
+
+    assert tokens.count("BC_RETURN") == 10
+    assert tokens.count("BC_IF_BEGIN") == 15
+    assert env["NativeFailed"] == 0
+    assert env["NativeFunctionReturnKinds"][0] == "T"
+
+    executable = tmp_path / "parse-comparison-structural-variant"
+    subprocess.run(
+        [
+            "clang",
+            "-target",
+            "x86_64-unknown-linux-gnu",
+            "-nostdlib",
+            "-Wl,-e,_start",
+            "-x",
+            "assembler",
+            "-",
+            "-o",
+            str(executable),
+        ],
+        input=env["NativeOut"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run([str(executable)], capture_output=True, text=True, check=True)
+    assert result.stdout == expected_output
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        pytest.param({"nonempty_root_else": True}, id="root-else-must-fall-through-empty"),
+        pytest.param({"nonempty_nested_else": True}, id="return-only-else-boundary"),
+        pytest.param({"different_inner_shape": True}, id="same-count-different-tree"),
+        pytest.param({"wrong_return_kind": True}, id="explicit-text-write-required"),
+        pytest.param({"wrong_return_text": True}, id="ordered-result-literals"),
+        pytest.param({"wrong_arm_distribution": True}, id="same-count-wrong-arm-distribution"),
+        pytest.param({"wrong_fallback": True}, id="empty-terminal-fallback-required"),
+        pytest.param({"trailing_after_fallback": True}, id="fallback-must-be-terminal"),
+        pytest.param({"loop_kind": "repeat"}, id="repeat-rejected"),
+        pytest.param({"loop_kind": "while"}, id="while-rejected"),
+        pytest.param({"action_name": "ParseComparisonOpLookalike"}, id="no-name-only-count-admission"),
+        pytest.param({"extra_parameter": True}, id="zero-parameter-signature-required"),
+    ],
+)
+def test_kuro_native_codegen_fails_closed_for_parse_comparison_op_near_misses(mutation):
+    tokens, env = compile_program_to_codegen(parse_comparison_op_program(**mutation), target="x86_64-linux")
+
+    assert tokens.count("BC_RETURN") == 10
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+@pytest.mark.parametrize(
+    ("mutation", "return_count"),
+    [
+        pytest.param({"missing_fallback": True}, 9, id="nine-returns"),
+        pytest.param({"extra_return": True}, 11, id="eleven-returns"),
+    ],
+)
+def test_kuro_native_codegen_keeps_unsupported_parse_comparison_return_counts_closed(mutation, return_count):
+    tokens, env = compile_program_to_codegen(parse_comparison_op_program(**mutation), target="x86_64-linux")
+
+    assert tokens.count("BC_RETURN") == return_count
+    assert env["NativeFailed"] == 1
+    assert env["NativeOut"] == ""
+
+
+def test_kuro_native_codegen_rejects_broken_parse_comparison_arm_boundary():
+    tokens, accepted = compile_program_to_codegen(parse_comparison_op_program(), target="x86_64-linux")
+    assert accepted["NativeFailed"] == 0
+    assert tokens.count("BC_RETURN") == 10
+
+    malformed = tokens.copy()
+    malformed.remove("BC_IF_END")
+    bytecode = ", ".join(json.dumps(token, ensure_ascii=False) for token in malformed)
+    rejected = run_codegen(bytecode, target="x86_64-linux")
+
+    assert rejected["NativeFailed"] == 1
+    assert rejected["NativeOut"] == ""
 
 
 @pytest.mark.parametrize(

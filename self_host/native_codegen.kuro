@@ -983,6 +983,49 @@ NativePrepareFrameElseReturns = 0;
 NativePrepareFrameHasElse = 0;
 NativePrepareFrameComplete = 0;
 NativePrepareParentIndex = 0;
+NativeParseComparisonExpectedReturns = "ge", "gt", "le", "lt", "eq", "eq", "ne", "ge", "le", "";
+NativeParseComparisonExpectedNodeIfCounts = 3, 2, 1, 3, 2, 1, 2, 1, 2, 1, 2, 1, 3, 1, 1;
+NativeParseComparisonExpectedNodeMaxDepths = 3, 2, 1, 3, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 1;
+NativeParseComparisonExpectedNodeThenReturns = 2, 1, 0, 2, 1, 0, 1, 0, 1, 0, 1, 0, 2, 1, 1;
+NativeParseComparisonExpectedNodeElseReturns = 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeParseComparisonFrameNodeIndices = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeParseComparisonFrameIfCounts = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeParseComparisonFrameMaxDepths = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeParseComparisonFrameElseSeen = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeParseComparisonFrameThenReturns = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeParseComparisonFrameElseReturns = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+NativeParseComparisonValid = 0;
+NativeParseComparisonPosition = 0;
+NativeParseComparisonOp = "";
+NativeParseComparisonNodeCount = 0;
+NativeParseComparisonIfCount = 0;
+NativeParseComparisonElseCount = 0;
+NativeParseComparisonIfEndCount = 0;
+NativeParseComparisonDepth = 0;
+NativeParseComparisonMaxDepth = 0;
+NativeParseComparisonRootCount = 0;
+NativeParseComparisonReturnCount = 0;
+NativeParseComparisonTopLevelReturnCount = 0;
+NativeParseComparisonFrameIndex = 0;
+NativeParseComparisonParentIndex = 0;
+NativeParseComparisonNodeIndex = 0;
+NativeParseComparisonFrameIfCount = 0;
+NativeParseComparisonFrameMaxDepth = 0;
+NativeParseComparisonFrameThenReturnCount = 0;
+NativeParseComparisonFrameElseReturnCount = 0;
+NativeParseComparisonSubtreeReturnCount = 0;
+NativeParseComparisonExpectedCount = 0;
+NativeParseComparisonExpectedMaxDepth = 0;
+NativeParseComparisonExpectedThenReturns = 0;
+NativeParseComparisonExpectedElseReturns = 0;
+NativeParseComparisonReturnValue = "";
+NativeParseComparisonReturnOpcodePosition = 0;
+NativeParseComparisonReturnValuePosition = 0;
+NativeParseComparisonBoundaryPosition = 0;
+NativeParseComparisonElseBodyPosition = 0;
+NativeParseComparisonElseText = "";
+NativeParseComparisonExpectedReturnText = "";
+NativeParseComparisonOperandCount = 0;
 NativeCallDepth = 0;
 NativeCallResolvedIndex = 0;
 NativeCallGeneralRegisterIndex = 0;
@@ -1386,6 +1429,258 @@ Action NativeInferFunctionReturnKinds;
     Done.
 Done.
 
+Action NativeValidateParseComparisonOpShape FunctionName: Text, ParameterCount: Integers, BodyStart: Integers, BodyEnd: Integers;
+    NativeParseComparisonValid = 1;
+    # This gate narrows function identity, return writes, and branch/arm topology only.
+    # Guard expressions and ordinary statements use the generic opcode validation/emission path.
+    If FunctionName is not equal to "ParseComparisonOp";
+        NativeParseComparisonValid = 0;
+    Done.
+    If ParameterCount is not equal to 0;
+        NativeParseComparisonValid = 0;
+    Done.
+    NativeParseComparisonPosition = BodyStart;
+    NativeParseComparisonNodeCount = 0;
+    NativeParseComparisonIfCount = 0;
+    NativeParseComparisonElseCount = 0;
+    NativeParseComparisonIfEndCount = 0;
+    NativeParseComparisonDepth = 0;
+    NativeParseComparisonMaxDepth = 0;
+    NativeParseComparisonRootCount = 0;
+    NativeParseComparisonReturnCount = 0;
+    NativeParseComparisonTopLevelReturnCount = 0;
+    While NativeParseComparisonPosition is less than BodyEnd and NativeParseComparisonValid is equal to 1;
+        Get BytecodeOut NativeParseComparisonPosition;
+        NativeParseComparisonOp = @_;
+        If NativeParseComparisonOp is equal to "BC_REPEAT_BEGIN" or NativeParseComparisonOp is equal to "BC_REPEAT_END" or NativeParseComparisonOp is equal to "BC_WHILE_BEGIN" or NativeParseComparisonOp is equal to "BC_WHILE_TEST" or NativeParseComparisonOp is equal to "BC_WHILE_END";
+            NativeParseComparisonValid = 0;
+        Done.
+        If NativeParseComparisonOp is equal to "BC_IF_BEGIN";
+            If NativeParseComparisonNodeCount is less than 15 and NativeParseComparisonDepth is less than 16;
+                If NativeParseComparisonDepth is equal to 0;
+                    If NativeParseComparisonRootCount is greater than or equal to 6;
+                        NativeParseComparisonValid = 0;
+                    Done.
+                Else;
+                    NativeParseComparisonParentIndex = NativeParseComparisonDepth - 1;
+                    Get NativeParseComparisonFrameElseSeen NativeParseComparisonParentIndex;
+                    If @_ is equal to 1;
+                        NativeParseComparisonValid = 0;
+                    Done.
+                Done.
+                If NativeParseComparisonValid is equal to 1;
+                    NativeParseComparisonFrameIndex = NativeParseComparisonDepth;
+                    Set NativeParseComparisonFrameNodeIndices NativeParseComparisonFrameIndex to NativeParseComparisonNodeCount;
+                    Set NativeParseComparisonFrameIfCounts NativeParseComparisonFrameIndex to 1;
+                    Set NativeParseComparisonFrameMaxDepths NativeParseComparisonFrameIndex to 1;
+                    Set NativeParseComparisonFrameElseSeen NativeParseComparisonFrameIndex to 0;
+                    Set NativeParseComparisonFrameThenReturns NativeParseComparisonFrameIndex to 0;
+                    Set NativeParseComparisonFrameElseReturns NativeParseComparisonFrameIndex to 0;
+                    Add 1 to NativeParseComparisonNodeCount;
+                    Add 1 to NativeParseComparisonIfCount;
+                    Add 1 to NativeParseComparisonDepth;
+                    If NativeParseComparisonDepth is greater than NativeParseComparisonMaxDepth;
+                        NativeParseComparisonMaxDepth = NativeParseComparisonDepth;
+                    Done.
+                Done.
+            Else;
+                NativeParseComparisonValid = 0;
+            Done.
+        Done.
+        If NativeParseComparisonOp is equal to "BC_ELSE_BEGIN";
+            Add 1 to NativeParseComparisonElseCount;
+            If NativeParseComparisonDepth is greater than 0;
+                NativeParseComparisonFrameIndex = NativeParseComparisonDepth - 1;
+                Get NativeParseComparisonFrameElseSeen NativeParseComparisonFrameIndex;
+                If @_ is equal to 0;
+                    Set NativeParseComparisonFrameElseSeen NativeParseComparisonFrameIndex to 1;
+                    Get NativeParseComparisonFrameNodeIndices NativeParseComparisonFrameIndex;
+                    NativeParseComparisonNodeIndex = @_;
+                    Get NativeParseComparisonExpectedNodeElseReturns NativeParseComparisonNodeIndex;
+                    NativeParseComparisonExpectedElseReturns = @_;
+                    NativeParseComparisonElseBodyPosition = NativeParseComparisonPosition + 1;
+                    If NativeParseComparisonElseBodyPosition is less than BodyEnd;
+                        Get BytecodeOut NativeParseComparisonElseBodyPosition;
+                        If NativeParseComparisonExpectedElseReturns is equal to 0;
+                            If @_ is not equal to "BC_IF_END";
+                                NativeParseComparisonValid = 0;
+                            Done.
+                        Else;
+                            NativeParseComparisonElseText = "";
+                            If NativeParseComparisonNodeIndex is equal to 1;
+                                NativeParseComparisonElseText = "gt";
+                            Else;
+                                If NativeParseComparisonNodeIndex is equal to 4;
+                                    NativeParseComparisonElseText = "lt";
+                                Else;
+                                    NativeParseComparisonValid = 0;
+                                Done.
+                            Done.
+                            If @_ is not equal to "BC_CONST_TEXT";
+                                NativeParseComparisonValid = 0;
+                            Done.
+                            NativeParseComparisonBoundaryPosition = NativeParseComparisonElseBodyPosition + 1;
+                            Get BytecodeOut NativeParseComparisonBoundaryPosition;
+                            If @_ is not equal to NativeParseComparisonElseText;
+                                NativeParseComparisonValid = 0;
+                            Done.
+                            NativeParseComparisonBoundaryPosition = NativeParseComparisonElseBodyPosition + 2;
+                            Get BytecodeOut NativeParseComparisonBoundaryPosition;
+                            If @_ is not equal to "BC_RETURN";
+                                NativeParseComparisonValid = 0;
+                            Done.
+                            NativeParseComparisonBoundaryPosition = NativeParseComparisonElseBodyPosition + 3;
+                            If NativeParseComparisonBoundaryPosition is less than BodyEnd;
+                                Get BytecodeOut NativeParseComparisonBoundaryPosition;
+                                If @_ is not equal to "BC_IF_END";
+                                    NativeParseComparisonValid = 0;
+                                Done.
+                            Else;
+                                NativeParseComparisonValid = 0;
+                            Done.
+                        Done.
+                    Else;
+                        NativeParseComparisonValid = 0;
+                    Done.
+                Else;
+                    NativeParseComparisonValid = 0;
+                Done.
+            Else;
+                NativeParseComparisonValid = 0;
+            Done.
+        Done.
+        If NativeParseComparisonOp is equal to "BC_IF_END";
+            Add 1 to NativeParseComparisonIfEndCount;
+            If NativeParseComparisonDepth is greater than 0;
+                NativeParseComparisonFrameIndex = NativeParseComparisonDepth - 1;
+                Get NativeParseComparisonFrameElseSeen NativeParseComparisonFrameIndex;
+                If @_ is not equal to 1;
+                    NativeParseComparisonValid = 0;
+                Done.
+                Get NativeParseComparisonFrameNodeIndices NativeParseComparisonFrameIndex;
+                NativeParseComparisonNodeIndex = @_;
+                If NativeParseComparisonNodeIndex is less than 15;
+                    Get NativeParseComparisonFrameIfCounts NativeParseComparisonFrameIndex;
+                    NativeParseComparisonFrameIfCount = @_;
+                    Get NativeParseComparisonFrameMaxDepths NativeParseComparisonFrameIndex;
+                    NativeParseComparisonFrameMaxDepth = @_;
+                    Get NativeParseComparisonFrameThenReturns NativeParseComparisonFrameIndex;
+                    NativeParseComparisonFrameThenReturnCount = @_;
+                    Get NativeParseComparisonFrameElseReturns NativeParseComparisonFrameIndex;
+                    NativeParseComparisonFrameElseReturnCount = @_;
+                    Get NativeParseComparisonExpectedNodeIfCounts NativeParseComparisonNodeIndex;
+                    NativeParseComparisonExpectedCount = @_;
+                    Get NativeParseComparisonExpectedNodeMaxDepths NativeParseComparisonNodeIndex;
+                    NativeParseComparisonExpectedMaxDepth = @_;
+                    Get NativeParseComparisonExpectedNodeThenReturns NativeParseComparisonNodeIndex;
+                    NativeParseComparisonExpectedThenReturns = @_;
+                    Get NativeParseComparisonExpectedNodeElseReturns NativeParseComparisonNodeIndex;
+                    NativeParseComparisonExpectedElseReturns = @_;
+                    If NativeParseComparisonFrameIfCount is not equal to NativeParseComparisonExpectedCount or NativeParseComparisonFrameMaxDepth is not equal to NativeParseComparisonExpectedMaxDepth or NativeParseComparisonFrameThenReturnCount is not equal to NativeParseComparisonExpectedThenReturns or NativeParseComparisonFrameElseReturnCount is not equal to NativeParseComparisonExpectedElseReturns;
+                        NativeParseComparisonValid = 0;
+                    Done.
+                Else;
+                    NativeParseComparisonValid = 0;
+                Done.
+                NativeParseComparisonSubtreeReturnCount = NativeParseComparisonFrameThenReturnCount + NativeParseComparisonFrameElseReturnCount;
+                NativeParseComparisonDepth = NativeParseComparisonDepth - 1;
+                If NativeParseComparisonDepth is greater than 0;
+                    NativeParseComparisonParentIndex = NativeParseComparisonDepth - 1;
+                    Get NativeParseComparisonFrameElseSeen NativeParseComparisonParentIndex;
+                    If @_ is equal to 1;
+                        Get NativeParseComparisonFrameElseReturns NativeParseComparisonParentIndex;
+                        NativeParseComparisonFrameElseReturnCount = @_ + NativeParseComparisonSubtreeReturnCount;
+                        Set NativeParseComparisonFrameElseReturns NativeParseComparisonParentIndex to NativeParseComparisonFrameElseReturnCount;
+                    Else;
+                        Get NativeParseComparisonFrameThenReturns NativeParseComparisonParentIndex;
+                        NativeParseComparisonFrameThenReturnCount = @_ + NativeParseComparisonSubtreeReturnCount;
+                        Set NativeParseComparisonFrameThenReturns NativeParseComparisonParentIndex to NativeParseComparisonFrameThenReturnCount;
+                    Done.
+                    Get NativeParseComparisonFrameIfCounts NativeParseComparisonParentIndex;
+                    NativeParseComparisonFrameIfCount = @_ + NativeParseComparisonFrameIfCount;
+                    Set NativeParseComparisonFrameIfCounts NativeParseComparisonParentIndex to NativeParseComparisonFrameIfCount;
+                    NativeParseComparisonFrameMaxDepth = NativeParseComparisonFrameMaxDepth + 1;
+                    Get NativeParseComparisonFrameMaxDepths NativeParseComparisonParentIndex;
+                    If NativeParseComparisonFrameMaxDepth is greater than @_;
+                        Set NativeParseComparisonFrameMaxDepths NativeParseComparisonParentIndex to NativeParseComparisonFrameMaxDepth;
+                    Done.
+                Else;
+                    Add 1 to NativeParseComparisonRootCount;
+                Done.
+            Else;
+                NativeParseComparisonValid = 0;
+            Done.
+        Done.
+        If NativeParseComparisonOp is equal to "BC_RETURN";
+            If NativeParseComparisonReturnCount is less than 10;
+                Get NativeParseComparisonExpectedReturns NativeParseComparisonReturnCount;
+                NativeParseComparisonExpectedReturnText = @_;
+                NativeParseComparisonReturnOpcodePosition = NativeParseComparisonPosition - 2;
+                NativeParseComparisonReturnValuePosition = NativeParseComparisonPosition - 1;
+                If NativeParseComparisonReturnOpcodePosition is greater than or equal to BodyStart;
+                    Get BytecodeOut NativeParseComparisonReturnOpcodePosition;
+                    If @_ is not equal to "BC_CONST_TEXT";
+                        NativeParseComparisonValid = 0;
+                    Done.
+                    Get BytecodeOut NativeParseComparisonReturnValuePosition;
+                    NativeParseComparisonReturnValue = @_;
+                    If NativeParseComparisonReturnValue is not equal to NativeParseComparisonExpectedReturnText;
+                        NativeParseComparisonValid = 0;
+                    Done.
+                Else;
+                    NativeParseComparisonValid = 0;
+                Done.
+            Else;
+                NativeParseComparisonValid = 0;
+            Done.
+            Add 1 to NativeParseComparisonReturnCount;
+            NativeParseComparisonBoundaryPosition = NativeParseComparisonPosition + 1;
+            If NativeParseComparisonDepth is greater than 0;
+                NativeParseComparisonFrameIndex = NativeParseComparisonDepth - 1;
+                Get NativeParseComparisonFrameElseSeen NativeParseComparisonFrameIndex;
+                If @_ is equal to 1;
+                    Get NativeParseComparisonFrameElseReturns NativeParseComparisonFrameIndex;
+                    NativeParseComparisonFrameElseReturnCount = @_ + 1;
+                    Set NativeParseComparisonFrameElseReturns NativeParseComparisonFrameIndex to NativeParseComparisonFrameElseReturnCount;
+                    Get BytecodeOut NativeParseComparisonBoundaryPosition;
+                    If @_ is not equal to "BC_IF_END";
+                        NativeParseComparisonValid = 0;
+                    Done.
+                Else;
+                    Get NativeParseComparisonFrameThenReturns NativeParseComparisonFrameIndex;
+                    NativeParseComparisonFrameThenReturnCount = @_ + 1;
+                    Set NativeParseComparisonFrameThenReturns NativeParseComparisonFrameIndex to NativeParseComparisonFrameThenReturnCount;
+                    Get BytecodeOut NativeParseComparisonBoundaryPosition;
+                    If @_ is not equal to "BC_ELSE_BEGIN";
+                        NativeParseComparisonValid = 0;
+                    Done.
+                Done.
+            Else;
+                Add 1 to NativeParseComparisonTopLevelReturnCount;
+                If NativeParseComparisonRootCount is not equal to 6 or NativeParseComparisonReturnCount is not equal to 10 or NativeParseComparisonBoundaryPosition is not equal to BodyEnd;
+                    NativeParseComparisonValid = 0;
+                Else;
+                    Get BytecodeOut NativeParseComparisonBoundaryPosition;
+                    If @_ is not equal to "BC_FUNC_END";
+                        NativeParseComparisonValid = 0;
+                    Done.
+                Done.
+            Done.
+        Done.
+        Call NativeOpcodeArity NativeParseComparisonOp;
+        NativeParseComparisonOperandCount = @_;
+        If NativeOpcodeKnown is equal to 0;
+            NativeParseComparisonValid = 0;
+        Else;
+            NativeParseComparisonPosition = NativeParseComparisonPosition + NativeParseComparisonOperandCount + 1;
+        Done.
+    Done.
+    If NativeParseComparisonNodeCount is not equal to 15 or NativeParseComparisonIfCount is not equal to 15 or NativeParseComparisonElseCount is not equal to 15 or NativeParseComparisonIfEndCount is not equal to 15 or NativeParseComparisonDepth is not equal to 0 or NativeParseComparisonMaxDepth is not equal to 3 or NativeParseComparisonRootCount is not equal to 6 or NativeParseComparisonReturnCount is not equal to 10 or NativeParseComparisonTopLevelReturnCount is not equal to 1;
+        NativeParseComparisonValid = 0;
+    Done.
+    Return NativeParseComparisonValid;
+Done.
+
 Action NativePrepareProgram;
     NativeGlobalVariableNames = "";
     NativeGlobalVariableKinds = "";
@@ -1726,7 +2021,14 @@ Action NativePrepareProgram;
                                     Done.
                                 Done.
                             Else;
-                                NativeFailed = 1;
+                                If NativePrepareReturnCount is equal to 10;
+                                    Call NativeValidateParseComparisonOpShape NativePrepareName, NativePrepareParamCount, NativePrepareBodyStart, NativePrepareBodyEnd;
+                                    If @_ is not equal to 1;
+                                        NativeFailed = 1;
+                                    Done.
+                                Else;
+                                    NativeFailed = 1;
+                                Done.
                             Done.
                         Done.
                     Done.
