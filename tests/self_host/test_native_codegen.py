@@ -1971,7 +1971,11 @@ def test_kuro_native_codegen_separates_266_globals_from_repeat_frames(
     )
     assert object_file.stat().st_size > 0
 
-    if target == "x86_64-linux":
+    if (
+        target == "x86_64-linux"
+        and platform.system() == "Linux"
+        and platform.machine().lower() in {"x86_64", "amd64"}
+    ):
         executable = tmp_path / "global-arena-linux"
         subprocess.run(
             ["clang", "-target", triple, "-nostdlib", "-Wl,-e,_start", "-x", "assembler", str(assembly), "-o", str(executable)],
